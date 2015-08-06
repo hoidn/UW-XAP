@@ -5,14 +5,16 @@
 # Author: Zhou Xing
 # Email: zxing@slac.stanford.edu
 
+import pdb
 import sys
 import os
-from AngularIntegrationM import AngularIntegratorM
+import numpy as np
+#from AngularIntegrationM import AngularIntegratorM
 
 
-if len(sys.argv)!=3:
-    print 'Syntax: tiff_converter_dump_epics.py <run> <exp. name>'
-    sys.exit()
+#if len(sys.argv)!=3:
+#    print 'Syntax: tiff_converter_dump_epics.py <run> <exp. name>'
+#    sys.exit()
 
 saveImage = True
 
@@ -30,20 +32,24 @@ setConfigFile(configFileName)
 
 
 def getImg(det_label, run, expname):
+    #pdb.set_trace()
     """
-    det == 1, 2, or 'quad'
+    det == 1, 2, or 3
     """
+    # event code for events that were diverted to endstation A
+    DIVERTED_CODE = 162
     ds = DataSource('exp=MEC/%s:run=%d:stream=0,1'% (expname,run) )
     src = [ Source('DetInfo(MecTargetChamber.0:Cspad.0)') ]
     src += [ Source('DetInfo(MecTargetChamber.0:Cspad2x2.1)') ]
     src += [ Source('DetInfo(MecTargetChamber.0:Cspad2x2.2)') ]
     src += [ Source('DetInfo(MecTargetChamber.0:Cspad2x2.3)') ]
     src += [ Source('DetInfo(MecTargetChamber.0:Cspad2x2.4)') ]
-    detectors = {'quad': src[0], 1: src[1], 2: src[2]}
+    detectors = {3: src[0], 1: src[1], 2: src[2]}
     det = detectors[det_label]
     nevent = 0
     arraylist = []
-    for evt in  ds.events():
+    blank_indices = []
+    for i, evt in enumerate(ds.events()):
         nevent+=1
         calibframe = evt.get(ndarray_int16_2, det, 'image0')
         if calibframe is not None:
@@ -54,14 +60,20 @@ def getImg(det_label, run, expname):
         else:
             print 'this event does not contain %s' % det.__str__()
             continue        
-
         print cropframe.shape
         arraylist.append(cropframe)
+
+        # determine if this event is a blank frame.
+        image = evt.get(EvrData.DataV3, Source('DetInfo(NoDetector.0:Evr.0)'))
+        for fifoEvent in image.fifoEvents():
+            if fifoEvent.eventCode()==DIVERTED_CODE:
+                blank_indices.append(i)
+
         #print cropframe
         #im = Image.fromarray(cropframe)
         #file = '/reg/d/psdm/mec/%s/scratch/run_%d_evt_%d_%s.tif'%( expname,run,nevent,det.__str__())
         #if saveImage:
         #    print 'writing file',file
         #    im.save(file)
-    return nevent, arraylist
+    return nevent, np.array(arraylist), blank_indices
 
