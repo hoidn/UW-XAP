@@ -9,6 +9,7 @@ import pdb
 import sys
 import os
 import numpy as np
+import gc
 #from AngularIntegrationM import AngularIntegratorM
 
 
@@ -21,6 +22,9 @@ saveImage = True
 from psana import *
 import Image
 
+sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
+import utils
+
 
 basedir = os.path.split(os.path.abspath( __file__ ))[0]
 configFileName = os.path.join(basedir,"tiff_converter_dump_epics.cfg")
@@ -31,8 +35,9 @@ setConfigFile(configFileName)
 
 
 
+#@utils.persist_to_file("cache/getImg.p")
 def getImg(det_label, run, expname):
-    #pdb.set_trace()
+    gc.collect() # collect garbage
     """
     det == 1, 2, or 3
     """

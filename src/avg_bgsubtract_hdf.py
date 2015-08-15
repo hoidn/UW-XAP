@@ -1,4 +1,4 @@
-import gc
+import pandas as pd
 import re
 import pdb
 import sys
@@ -10,10 +10,13 @@ import argparse
 import os
 import hdfget
 
-#TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
+# TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
+# TODO: consider making labels more generic, for example by allowing the user
+# to generate derived data and then refer to it by label
 
 # NOTE: it is important to do this AFTER importing hdfget (which in turn imports *
 # from psana. Otherwise, for some reason, a segfault occurs.
+# Necessary for importing dill, which is a dependency of utils
 sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
 import utils
 
@@ -76,62 +79,100 @@ def get_run_clusters(interval = None, max_interval = 50.):
 
 def outliers(eventlist, blanks, sigma_max = 1.0):
     """
-    return the indices of outliers (not including blank frames) in the list of 
-    data arrays, along with a list of 'good' (neither outlier nor blank) indices
+    Return the indices of outliers (not including blank frames) in the list of 
+    data arrays, along with a list of 'good' (neither outlier nor blank) indices.
+
     """
-    totalcounts = map(np.sum, eventlist)
+    totalcounts = np.array(map(np.sum, eventlist))
     nonblank_counts_enumerated = filter(lambda (indx, counts): indx not in blanks, enumerate(totalcounts))
     nonblank_counts = map(lambda x: x[1], nonblank_counts_enumerated)
-    mean = np.mean(nonblank_counts)
+#    blank_counts_mean = np.mean(totalcounts[blanks])
+#    nonblank_counts_mean = np.mean(nonblank_counts)
+#
+#    # if "blank" frames have similar signal levels to nonblanks, use the 
+#    # default_bg instead of the "blank" frames
+#    if np.abs((nonblank_counts_mean - blank_counts_mean)/nonblank_counts_mean) < 0.1:
+
+    median = np.median(nonblank_counts)
     std = np.std(nonblank_counts)
     print  'signal levels:', totalcounts
-    print mean, std
+    print median, std
     # indices of the events in ascending order of total signal
-    outlier_indices = [i  for i, counts in nonblank_counts_enumerated if np.abs(counts - mean) > std * sigma_max]
+    outlier_indices = [i  for i, counts in nonblank_counts_enumerated if np.abs(counts - median) > std * sigma_max]
     good_indices = [i for i in range(len(eventlist)) if ((i not in outlier_indices) and (i not in blanks))]
     return outlier_indices, good_indices
 
-def blank_outlier_good(runNum, sigma_max = 1.0, intensity_det_id = 3):
+
+def get_signal_bg_one_run(runNum, detid, sigma_max = 1.0, **kwargs):
     """
     In:
-        run number
+        runNum: run number
         -sigma_max, max deviation from the mean of the total signal
         levels of events we will retain
-        -intensity_det_id, the id of the detector we're using to determine outliers
-        (defaults to 3, the quad CSPAD)
-    Returns indices of blank frames, outliers, and good (neither outlier nor blank)
-    frames
-    """
-    nfiles, eventlist, blanks = hdfget.getImg(intensity_det_id, runNum, EXPNAME)
-    outlier, good = outliers(eventlist, blanks, sigma_max = sigma_max)
-    return blanks, outlier, good
-
-def get_signal_bg_one_run(runNum, detid, **kwargs):
-    """
+        -default_bg: list of run numbers from which to exctract blank frames to use
+            as background subtraction.
     Returns the averaged signal and background (based on blank frames) for the 
     events in one run
+
+    # TODO: move this part of the doctring somewhere else
+    The event code-based method that hdfget uses to identify blank events does
+    not work with 60 Hz data. We work around this by using default_bg for
+    background subtraction if it is provided (or no subtraction if it is not).
     """
-    blank, outlier, good = blank_outlier_good(runNum, **kwargs)
+    def spacing_between(arr):
+        """
+        Given an array (intended to be an array of indices of blank runs), return the
+        interval between successive values (assumed to be constant).
+
+        The array must be of length >= 1
+
+        60 Hz datasets should have an interval of 12 between blank indices, 
+        whereas 120Hz datasets should have an interval of 24
+        """
+        diffs = np.diff(arr)[1:]
+        return int(np.sum(diffs))/len(diffs)
+
+    def get_bg(eventlist, vetted_blanks):
+        if vetted_blanks:
+            return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
+        return np.zeros(np.shape(eventlist[0]))
+
     nfiles, eventlist, blanks = hdfget.getImg(detid, runNum, EXPNAME)
-    bg = reduce(lambda x, y: x + y, eventlist[blank])/len(blank)
+    if spacing_between(blanks) == 24:
+        vetted_blanks = blanks
+    else:
+        vetted_blanks = []
+    outlier, good = outliers(eventlist, vetted_blanks, sigma_max = sigma_max)
+    bg = get_bg(eventlist, vetted_blanks)
     signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
     return signal, bg
 
 @utils.persist_to_file("cache/get_signal_bg_many.p")
 def get_signal_bg_many(runList, detid, **kwargs):
     """
-    return the averaged signal and background (based on blank frames) over the given runs
+    Return the averaged signal and background (based on blank frames) over the given runs
     """
     bg = np.zeros(DIMENSIONS_DICT[detid])
     signal = np.zeros(DIMENSIONS_DICT[detid]) 
     for run_number in runList:
-        gc.collect() # collect garbage
         signal_increment, bg_increment = get_signal_bg_one_run(run_number, detid, **kwargs)
-        signal += signal_increment
-        bg += bg_increment
+        signal += (signal_increment / len(runList))
+        bg += (bg_increment / len(runList))
+    return signal, bg
+
+def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None):
+    """
+    wraps get_signal_bg_many, additionally allowing a default background 
+    subtraction for groups of runs that lack interposed blank frames
+    """
+    signal, bg = get_signal_bg_many(runList, detid)
+    # if a default background runs are supplied AND bg is all zeros
+    if default_bg and not np.any(bg):
+        discard, bg = get_signal_bg_many(default_bg, detid)
     return signal, bg
 
 def process_and_save(runList, detid, **kwargs):
+    print "processing runs", runList
     signal, bg = get_signal_bg_many(runList, detid, **kwargs)
     boundaries = map(str, [runList[0], runList[-1]])
     os.system('mkdir -p processed/')
@@ -140,30 +181,25 @@ def process_and_save(runList, detid, **kwargs):
     np.savetxt("./processed/" + "-".join(boundaries) + "_" + str(detid) + "_bgsubbed.dat", signal - bg)   
     return signal, bg
 
-def process_all_clusters(detid, interval = None):
+def process_all_clusters(detid_list, interval = None):
     clusters = get_run_clusters(interval = interval)
     for c in clusters:
         # For LD67 compatibility: clusters of less than 5 runs correspond to 
         # closely spaced optical pump-probe runs, which we don't want to analyze 
-        # here. TODO: not very pretty
         if len(c) >= 5:
-            print "processing runs", c
-            process_and_save(c, detid)
+            for detid in detid_list:
+                process_and_save(c, detid)
 
-def main(detectorList = [1, 2]):
+
+def main(runs, detectorList = [1, 2]):
     for det in detectorList:
-        process_all_clusters(det)
+#        process_all_clusters(det)
+        process_and_save(runs, det)
 
 if __name__ == '__main__':
-    #parser = argparse.ArgumentParser()
-    #parser.add_argument('run', type = int, nargs = '+',  help = 'start and end numbers of ranges of runs to process')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('runs', type = int, nargs = '+',  help = 'run numbers to process')
 
-    #args = parser.parse_args()
-    #if len(args.run)%2 != 0:
-#        raise ValueError("number of args must be positive and even (i.e., must specify one or more ranges of runs)")
-#    fullRange = []
-#    for i in range(len(args.run)/2):
-#        fullRange += range(args.run[2 * i], 1 + args.run[2 * i + 1])
-#    main(fullRange)
-    main()
+    args = parser.parse_args()
 
+    main(args.runs)
