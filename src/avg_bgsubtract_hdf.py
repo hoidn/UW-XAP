@@ -13,6 +13,8 @@ import hdfget
 # TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
 # TODO: consider making labels more generic, for example by allowing the user
 # to generate derived data and then refer to it by label
+# Replace the event-code driven method of detecting blank frames with
+# something more reliable (i.e. with fewer edge cases)
 
 # NOTE: it is important to do this AFTER importing hdfget (which in turn imports *
 # from psana. Otherwise, for some reason, a segfault occurs.
@@ -103,6 +105,7 @@ def outliers(eventlist, blanks, sigma_max = 1.0):
     return outlier_indices, good_indices
 
 
+@utils.persist_to_file("cache/get_signal_bg_one_run.p")
 def get_signal_bg_one_run(runNum, detid, sigma_max = 1.0, **kwargs):
     """
     In:
@@ -139,7 +142,9 @@ def get_signal_bg_one_run(runNum, detid, sigma_max = 1.0, **kwargs):
 
     nfiles, eventlist, blanks = hdfget.getImg(detid, runNum, EXPNAME)
     if spacing_between(blanks) == 24:
-        vetted_blanks = blanks
+        # throw out the first blank frame, because it does NOT appear to
+        # actually be blank in LD67 runs
+        vetted_blanks = blanks[1:]
     else:
         vetted_blanks = []
     outlier, good = outliers(eventlist, vetted_blanks, sigma_max = sigma_max)
@@ -160,14 +165,25 @@ def get_signal_bg_many(runList, detid, **kwargs):
         bg += (bg_increment / len(runList))
     return signal, bg
 
-def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None):
+def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None,
+override_bg = None):
     """
     wraps get_signal_bg_many, additionally allowing a default background 
     subtraction for groups of runs that lack interposed blank frames
+
+    Inputs:
+        default_bg: A list of run numbers to use for bg subtraction of 60Hz runs
+        override_bg: A list of run numbers to use for bg subtraction of ALL
+        runs
+
+    If both default_bg and override_bg are provided, override_bg is used
     """
     signal, bg = get_signal_bg_many(runList, detid)
-    # if a default background runs are supplied AND bg is all zeros
-    if default_bg and not np.any(bg):
+    if override_bg:
+        discard, bg = get_signal_bg_many(override_bg, detid)
+    # if a default background runs are supplied AND bg is all zeros (meaning
+    # dummy values were inserted by get_signal_bg_many)
+    elif default_bg and not np.any(bg):
         discard, bg = get_signal_bg_many(default_bg, detid)
     return signal, bg
 

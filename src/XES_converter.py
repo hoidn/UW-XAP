@@ -51,6 +51,7 @@ def lineout(label, detid, cencol, pxwidth = 10, **kwargs):
 
 def get_normalization(spectrum, sumwidth = 40):
     nalpha = np.argmax(spectrum)
+    print "peak index: ", nalpha
     return np.sum(spectrum[max(nalpha-sumwidth,0):min(nalpha+sumwidth,len(spectrum) - 1)])
 
 def get_energies(label, detid, eltname, cencol, **kwargs):

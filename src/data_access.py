@@ -8,20 +8,20 @@ module for accessing already-processed data by run group labels specified in
 parameters file (default name: labels.txt)
 """
 
-def make_labels(fname = 'labels.txt', min_cluster_size = 5):
+def make_labels(fname = 'labels.txt', min_cluster_size = 2):
     """
     Generate list of time-clustered run ranges in a text file. Pairs with 
     get_labels()
 
     This needs to be run once before invoking the other functions in this module
     """
-    clusters = filter(lambda x: len(x) > min_cluster_size, avg_bgsubtract_hdf.get_run_clusters())
+    clusters = filter(lambda x: len(x) >= min_cluster_size, avg_bgsubtract_hdf.get_run_clusters())
     if os.path.exists(fname):
         raise ValueError("file " + fname + "exists")
     # pairs of start and end run numbers
     bounds = np.array(map(lambda cluster: np.array([cluster[0], cluster[-1]]), clusters))
     #bounds = map(lambda cluster: "%s-%s"%(str(cluster[0]), str(cluster[-1])), clusters)
-    np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, label', delimiter = ',')
+    np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, [label1], [label2]', delimiter = ',')
     return bounds
 
 def get_label_map(fname = 'labels.txt', **kwargs):
@@ -36,15 +36,16 @@ def get_label_map(fname = 'labels.txt', **kwargs):
     labdat = np.array(pd.read_csv(fname, delimiter = ','))
     #labdat = np.genfromtxt(fname, dtype = None)
     shape = np.shape(labdat)
-    if len(shape) != 2 or shape[1] != 3:
-        raise StandardError(fname + ' : incorrect format. Must be 2 or 3 comma-delimited columns.')
+    if len(shape) != 2 or shape[1] > 4:
+        raise StandardError(fname + ' : incorrect format. Must be no more than 4 comma-delimited columns.')
     for row in labdat:
         run_range = tuple(map(int, row[:2]))
         # remove whitespace
         if isinstance(row[2], str) and row[2].strip() != '':
             labels.setdefault(row[2].strip(), []).append(run_range)
-        else:
-            labels.setdefault("%s-%s"%run_range, []).append(run_range)
+        if isinstance(row[3], str) and row[3].strip() != '':
+            labels.setdefault(row[3].strip(), []).append(run_range)
+        labels.setdefault("%s-%s"%run_range, []).append(run_range)
     return labels
 
 
@@ -60,8 +61,14 @@ def get_all_runlist(label):
     except KeyError:
         raise KeyError("label " + label + " not found")
     return [range(runRange[0], runRange[1] + 1) for runRange in groups]
+
+#def get_label_componenets(label):
+#    ldict = get_label_map()
+#    runlists = itertools.chain(*np.unique([get_all_runlist(label) for label in ldict.keys()]))
+#    for lst in runlists:
     
-def get_label_data(label, detid, default_bg = None, **kwargs):
+
+def get_label_data(label, detid, default_bg = None, separate = False, **kwargs):
     """
     Given a label corresponding to a group of runs, returns an array of
     background-subtracted data
@@ -78,4 +85,6 @@ def get_label_data(label, detid, default_bg = None, **kwargs):
             bg += newbg
         except NameError:
             signal, bg = newsignal, newbg
+    if separate:
+        return (signal) / float(len(groups)), bg / float(len(groups))
     return (signal - bg) / float(len(groups))
