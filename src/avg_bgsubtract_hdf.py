@@ -88,13 +88,6 @@ def outliers(eventlist, blanks, sigma_max = 1.0):
     totalcounts = np.array(map(np.sum, eventlist))
     nonblank_counts_enumerated = filter(lambda (indx, counts): indx not in blanks, enumerate(totalcounts))
     nonblank_counts = map(lambda x: x[1], nonblank_counts_enumerated)
-#    blank_counts_mean = np.mean(totalcounts[blanks])
-#    nonblank_counts_mean = np.mean(nonblank_counts)
-#
-#    # if "blank" frames have similar signal levels to nonblanks, use the 
-#    # default_bg instead of the "blank" frames
-#    if np.abs((nonblank_counts_mean - blank_counts_mean)/nonblank_counts_mean) < 0.1:
-
     median = np.median(nonblank_counts)
     std = np.std(nonblank_counts)
     print  'signal levels:', totalcounts

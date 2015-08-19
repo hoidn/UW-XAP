@@ -1,7 +1,9 @@
 import numpy as np
+import sys
 import pandas as pd
 import avg_bgsubtract_hdf
 import os
+import pdb
 
 """
 module for accessing already-processed data by run group labels specified in 
@@ -68,18 +70,23 @@ def get_all_runlist(label):
 #    for lst in runlists:
     
 
-def get_label_data(label, detid, default_bg = None, separate = False, **kwargs):
+def get_label_data(label, detid, default_bg = None, override_bg = None, separate = False, **kwargs):
     """
     Given a label corresponding to a group of runs, returns an array of
     background-subtracted data
     """
-    if default_bg:
-        default_bg_runlist = tuple(np.concatenate(get_all_runlist(default_bg)))
-    else:
-        default_bg_runlist = None
+    def concatenated_runlists(lab):
+        if lab:
+            # convert from numpy type to int after concatenating
+            return tuple(map(int, np.concatenate(get_all_runlist(lab))))
+        else:
+            return None
+        
+    default_bg_runlist = concatenated_runlists(default_bg)
+    override_bg_runlist = concatenated_runlists(override_bg)
     groups = get_all_runlist(label)
     for runList in groups:
-        newsignal, newbg = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(runList, detid, default_bg = default_bg_runlist, **kwargs)
+        newsignal, newbg = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(runList, detid, default_bg = default_bg_runlist, override_bg = override_bg_runlist, **kwargs)
         try:
             signal += newsignal
             bg += newbg
@@ -88,3 +95,10 @@ def get_label_data(label, detid, default_bg = None, separate = False, **kwargs):
     if separate:
         return (signal) / float(len(groups)), bg / float(len(groups))
     return (signal - bg) / float(len(groups))
+
+def main(label):
+    get_label_data(label, 1)
+    get_label_data(label, 2)
+
+if __name__ == '__main__':
+    main(sys.argv[1])

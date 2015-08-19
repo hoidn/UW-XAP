@@ -152,13 +152,14 @@ def plot_spectra(eltname, spectrumList, labels, name = None):
     plt.ylim((0, 1.15 * max_intensity))
     if name:
         plt.savefig(name + '.png', bbox_inches='tight')
+        plt.savefig(name + '.svg', bbox_inches='tight')
     plt.show()
 
 
 if __name__ =='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('eltname', help = 'element name')
-    parser.add_argument('calibration', type = str, help = 'name of group of cold runs to use for calibration of the energy scale identification of the subregion of the CSPAD to process into a spectrum')
+    parser.add_argument('calibration', type = str, help = 'name of group of cold runs to use for calibration of the energy scale and identification of the subregion of the CSPAD to process into a spectrum')
     parser.add_argument('detid', type = int, help = 'Detector ID')
     parser.add_argument('--pxwidth', '-p', type = int, default = 10, help = 'pixel width of CSPAD subregion to sum')
     parser.add_argument('--background', '-b',  help = 'Use runs of this label for background subtraction instead of extracting dark exposures from the run if interposed background frames are absent. \nThis is necessary for 60 Hz runs.')
