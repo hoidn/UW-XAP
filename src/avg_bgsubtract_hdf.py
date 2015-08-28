@@ -8,7 +8,9 @@ import Image
 import glob
 import argparse
 import os
+
 import hdfget
+from functools import partial
 
 # TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
 # TODO: consider making labels more generic, for example by allowing the user
@@ -19,8 +21,16 @@ import hdfget
 # NOTE: it is important to do this AFTER importing hdfget (which in turn imports *
 # from psana. Otherwise, for some reason, a segfault occurs.
 # Necessary for importing dill, which is a dependency of utils
+#sys.path.remove('/reg/g/psdm/sw/external/python/2.7.10/x86_64-rhel5-gcc41-opt/lib/python2.7')
 sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
+sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
+
+# The version of multiprocessing installed on the psana system is incompatible
+# with pathogen. We need to install multiprocessing locally and push its
+# to sys.path
+sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/multiprocess-0.70.3-py2.7-linux-x86_64.egg')
 import utils
+from pathos.multiprocessing import ProcessingPool
 
 EXPNAME = "mecd6714"
 XTC_DIR = '/reg/d/psdm/MEC/mecd6714/xtc/'
@@ -98,8 +108,8 @@ def outliers(eventlist, blanks, sigma_max = 1.0):
     return outlier_indices, good_indices
 
 
-@utils.persist_to_file("cache/get_signal_bg_one_run.p")
-def get_signal_bg_one_run(runNum, detid, sigma_max = 1.0, **kwargs):
+@utils.eager_persist_to_file("cache/get_signal_bg_one_run/")
+def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
     """
     In:
         runNum: run number
@@ -158,6 +168,24 @@ def get_signal_bg_many(runList, detid, **kwargs):
         bg += (bg_increment / len(runList))
     return signal, bg
 
+@utils.persist_to_file("cache/get_signal_bg_many_parallel.p")
+def get_signal_bg_many_parallel(runList, detid, **kwargs):
+    """
+    Return the averaged signal and background (based on blank frames) over the given runs
+    """
+    def mapfunc(run_number):
+        return get_signal_bg_one_run(run_number, detid, **kwargs)
+
+    MAXNODES = 12
+    pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
+    bg = np.zeros(DIMENSIONS_DICT[detid])
+    signal = np.zeros(DIMENSIONS_DICT[detid]) 
+    run_data = pool.map(mapfunc, runList)
+    for signal_increment, bg_increment in run_data:
+        signal += (signal_increment / len(runList))
+        bg += (bg_increment / len(runList))
+    return signal, bg
+
 def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None,
 override_bg = None):
     """
@@ -171,7 +199,7 @@ override_bg = None):
 
     If both default_bg and override_bg are provided, override_bg is used
     """
-    signal, bg = get_signal_bg_many(runList, detid)
+    signal, bg = get_signal_bg_many_parallel(runList, detid)
     if override_bg:
         discard, bg = get_signal_bg_many(override_bg, detid)
     # if a default background runs are supplied AND bg is all zeros (meaning
