@@ -1,9 +1,32 @@
+import numpy as np
 import os
 import dill
 import collections
 import pdb
 import atexit
 
+def extrap1d(interpolator):
+    xs = interpolator.x
+    ys = interpolator.y
+
+    def pointwise(x):
+        if x < xs[0]:
+            return ys[0]
+            #return 0.
+        elif x > xs[-1]:
+            return ys[-1]
+            #return 0.
+        else:
+            return interpolator(x)
+
+    def ufunclike(xs):
+        try:
+            iter(xs)
+        except TypeError:
+            xs = np.array([xs])
+        return np.array(map(pointwise, np.array(xs)))
+
+    return ufunclike
 
 def hashable_dict(d):
     """
@@ -27,6 +50,10 @@ def persist_to_file(file_name):
     Inputs:
         file_name: File name prefix for the cache file(s)
     """
+    # Optimization: initialize the cache dict but don't load data from disk
+    # until the memoized function is called.
+    cache = {}
+
     # These are the hoops we need to jump through because python doesn't allow
     # assigning to variables in enclosing scope:
     state = {'loaded': False, 'cache_changed': False}
@@ -38,10 +65,6 @@ def persist_to_file(file_name):
         return state['cache_changed']
     def flag_cache_changed():
         return state['cache_changed']
-
-    # Optimization: initialize the cache dict but don't load data from disk
-    # until the memoized function is called.
-    cache = {}
 
     def dump():
         os.system('mkdir -p ' + os.path.dirname(file_name))

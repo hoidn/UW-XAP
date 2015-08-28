@@ -23,7 +23,7 @@ def make_labels(fname = 'labels.txt', min_cluster_size = 2):
     # pairs of start and end run numbers
     bounds = np.array(map(lambda cluster: np.array([cluster[0], cluster[-1]]), clusters))
     #bounds = map(lambda cluster: "%s-%s"%(str(cluster[0]), str(cluster[-1])), clusters)
-    np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, [label1], [label2]', delimiter = ',')
+    np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, label1, label2', delimiter = ',')
     return bounds
 
 def get_label_map(fname = 'labels.txt', **kwargs):
@@ -43,9 +43,9 @@ def get_label_map(fname = 'labels.txt', **kwargs):
     for row in labdat:
         run_range = tuple(map(int, row[:2]))
         # remove whitespace
-        if isinstance(row[2], str) and row[2].strip() != '':
+        if isinstance(row[2], str) and row[2].strip() != '' and row[2].strip() != 'None':
             labels.setdefault(row[2].strip(), []).append(run_range)
-        if isinstance(row[3], str) and row[3].strip() != '':
+        if isinstance(row[3], str) and row[3].strip() != '' and row[3].strip() != 'None':
             labels.setdefault(row[3].strip(), []).append(run_range)
         labels.setdefault("%s-%s"%run_range, []).append(run_range)
     return labels
@@ -82,6 +82,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None, separate
         else:
             return None
         
+    #signal, bg = None, None
     default_bg_runlist = concatenated_runlists(default_bg)
     override_bg_runlist = concatenated_runlists(override_bg)
     groups = get_all_runlist(label)
@@ -91,7 +92,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None, separate
             signal += newsignal
             bg += newbg
         except NameError:
-            signal, bg = newsignal, newbg
+            signal, bg = newsignal.copy(), newbg.copy()
     if separate:
         return (signal) / float(len(groups)), bg / float(len(groups))
     return (signal - bg) / float(len(groups))
