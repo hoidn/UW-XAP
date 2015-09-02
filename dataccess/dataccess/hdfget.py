@@ -26,8 +26,7 @@ sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
 import utils
 
 
-basedir = os.path.split(os.path.abspath( __file__ ))[0]
-configFileName = os.path.join(basedir,"tiff_converter_dump_epics.cfg")
+configFileName = utils.resource_path('data/tiff_converter_dump_epics.cfg')
 print configFileName
 assert os.path.exists(configFileName), "Config file not found, looked for: %s" \
        % configFileName

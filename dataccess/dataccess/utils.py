@@ -5,6 +5,16 @@ import collections
 import pdb
 import atexit
 from atomicfile import AtomicFile
+import pkg_resources
+from StringIO import StringIO
+
+PKG_NAME = 'dataccess'
+
+def resource_f(fpath):
+    return StringIO(pkg_resources.resource_string(PKG_NAME, fpath))
+
+def resource_path(fpath):
+    return pkg_resources.resource_filename(PKG_NAME, fpath)
 
 def extrap1d(interpolator):
     xs = interpolator.x

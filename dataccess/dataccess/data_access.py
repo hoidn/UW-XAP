@@ -5,6 +5,7 @@ import avg_bgsubtract_hdf
 import os
 import pdb
 
+
 """
 module for accessing already-processed data by run group labels specified in 
 parameters file (default name: labels.txt)
@@ -34,6 +35,9 @@ def get_label_map(fname = 'labels.txt', **kwargs):
 
     Output type: Dict mapping strings to lists of tuples.
     """
+    if not os.path.exists(fname):
+        make_labels(fname = fname)
+        print "File",fname,"not found. It will be created."
     labels = {}
     labdat = np.array(pd.read_csv(fname, delimiter = ','))
     #labdat = np.genfromtxt(fname, dtype = None)
@@ -51,12 +55,12 @@ def get_label_map(fname = 'labels.txt', **kwargs):
     return labels
 
 
-def get_all_runlist(label):
+def get_all_runlist(label, fname = 'labels.txt'):
     """
     Get list of run numbers associated with a label
     """
 
-    mapping = get_label_map()
+    mapping = get_label_map(fname = fname)
     # list of tuples denoting run ranges
     try:
         groups = mapping[label]
@@ -70,7 +74,7 @@ def get_all_runlist(label):
 #    for lst in runlists:
     
 
-def get_label_data(label, detid, default_bg = None, override_bg = None, separate = False, **kwargs):
+def get_label_data(label, detid, default_bg = None, override_bg = None, separate = False, fname = 'labels.txt', **kwargs):
     """
     Given a label corresponding to a group of runs, returns an array of
     background-subtracted data
@@ -78,14 +82,14 @@ def get_label_data(label, detid, default_bg = None, override_bg = None, separate
     def concatenated_runlists(lab):
         if lab:
             # convert from numpy type to int after concatenating
-            return tuple(map(int, np.concatenate(get_all_runlist(lab))))
+            return tuple(map(int, np.concatenate(get_all_runlist(lab, fname = fname))))
         else:
             return None
         
     #signal, bg = None, None
     default_bg_runlist = concatenated_runlists(default_bg)
     override_bg_runlist = concatenated_runlists(override_bg)
-    groups = get_all_runlist(label)
+    groups = get_all_runlist(label, fname = fname)
     for runList in groups:
         newsignal, newbg = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(runList, detid, default_bg = default_bg_runlist, override_bg = override_bg_runlist, **kwargs)
         try:
@@ -97,7 +101,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None, separate
         return (signal) / float(len(groups)), bg / float(len(groups))
     return (signal - bg) / float(len(groups))
 
-def main(label):
+def main(label, fname = 'labels.txt'):
     get_label_data(label, 1)
     get_label_data(label, 2)
 

@@ -12,6 +12,7 @@ import os
 import hdfget
 from functools import partial
 
+# TODO: don't blindly pass **kwargs
 # TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
 # TODO: consider making labels more generic, for example by allowing the user
 # to generate derived data and then refer to it by label
