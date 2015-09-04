@@ -9,7 +9,6 @@ import matplotlib as mp
 import os
 from scipy import interpolate
 
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dataccess-1.0-py2.7.egg')
 from dataccess import data_access as data
 from dataccess import xes_energies
 
@@ -52,7 +51,8 @@ def lineout(label, detid, cencol, pxwidth = 10, default_bg = None, run_label_fil
     Return a 1d lineout
     """
     raw = data.get_label_data(label, detid, default_bg = default_bg, fname = run_label_filename)
-    spectrum_intensities = np.array([ sum( [raw[i][j] for j in range(cencol-pxwidth,cencol+pxwidth+1)] ) for i in range(400) ])
+    frame_dimension = len(raw)
+    spectrum_intensities = np.array([ sum( [raw[i][j] for j in range(cencol-pxwidth,cencol+pxwidth+1)] ) for i in range(frame_dimension) ])
     return spectrum_intensities
 
 def get_normalization(x, intensities, sumwidth = 150):
@@ -122,7 +122,6 @@ def get_energies(label, detid, eltname, cencol, save_path = None, run_label_file
     Returns a tuple:
     Row index of the k alpha peak, 1d array of energies
     """
-    frame_dimension = 400
     if detid not in [1, 2]:
         raise ValueError("Invalid detector id for von Hamos spectrometer")
 
@@ -131,6 +130,7 @@ def get_energies(label, detid, eltname, cencol, save_path = None, run_label_file
     kbeta = emission[eltname]['kb']
 
     spectrum = lineout(label, detid, cencol, run_label_filename = run_label_filename)[::-1]
+    frame_dimension = len(spectrum)
     nalpha = np.argmax(spectrum)
     offset = nalpha + 20
     nbeta = np.argmax(spectrum[offset:]) + offset
@@ -154,7 +154,7 @@ def get_energies(label, detid, eltname, cencol, save_path = None, run_label_file
 
     nrm = np.sum(spectrum[max(nalpha-40,0):min(nalpha+40,frame_dimension)])
     energies = elist[::-1]
-    if save_path:
+    if os.path.dirname(save_path):
         os.system('mkdir -p ' + os.path.dirname(save_path))
         save_calib(save_path, energies)
     return np.array(energies)

@@ -12,26 +12,15 @@ import os
 import hdfget
 from functools import partial
 
+import utils
+from pathos.multiprocessing import ProcessingPool
+
 # TODO: don't blindly pass **kwargs
 # TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
 # TODO: consider making labels more generic, for example by allowing the user
 # to generate derived data and then refer to it by label
 # Replace the event-code driven method of detecting blank frames with
 # something more reliable (i.e. with fewer edge cases)
-
-# NOTE: it is important to do this AFTER importing hdfget (which in turn imports *
-# from psana. Otherwise, for some reason, a segfault occurs.
-# Necessary for importing dill, which is a dependency of utils
-#sys.path.remove('/reg/g/psdm/sw/external/python/2.7.10/x86_64-rhel5-gcc41-opt/lib/python2.7')
-sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
-sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
-
-# The version of multiprocessing installed on the psana system is incompatible
-# with pathogen. We need to install multiprocessing locally and push its
-# to sys.path
-sys.path.insert(1, '/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/multiprocess-0.70.3-py2.7-linux-x86_64.egg')
-import utils
-from pathos.multiprocessing import ProcessingPool
 
 EXPNAME = "mecd6714"
 XTC_DIR = '/reg/d/psdm/MEC/mecd6714/xtc/'
@@ -41,7 +30,7 @@ XTC_NAME = "/reg/d/psdm/MEC/mecd6714/xtc/e441-r%04d-s01-c00.xtc"
 XTC_GLOB = "/reg/d/psdm/MEC/mecd6714/xtc/e441-*-s01-c00.xtc"
 # XTC filename regex pattern
 XTC_REGEX = r"/reg/d/psdm/MEC/mecd6714/xtc/e441-r([0-9]{4})-s01-c00.xtc"
-DIMENSIONS_DICT = {1: (400, 400), 2: (400, 400), 3: (830, 825)}
+DIMENSIONS_DICT = {1: (391,370), 2: (391,370), 3: (830, 825)}
 
 # TODO: memoize timestamp lookup
 def get_run_clusters(interval = None, max_interval = 50.):
@@ -148,7 +137,7 @@ def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
     if spacing_between(blanks) == 24:
         # throw out the first blank frame, because it does NOT appear to
         # actually be blank in LD67 runs
-        vetted_blanks = blanks[1:]
+        vetted_blanks = blanks
     else:
         vetted_blanks = []
     outlier, good = outliers(eventlist, vetted_blanks, sigma_max = sigma_max)
@@ -177,7 +166,7 @@ def get_signal_bg_many_parallel(runList, detid, **kwargs):
     def mapfunc(run_number):
         return get_signal_bg_one_run(run_number, detid, **kwargs)
 
-    MAXNODES = 12
+    MAXNODES = 14
     pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
     bg = np.zeros(DIMENSIONS_DICT[detid])
     signal = np.zeros(DIMENSIONS_DICT[detid]) 
