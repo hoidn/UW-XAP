@@ -26,6 +26,8 @@ from dataccess import utils
 RUN_HEADER = 'Run #'
 LABELS = ['label 1', 'label 2']
 
+# TODO: better validation of user input
+
 def acquire_oauth2_credentials(secrets_file):
     """Flows through OAuth 2.0 authorization process for credentials."""
     flow = client.flow_from_clientsecrets(
@@ -69,8 +71,25 @@ def get_run_ranges(url, sheet_number = 0):
         else:
             return arr1 + [target_num_labels * [None]] * (len(arr2) - len(arr1)), arr2
     def str_to_range(run_string):
-        """Converts string of format "abcd,efgh" to list [abcd, efgh]"""
-        return run_string.split('-')
+        """
+        Converts string of format "abcd,efgh" to list [abcd, efgh]
+
+        Returns ValueError on incorrectly-formatted range entries.
+        """
+        if not run_string:
+            return [None, None]
+        else:
+            split = run_string.split('-')
+            try:
+                map(int, split) # values convertible to ints?
+                if len(split) == 1:
+                    return 2 * split
+                elif len(split) == 2:
+                    return split
+                else:
+                    raise ValueError("Invalid run range format: ", run_string)
+            except:
+                raise ValueError("Invalid run range format: ", run_string)
 
     storage =  Storage(utils.resource_path('data/credentials'))
     credentials = storage.get()

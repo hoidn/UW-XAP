@@ -282,8 +282,8 @@ def plot_spectra(eltname, spectrumList, labels, name = None):
 if __name__ =='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('eltname', help = 'element name')
-    parser.add_argument('calibration', type = str, help = 'name of group of cold runs to use for calibration of the energy scale and identification of the subregion of the CSPAD to process into a spectrum')
     parser.add_argument('detid', type = int, help = 'Detector ID')
+    parser.add_argument('calibration', type = str, help = 'name of group of cold runs to use for calibration of the energy scale and identification of the subregion of the CSPAD to process into a spectrum')
     parser.add_argument('--pxwidth', '-p', type = int, default = 10, help = 'pixel width of CSPAD subregion to sum')
     parser.add_argument('--background', '-b',  help = 'Use runs of this label for background subtraction instead of extracting dark exposures from the run if interposed background frames are absent. \nThis is necessary for 60 Hz runs.')
     parser.add_argument('--calibration_save_path', '-s', type = str, help = 'Path to which to save energy calibration data if calibration_load_path is unspecified and --kalpha_kbeta_calibration is selected')
