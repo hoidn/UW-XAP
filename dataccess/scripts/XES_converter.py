@@ -154,7 +154,7 @@ def get_energies(label, detid, eltname, cencol, save_path = None, run_label_file
 
     nrm = np.sum(spectrum[max(nalpha-40,0):min(nalpha+40,frame_dimension)])
     energies = elist[::-1]
-    if os.path.dirname(save_path):
+    if save_path and os.path.dirname(save_path):
         os.system('mkdir -p ' + os.path.dirname(save_path))
         save_calib(save_path, energies)
     return np.array(energies)
@@ -281,15 +281,15 @@ def plot_spectra(eltname, spectrumList, labels, name = None):
 
 if __name__ =='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('eltname', help = 'element name')
-    parser.add_argument('detid', type = int, help = 'Detector ID')
-    parser.add_argument('calibration', type = str, help = 'name of group of cold runs to use for calibration of the energy scale and identification of the subregion of the CSPAD to process into a spectrum')
-    parser.add_argument('--pxwidth', '-p', type = int, default = 10, help = 'pixel width of CSPAD subregion to sum')
-    parser.add_argument('--background', '-b',  help = 'Use runs of this label for background subtraction instead of extracting dark exposures from the run if interposed background frames are absent. \nThis is necessary for 60 Hz runs.')
-    parser.add_argument('--calibration_save_path', '-s', type = str, help = 'Path to which to save energy calibration data if calibration_load_path is unspecified and --kalpha_kbeta_calibration is selected')
+    parser.add_argument('eltname', help = 'Element name.')
+    parser.add_argument('detid', type = int, help = 'Detector ID.')
+    parser.add_argument('calibration', type = str, help = 'Label of a group of runs to use for calibration of the energy scale (if a calibration file is not provided) and identification of the subregion of the CSPAD to process into a spectrum.')
+    parser.add_argument('--pxwidth', '-p', type = int, default = 10, help = 'Pixel width of CSPAD subregion to sum.')
+    parser.add_argument('--background', '-b',  help = 'Use runs of this label for background subtraction instead of extracting dark exposures from the run, if interposed background frames are absent.')
+    parser.add_argument('--calibration_save_path', '-s', type = str, help = 'Path to which to save energy calibration data if calibration_load_path is unspecified and --kalpha_kbeta_calibration is selected.')
     parser.add_argument('--calibration_load_path', '-l', type = str, help = 'Path from which to load energy calibration data')
-    parser.add_argument('--kalpha_kbeta_calibration', '-k', action = 'store_true', help = 'Enable calculation of energy calibration based on k alpha and k beta peak locations if --calibration_load_path is not given')
-    parser.add_argument('--runlabels', '-r', type = str, default = 'labels.txt', help = 'Path to run group label input file. Defaults to labels.txt. If the file does not exist it is generated automatically (based on run data timestamps)')
+    parser.add_argument('--kalpha_kbeta_calibration', '-k', action = 'store_true', help = 'Enable automaic generation of energy calibration based on k alpha and k beta peak locations if --calibration_load_path is not given.')
+    parser.add_argument('--runlabels', '-r', type = str, default = 'labels.txt', help = 'Path to run group label input file. Defaults to labels.txt. If the file does not exist it is generated automatically (based on run data timestamps), and can subsequently be edited by the user.)')
     parser.add_argument('datalabels', nargs = '+', help = 'Labels of run groups to process.')
     args = parser.parse_args()
     eltname = args.eltname
