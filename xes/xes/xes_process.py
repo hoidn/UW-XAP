@@ -118,7 +118,8 @@ def get_energies(data, cencol, save_path = None, eltname = '', **kwargs):
     nrm = np.sum(spectrum[max(nalpha-40,0):min(nalpha+40,frame_dimension)])
     energies = elist[::-1]
     if save_path:
-        if not os.path.dirname(save_path):
+        dirname = os.path.dirname(save_path)
+        if dirname and (not os.path.exists(dirname)):
             os.system('mkdir -p ' + os.path.dirname(save_path))
         save_calib(save_path, energies)
     return np.array(energies)
@@ -196,10 +197,8 @@ def main(paths, cold_calibration_path = None, pxwidth = 3,
         os.makedirs('xes_spectra')
     if cold_calibration_path:
         cold_calibration_data = data_extractor(cold_calibration_path)
-        cencol_calibration_data = cold_calibration_data
     else:
         cold_calibration_data = None
-        cencol_calibration_data = data_extractor(paths[0])
     if dark_path:
         dark = data_extractor(dark_path)
     else:
@@ -208,7 +207,7 @@ def main(paths, cold_calibration_path = None, pxwidth = 3,
     labels = map(os.path.basename, paths)
     for data, label in zip(data_arrays, labels):
         energies, intensities = get_spectrum(data,
-            cencol_calibration_data = cencol_calibration_data,
+            cencol_calibration_data = data,
             dark = dark, cold_calibration_data = cold_calibration_data,
             pxwidth = pxwidth, calib_load_path = calib_load_path,
             calib_save_path = calib_save_path,
