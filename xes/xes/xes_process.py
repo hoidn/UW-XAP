@@ -17,6 +17,10 @@ data_extractor = np.genfromtxt
 # backsatter energy for graphite 002
 e0 = 1848.303414
 
+# distance in mm between HOPG crystal and the spectrometer's
+# source-to-dectector axis; i.e., the crystal's curvature radius
+hopg_radius = 103.4
+
 # Dict of emission line energies. 
 emission = xes_energies.emission_dict()
 
@@ -35,45 +39,95 @@ def lineout(data, cencol, pxwidth = 3):
     """
     Return a 1d lineout
     """
-    frame_dimension = len(data)
-    spectrum_intensities = np.array([ sum( [data[i][j] for j in range(cencol-pxwidth,cencol+pxwidth+1)] ) for i in range(frame_dimension) ])
+    spectrum_num_points = len(data)
+    spectrum_intensities = np.array([ sum( [data[i][j] for j in range(cencol-pxwidth,cencol+pxwidth+1)] ) for i in range(spectrum_num_points) ])
     return spectrum_intensities
 
 def get_normalization(x, intensities, sumwidth = 150):
-    nalpha = np.argmax(intensities)
-    x_alpha = x[nalpha]
-    filtered = intensities[np.logical_and(x > x_alpha - sumwidth, x < x_alpha + sumwidth)]
-    #print "peak index: ", nalpha
+    n_ref1 = np.argmax(intensities)
+    x_ref1 = x[n_ref1]
+    filtered = intensities[np.logical_and(x > x_ref1 - sumwidth, x < x_ref1 + sumwidth)]
+    #print "peak index: ", n_ref1
     return np.sum(filtered)
 
-def mask_peaks_and_iterpolate(x, y, peak_ranges, avg_interval = 20.):
-    interpolationx = []
-    interpolationy = []
-    for peakmin, peakmax in peak_ranges:
-        indices_min = np.where(np.abs(x - peakmin) < avg_interval)[0]
-        ymin = [np.mean(y[indices_min])] * len(indices_min)
-        xmin = list(x[indices_min])
+#def save_calib(fname, energies):
+#    with open(fname, 'wb') as f:
+#        np.savetxt(f, np.array([range(len(energies)), energies]).T, header = 'row index\tenergy(eV)')
 
-        indices_max = np.where(np.abs(x - peakmax) < avg_interval)[0]
-        ymax = [np.mean(y[indices_max])] * len(indices_max)
-        xmax = list(x[indices_max])
+def save_calib(spectrum_num_points, save_path, energy_ref1, energy_ref2, n_ref1, n_ref2):
+    """
+    energy_ref1: first (lower) reference energy
+    energy_ref2: second (higer) reference energy
+    n_ref1: array index corresponding to energy_ref1
+    n_ref2: array index corresponding to energy_ref2
 
-        interpolationx += (xmin + xmax)
-        interpolationy += (ymin + ymax)
-        
-    return utils.extrap1d(interpolate.interp1d(np.array(interpolationx), np.array(interpolationy)))
+    Saves the provided constants to save_path
+    """
+    with open(save_path, 'wb') as f:
+        np.savetxt(f, np.array([[spectrum_num_points], [energy_ref1], [energy_ref2], [n_ref1], [n_ref2]]).T, '%d\t %f\t %f\t %d\t %d', header = 'Number of points in spectrum\tEnergy 1 (eV)\tEnergy 2 (eV)\tpixel index 1\tpixel index 2')
 
-def save_calib(fname, energies):
-    with open(fname, 'wb') as f:
-        np.savetxt(f, np.array([range(len(energies)), energies]).T, header = 'row index\tenergy(eV)')
+#def load_calib(fname):
+#    with open(fname, 'rb') as f:
+#        energies =(np.genfromtxt(f).T)[1]
+#    return energies
 
 def load_calib(fname):
-    with open(fname, 'rb') as f:
-        energies =(np.genfromtxt(f).T)[1]
-    return energies
-    
+    def parse_config_objs(spectrum_num_points, energy_ref1, energy_ref2, n_ref1, n_ref2):
+        return int(spectrum_num_points), float(energy_ref1), float(energy_ref2), int(n_ref1), int(n_ref2)
 
-def get_energies(data, cencol, save_path = None, eltname = '', **kwargs):
+    with open(fname, 'rb') as f:
+        spectrum_num_points, energy_ref1, energy_ref2, n_ref1, n_ref2 = parse_config_objs(*np.genfromtxt(f).T)
+
+    return energies_from_two_points(spectrum_num_points, energy_ref1, energy_ref2, n_ref1, n_ref2)
+
+def get_k_energies_and_positions(eltname, spectrum):
+    """
+    Return the energies and indices of the k alpha and k beta peaks in
+    spectrum.
+    Arguments:
+        spectrum: a 1d-array
+    
+    It is assumed that the largest two peaks in spectrum are the k alpha
+    and k beta peak of a single element
+    """
+    try:
+        energy_kalpha = emission[eltname]['ka1']
+        energy_kbeta = emission[eltname]['kb']
+    except KeyError:
+        raise KeyError("element identifier not found: " + eltname)
+
+    n_kalpha = np.argmax(spectrum)
+    offset = n_kalpha + 20
+    n_kbeta = np.argmax(spectrum[offset:]) + offset
+
+    return energy_kalpha, energy_kbeta, n_kalpha, n_kbeta
+
+
+def energies_from_two_points(spectrum_num_points, energy_ref1, energy_ref2, n_ref1, n_ref2):
+    """
+    Calculate an array of energy values corresponding to pixel indices using
+    two reference points
+    """
+    # calculate position of peak positions on spectrometer
+    thalpha = math.asin(e0/energy_ref1)
+    posalpha = hopg_radius/(math.tan(thalpha))
+    thbeta = math.asin(e0/energy_ref2)
+    posbeta = hopg_radius/(math.tan(thbeta))
+
+    # calculate pixel size
+    pxsize = (posbeta - posalpha)/(n_ref1 - n_ref2)
+
+    # calculate pixel horizontal positions relative to source point
+    pixels = range(n_ref1-spectrum_num_points, n_ref1)
+    pixels = [ posalpha + pxsize*n for n in pixels ]
+
+    # calculate Bragg angles and energies for graphite 002
+    thetalist = [ math.atan(hopg_radius/p) for p in pixels ]
+    elist = [ e0/(math.sin(theta)) for theta in thetalist ]
+
+    return elist
+
+def energies_from_data(data, cencol, save_path = None, eltname = '', calibration_mode = 'k alpha k beta', **kwargs):
     """
     Return 1d array of energies corresponding to rows on the detector 
     based on calibration off of the ka and kb positions in XES data of the 
@@ -85,50 +139,32 @@ def get_energies(data, cencol, save_path = None, eltname = '', **kwargs):
     Returns a tuple:
     Row index of the k alpha peak, 1d array of energies
     """
-    # element id
-    try:
-        kalpha = emission[eltname]['ka1']
-        kbeta = emission[eltname]['kb']
-    except KeyError:
-        raise KeyError("element identifier not found: " + eltname)
 
     spectrum = lineout(data, cencol)[::-1]
-    frame_dimension = len(spectrum)
-    nalpha = np.argmax(spectrum)
-    offset = nalpha + 20
-    nbeta = np.argmax(spectrum[offset:]) + offset
+    spectrum_num_points = len(spectrum)
 
-    # calculate position of peak positions on spectrometer
-    thalpha = math.asin(e0/kalpha)
-    posalpha = 103.4/(math.tan(thalpha))
-    thbeta = math.asin(e0/kbeta)
-    posbeta = 103.4/(math.tan(thbeta))
+    if calibration_mode == 'k alpha k beta':
+        energy_ref1, energy_ref2, n_ref1, n_ref2 = get_k_energies_and_positions(eltname, spectrum)
+    # else:....
+    # TODO: add other energy calibration modes
 
-    # calculate pixel size
-    pxsize = (posbeta - posalpha)/(nalpha - nbeta)
+    energies = energies_from_two_points(spectrum_num_points, energy_ref1, energy_ref2, n_ref1, n_ref2)
 
-    # calculate pixel positions
-    pixels = range(nalpha,nalpha-frame_dimension,-1)
-    pixels = [ posalpha + pxsize*n for n in pixels ]
-
-    # calculate Bragg angles and energies for graphite 002
-    thetalist = [ math.atan(103.4/p) for p in pixels ]
-    elist = [ 1848.303414/(math.sin(theta)) for theta in thetalist ]
-
-    nrm = np.sum(spectrum[max(nalpha-40,0):min(nalpha+40,frame_dimension)])
-    energies = elist[::-1]
+    nrm = np.sum(spectrum[max(n_ref1-40,0):min(n_ref1+40, spectrum_num_points)])
+    #energies = elist[::-1]
     if save_path:
         dirname = os.path.dirname(save_path)
         if dirname and (not os.path.exists(dirname)):
             os.system('mkdir -p ' + os.path.dirname(save_path))
-        save_calib(save_path, energies)
+        #save_calib(save_path, energies)
+        save_calib(spectrum_num_points, save_path, energy_ref1, energy_ref2, n_ref1, n_ref2)
     return np.array(energies)
 
 # TODO: allow masking out bad data ranges (probably something to put into
 #  a config file) for background subtraction purposes
 def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibration_data = None,
         pxwidth = 3, bg_sub = True, calib_load_path = None, calib_save_path = None,
-        kalpha_kbeta_calibration = True, eltname = ''):
+        energy_ref1_energy_ref2_calibration = True, eltname = ''):
     """
     Return the XES spectrum corresponding to the given data
     and element
@@ -151,7 +187,7 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
         calib_load_path: path to a file with an energy calibration to load
         calib_save_path: File to which to save an energy calibration if
             calib_load_path is None
-        kalpha_kbeta_calibration: If calib_load_path is None, use k alpha
+        energy_ref1_energy_ref2_calibration: If calib_load_path is None, use k alpha
             and k beta peak locations to determine an energy scale. If None
             and calib_load_path is also None, do not perform an energy
             calibration at all.
@@ -159,7 +195,7 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
     """
     if np.shape(data) != (391, 370):
         print "WARNING: array dimensions differ from those of CSPAD140k"
-    if kalpha_kbeta_calibration or calib_load_path:
+    if energy_ref1_energy_ref2_calibration or calib_load_path:
         peak_width = 150
     else:
         peak_width = 15
@@ -170,14 +206,16 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
         cencol_calibration_data = data
     cencol = center_col(cencol_calibration_data)
     intensities = lineout(data, cencol, pxwidth = pxwidth)
+#    if calib_load_path:
+#        x = load_calib(calib_load_path)
     if calib_load_path:
         x = load_calib(calib_load_path)
-    elif kalpha_kbeta_calibration and eltname and (cold_calibration_data is not None):
-        x = get_energies(cold_calibration_data, cencol, save_path = calib_save_path, eltname = eltname)
+    elif energy_ref1_energy_ref2_calibration and eltname and (cold_calibration_data is not None):
+        x = energies_from_data(cold_calibration_data, cencol, save_path = calib_save_path, eltname = eltname)
     else:
-        if kalpha_kbeta_calibration and not eltname:
+        if energy_ref1_energy_ref2_calibration and not eltname:
             print "No element identifier provided; skipping energy calibration."
-        elif kalpha_kbeta_calibration and not cold_calibration_data:
+        elif energy_ref1_energy_ref2_calibration and not cold_calibration_data:
             print "No file for calibration specified; skipping energy calibration"
         x = np.array(range(len(intensities)))
     if bg_sub:
@@ -189,10 +227,10 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
 
 def main(paths, cold_calibration_path = None, pxwidth = 3,
         calib_load_path = None, calib_save_path = None,
-        dark_path = None, kalpha_kbeta_calibration = True,
+        dark_path = None, energy_ref1_energy_ref2_calibration = True,
         eltname = ''):
     spectrumList = []
-    scale_ev = (kalpha_kbeta_calibration or calib_load_path)
+    scale_ev = (energy_ref1_energy_ref2_calibration or calib_load_path)
     if not os.path.exists('xes_spectra/'):
         os.makedirs('xes_spectra')
     if cold_calibration_path:
@@ -211,7 +249,7 @@ def main(paths, cold_calibration_path = None, pxwidth = 3,
             dark = dark, cold_calibration_data = cold_calibration_data,
             pxwidth = pxwidth, calib_load_path = calib_load_path,
             calib_save_path = calib_save_path,
-            kalpha_kbeta_calibration = kalpha_kbeta_calibration, eltname = eltname)
+            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration, eltname = eltname)
         spectrumList.append([energies, intensities])
         if eltname:
             np.savetxt('xes_spectra/' + label + '_' + eltname,
@@ -226,8 +264,6 @@ def main(paths, cold_calibration_path = None, pxwidth = 3,
     plot_spectra(spectrumList, labels, scale_ev, name = name, eltname = eltname)
 
 
-# TODO: Fix the behavior for the case in which the spectra aren't energy-
-# calibrated
 def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     if not os.path.exists('plots_xes/'):
         os.makedirs('plots_xes/')
@@ -266,5 +302,3 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
         plt.savefig(name + '.png', bbox_inches='tight')
         plt.savefig(name + '.svg', bbox_inches='tight')
     plt.show()
-
-
