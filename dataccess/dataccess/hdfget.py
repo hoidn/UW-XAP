@@ -59,6 +59,27 @@ def getImg(detid, run, expname):
             eventlist.append(proc_raw_single_data(evt.astype('float64')))
     return nevents, array(eventlist), background(run, expname)
 
+
+#def getImg(detid, run, expname, nodes = 16):
+#    print "processing", HDF_NAME % (expname, expname, run)
+#    f=h5py.File(HDF_NAME % (expname, expname, run),'r')
+#    detectors = {1: '2x2::ElementV1/MecTargetChamber.0:Cspad2x2.1', 2: '2x2::ElementV1/MecTargetChamber.0:Cspad2x2.2', 3: '::ElementV2/MecTargetChamber.0:Cspad.0'}
+#    ref_string = '/Configure:0000/Run:0000/CalibCycle:0000/CsPad%s/data'
+#    #print ref_string%detectors[detid]
+#    data = f[ref_string%detectors[detid]]
+#    nevents = len(data)
+#    event_indices = range(nevents)
+#    def mapfunc(evt_index):
+#        eventlist = []
+#        if detid == 3:
+#            eventlist.append(proc_raw_quad_data(data[evt_index].astype('float64')))
+#        else:
+#            eventlist.append(proc_raw_single_data(data[evt_index].astype('float64')))
+#    pool = ProcessingPool(nodes=nodes)
+#    sublists = pool.map(mapfunc, event_indices)
+#    eventlist = reduce(lambda x, y: x + y, sublists)
+#    return nevents, array(eventlist), background(run, expname)
+
 def proc_raw_single_data(data):
     """
     Given a 185x388x2 array extracted from an hdf5 file, return the assembeled
@@ -85,7 +106,7 @@ def proc_raw_quad_data(data):
         [228,424]
         ]
     rotated = [1,1,0,0,3,3,0,0]
-    for i, arr in enumerate(data[event-1]):
+    for i, arr in enumerate(data):
         a = rot90(insert(arr,(193,193,193,193),0,axis = 1),rotated[i])
         if rotated[i]:
             output[corners[i][0]:corners[i][0]+392, corners[i][1]:corners[i][1]+185] = a

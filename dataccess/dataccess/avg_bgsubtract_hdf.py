@@ -135,8 +135,6 @@ def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
 
     nfiles, eventlist, blanks = hdfget.getImg(detid, runNum, EXPNAME)
     if spacing_between(blanks) == 24:
-        # throw out the first blank frame, because it does NOT appear to
-        # actually be blank in LD67 runs
         vetted_blanks = blanks
     else:
         vetted_blanks = []

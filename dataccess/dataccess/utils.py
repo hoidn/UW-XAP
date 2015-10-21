@@ -39,6 +39,12 @@ def extrap1d(interpolator):
 
     return ufunclike
 
+def make_hashable(obj):
+    """
+    return hash of an object that supports python's buffer protocol
+    """
+    return hashlib.sha1(obj).hexdigest()
+
 def hashable_dict(d):
     """
     try to make a dict convertible into a frozen set by 
