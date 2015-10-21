@@ -1,4 +1,3 @@
-import Image
 import glob
 from numpy import *
 import sys
@@ -9,14 +8,30 @@ import h5py
 # (string, string, int) -> (expt name, expt name, run number)
 HDF_NAME = "/reg/d/psdm/MEC/%s/hdf5/%s-r%04.i.h5"
 
+def run_file(run = None, expname = None, path = None):
+    """
+    Return an h5py file object given (1) a run number and experiment name or
+        (2) the path to an hdf5 file
+    """
+    if (run is not None) and (expname is not None):
+        name = HDF_NAME % (expname, expname, run)
+    else:
+        if path is None:
+            raise ValueError("Either a run number and experiment name, OR an hdf5 file path, must be provided")
+        else:
+            name = path
+    return h5py.File(name, 'r')
+        
+
 # Background indices:
 # Inputs:
 #   run: a run number
 # Output:
 #   An list of indices of dark events
-def background(run, expname):
+def background(run = None, expname = None, path = None):
     darkevents = []
-    f=h5py.File(HDF_NAME%(expname, expname, run),'r')
+    #f=h5py.File(HDF_NAME%(expname, expname, run),'r')
+    f = run_file(run = run, expname = expname, path = path)
     evrData=f['/Configure:0000/Run:0000/CalibCycle:0000/EvrData::DataV3/NoDetector.0:Evr.0/data']
     a = [evt['eventCode'] for evt in evrData['fifoEvents']]
     for i, evt in enumerate(a):
@@ -33,19 +48,25 @@ def background(run, expname):
     return darkevents
 
 
-# GetArray function:
-# Gets a cspad image as an array from the hdf5 file.
-# Pattern of CsPad chips determined from testing.py and comparison to outputs
-# of the psana library's data import feature
-# Input:
-#   run: run number
-#   event: event number (starts at 1)
-# Outputs:
-#   numpy array shape 388 x 370 or  830 x 825
-
-def getImg(detid, run, expname):
-    print "processing", HDF_NAME % (expname, expname, run)
-    f=h5py.File(HDF_NAME % (expname, expname, run),'r')
+def getImg(detid, run = None, expname = None, path = None):
+    """
+     Gets a cspad image as an array from the hdf5 file.
+     Pattern of CsPad chips determined from testing.py and comparison to outputs
+     of the psana library's data import feature
+     Input:
+       detid: detector id:
+           1 for CSPAD140k 1, 2 for CSPAD140k 2, and 3 for quad CSPAD
+       run: run number
+       event: event number (starts at 1)
+     Outputs:
+       numpy array shape 388 x 370 or  830 x 825
+    """
+    if (run is not None) and (expname is not None):
+        print "processing: ", HDF_NAME % (expname, expname, run)
+    else:
+        print "processing: ", path
+    f = run_file(run = run, expname = expname, path = path)
+    #f=h5py.File(HDF_NAME % (expname, expname, run),'r')
     detectors = {1: '2x2::ElementV1/MecTargetChamber.0:Cspad2x2.1', 2: '2x2::ElementV1/MecTargetChamber.0:Cspad2x2.2', 3: '::ElementV2/MecTargetChamber.0:Cspad.0'}
     ref_string = '/Configure:0000/Run:0000/CalibCycle:0000/CsPad%s/data'
     #print ref_string%detectors[detid]
@@ -57,28 +78,9 @@ def getImg(detid, run, expname):
             eventlist.append(proc_raw_quad_data(evt.astype('float64')))
         else:
             eventlist.append(proc_raw_single_data(evt.astype('float64')))
-    return nevents, array(eventlist), background(run, expname)
+    return nevents, array(eventlist), background(run = run, expname = expname, path = path)
 
 
-#def getImg(detid, run, expname, nodes = 16):
-#    print "processing", HDF_NAME % (expname, expname, run)
-#    f=h5py.File(HDF_NAME % (expname, expname, run),'r')
-#    detectors = {1: '2x2::ElementV1/MecTargetChamber.0:Cspad2x2.1', 2: '2x2::ElementV1/MecTargetChamber.0:Cspad2x2.2', 3: '::ElementV2/MecTargetChamber.0:Cspad.0'}
-#    ref_string = '/Configure:0000/Run:0000/CalibCycle:0000/CsPad%s/data'
-#    #print ref_string%detectors[detid]
-#    data = f[ref_string%detectors[detid]]
-#    nevents = len(data)
-#    event_indices = range(nevents)
-#    def mapfunc(evt_index):
-#        eventlist = []
-#        if detid == 3:
-#            eventlist.append(proc_raw_quad_data(data[evt_index].astype('float64')))
-#        else:
-#            eventlist.append(proc_raw_single_data(data[evt_index].astype('float64')))
-#    pool = ProcessingPool(nodes=nodes)
-#    sublists = pool.map(mapfunc, event_indices)
-#    eventlist = reduce(lambda x, y: x + y, sublists)
-#    return nevents, array(eventlist), background(run, expname)
 
 def proc_raw_single_data(data):
     """
