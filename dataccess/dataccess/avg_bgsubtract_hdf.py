@@ -133,7 +133,9 @@ def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
             return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
         return np.zeros(np.shape(eventlist[0]))
 
-    nfiles, eventlist, blanks = hdfget.getImg(detid, runNum, EXPNAME)
+    # TODO: refactoring necessary, now that getImg returns indices of both
+    # dark and signal frames
+    nfiles, eventlist, blanks, signal = hdfget.getImg(detid, runNum, EXPNAME)
     if spacing_between(blanks) == 24:
         vetted_blanks = blanks
     else:

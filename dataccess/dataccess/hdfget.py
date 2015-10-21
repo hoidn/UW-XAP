@@ -48,6 +48,18 @@ def background(run = None, expname = None, path = None):
     return darkevents
 
 
+# TODO: refactor (functions background and signal are partially redundant)
+def signal(run = None, expname = None, path = None):
+    """
+    Return event indices of non-dark events in a run
+    """
+    f = run_file(run = run, expname = expname, path = path)
+    evrData=f['/Configure:0000/Run:0000/CalibCycle:0000/EvrData::DataV3/NoDetector.0:Evr.0/data']
+    indices = set(range(len(evrData)))
+    bg_indices = set(background(run = run, expname = expname, path = path))
+    return list(indices - bg_indices)
+
+
 def getImg(detid, run = None, expname = None, path = None):
     """
      Gets a cspad image as an array from the hdf5 file.
@@ -78,7 +90,8 @@ def getImg(detid, run = None, expname = None, path = None):
             eventlist.append(proc_raw_quad_data(evt.astype('float64')))
         else:
             eventlist.append(proc_raw_single_data(evt.astype('float64')))
-    return nevents, array(eventlist), background(run = run, expname = expname, path = path)
+    return nevents, array(eventlist), background(run = run, expname = expname, path = path), signal(run = run, expname = expname, path = path)
+
 
 
 
