@@ -9,11 +9,9 @@ import glob
 import argparse
 import os
 
-import hdfget
+import psana_get
 from functools import partial
-
-import utils
-from pathos.multiprocessing import ProcessingPool
+import config # config.py in local directory
 
 # TODO: don't blindly pass **kwargs
 # TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
@@ -22,18 +20,42 @@ from pathos.multiprocessing import ProcessingPool
 # Replace the event-code driven method of detecting blank frames with
 # something more reliable (i.e. with fewer edge cases)
 
-EXPNAME = "mecd6714"
-XTC_DIR = '/reg/d/psdm/MEC/mecd6714/xtc/'
+# NOTE: it is important to do this AFTER importing psana_get (which in turn imports *
+# from psana. Otherwise, for some reason, a segfault occurs.
+# Necessary for importing dill, which is a dependency of utils
+#sys.path.remove('/reg/g/psdm/sw/external/python/2.7.10/x86_64-rhel5-gcc41-opt/lib/python2.7')
+sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
+sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
+#sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/')
+#sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
+
+# The version of multiprocessing installed on the psana system is incompatible
+# with pathogen. We need to install multiprocessing locally and push its
+# to sys.path
+sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/multiprocess-0.70.3-py2.7-linux-x86_64.egg')
+#sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/multiprocess-0.70.3-py2.7-linux-x86_64.egg')
+import utils
+from pathos.multiprocessing import ProcessingPool
+
+XTC_DIR = '/reg/d/psdm/MEC/' + config.expname + '/xtc/'
 # Format string to generate the path to a given run's xtc file. Takes an int.
-XTC_NAME = "/reg/d/psdm/MEC/mecd6714/xtc/e441-r%04d-s01-c00.xtc"
 # XTC filename glob pattern
-XTC_GLOB = "/reg/d/psdm/MEC/mecd6714/xtc/e441-*-s01-c00.xtc"
+#XTC_GLOB = "/reg/d/psdm/MEC/mecd6714/xtc/e441-*-s01-c00.xtc"
 # XTC filename regex pattern
-XTC_REGEX = r"/reg/d/psdm/MEC/mecd6714/xtc/e441-r([0-9]{4})-s01-c00.xtc"
-DIMENSIONS_DICT = {1: (391,370), 2: (391,370), 3: (830, 825)}
+DIMENSIONS_DICT = {1: (400, 400), 2: (400, 400), 3: (830, 825)}
+
+def get_all_runs(exppath = config.exppath):
+    """
+    Return numbers of all runs that have been written to the xtc directory
+    """
+    all_files_in_xtc = os.listdir('/reg/d/psdm/' + exppath + '/xtc')
+    subbed = map(lambda fname: re.sub(os.path.basename(XTC_REGEX), r"\1", fname),\
+            all_files_in_xtc)
+    return map(int, [name for name in subbed if len(name) == 4])
+
 
 # TODO: memoize timestamp lookup
-def get_run_clusters(interval = None, max_interval = 50.):
+def get_run_clusters(interval = None, exppath = config.exppath, max_interval = 50.):
     """
     Returns a list of lists containing clusters of run numbers whose xtc data 
     files were created within max_interval seconds of each other. Testing with
@@ -42,6 +64,8 @@ def get_run_clusters(interval = None, max_interval = 50.):
     interval is a tuple of the form [run_low, run_high) indicating a  range of 
     run numbers to limit this operation to
     """
+    XTC_NAME = "/reg/d/psdm/" + exppath +  r"/xtc/e441-r%04d-s01-c00.xtc"
+    XTC_REGEX = r"/reg/d/psdm/" + exppath + r"/xtc/e441-r([0-9]{4})-s01-c00.xtc"
     key = lambda run_num: os.path.getmtime(XTC_NAME%run_num)
     def cluster(data, maxgap, key = lambda x: x):
         '''Arrange data into groups where successive elements
@@ -66,10 +90,7 @@ def get_run_clusters(interval = None, max_interval = 50.):
                 groups.append([x])
         return groups
 
-    all_files_in_xtc = os.listdir('/reg/d/psdm/MEC/mecd6714/xtc')
-    subbed = map(lambda fname: re.sub(os.path.basename(XTC_REGEX), r"\1", fname),\
-            all_files_in_xtc)
-    all_runs = map(int, [name for name in subbed if len(name) == 4])
+    all_runs = get_all_runs(exppath = exppath)
     if interval:
         runs = range(*interval)
         if not set(runs).issubset(set(all_runs)):
@@ -111,7 +132,7 @@ def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
     events in one run
 
     # TODO: move this part of the doctring somewhere else
-    The event code-based method that hdfget uses to identify blank events does
+    The event code-based method that psana_get uses to identify blank events does
     not work with 60 Hz data. We work around this by using default_bg for
     background subtraction if it is provided (or no subtraction if it is not).
     """
@@ -135,7 +156,7 @@ def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
 
     # TODO: refactoring necessary, now that getImg returns indices of both
     # dark and signal frames
-    nfiles, eventlist, blanks, signal = hdfget.getImg(detid, runNum, EXPNAME)
+    nfiles, eventlist, blanks = psana_get.getImg(detid, runNum, config.expname)
     if spacing_between(blanks) == 24:
         vetted_blanks = blanks
     else:

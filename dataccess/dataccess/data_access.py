@@ -4,6 +4,9 @@ import pandas as pd
 import avg_bgsubtract_hdf
 import os
 import pdb
+import sys
+
+print sys.path
 
 
 """
