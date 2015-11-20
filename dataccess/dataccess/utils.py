@@ -8,8 +8,8 @@ from atomicfile import AtomicFile
 import pkg_resources
 from StringIO import StringIO
 
-PKG_NAME = 'dataccess'
-print "package name is ", __name__.split('.')[0]
+#PKG_NAME = 'dataccess'
+PKG_NAME = __name__.split('.')[0]
 
 def resource_f(fpath):
     return StringIO(pkg_resources.resource_string(PKG_NAME, fpath))

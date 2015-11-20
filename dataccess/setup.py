@@ -1,5 +1,7 @@
 #from distutils.core import setup
 
+import sys
+
 from setuptools import setup, find_packages
 
 setup(name='dataccess',
@@ -8,9 +10,9 @@ setup(name='dataccess',
     package_dir={'dataccess': 'dataccess'},
     package_data={'dataccess': ['data/*']},
     scripts = [
-        'scripts/XES_converter.py', 'scripts/g_spreadsheet_sync.py'
+        'scripts/mecana.py', 'scripts/g_spreadsheet_sync.py'
     ],
-    #zip_safe = False,
+    zip_safe = False,
     )
 
 print  find_packages('.')

@@ -13,6 +13,14 @@ import psana_get
 from functools import partial
 import config # config.py in local directory
 
+# validate contents of config.py
+if not config.exppath:
+    raise ValueError("config.exppath: must be string of length > 0")
+if not config.expname:
+    raise ValueError("config.expname: must be string of length > 0")
+# TODO: ditto... validate values of other parameters in config.py
+# do this here or in the top-level script?
+
 # TODO: don't blindly pass **kwargs
 # TODO: find a permanent solution for the exception raised on lines 200-202 of /reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dill/dill.py. For example, handle the exception properly
 # TODO: consider making labels more generic, for example by allowing the user
