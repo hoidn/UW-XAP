@@ -8,8 +8,6 @@ import os
 import pdb
 import sys
 
-#print sys.path
-
 
 """
 module for accessing already-processed data by run group labels specified in 
