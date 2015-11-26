@@ -39,8 +39,6 @@ except:
 #sys.path.remove('/reg/g/psdm/sw/external/python/2.7.10/x86_64-rhel5-gcc41-opt/lib/python2.7')
 sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
 sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
-#sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/')
-#sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
 
 # The version of multiprocessing installed on the psana system is incompatible
 # with pathogen. We need to install multiprocessing locally and push its
