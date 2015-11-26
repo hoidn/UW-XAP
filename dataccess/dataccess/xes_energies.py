@@ -1,3 +1,5 @@
+# Author: O. Hoidn
+
 import pandas as pd
 import numpy as np
 import utils
@@ -30,9 +32,3 @@ def emission_dict():
         process_one_row(row)
     return line_dict
 
-#def add_ka(line_dict):
-#    for k, v in line_dict.iteritems():
-#        if (not np.isnan(v['ka1'])) and (not np.isnan(v['ka2'])):
-#            v['ka'] = (2. * v['ka1'] + v['ka2'])/3
-#        else:
-#            v['ka'] = np.nan

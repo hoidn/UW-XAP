@@ -107,9 +107,12 @@ def get_run_ranges(url, sheet_number = 0):
     return filter(lambda x: x[0], combined)
 
 
-def write_labels(url, sheet_number = 0):
+def get_labels(url, sheet_number = 0):
     dat = get_run_ranges(url, sheet_number = sheet_number)
-    arr = np.array([tuple(row) for row in dat], dtype = np.dtype("d, d, U200, U200"))
+    return np.array([tuple(row) for row in dat], dtype = np.dtype("d, d, U200, U200"))
+
+def write_labels(url, sheet_number = 0):
+    arr = get_labels(url, sheet_number = sheet_number)
     with AtomicFile('labels.txt', 'w') as f:
         np.savetxt(f, arr, fmt = ['%04d', '%04d', '%s', '%s'], header = 'start run, end run, label1, label2', delimiter = ',')
     print "wrote to labels.txt"

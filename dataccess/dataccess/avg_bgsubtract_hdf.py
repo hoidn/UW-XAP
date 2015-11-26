@@ -1,3 +1,5 @@
+# Author: O. Hoidn
+
 import pandas as pd
 import re
 import pdb
@@ -16,8 +18,11 @@ import config # config.py in local directory
 # validate contents of config.py
 if not config.exppath:
     raise ValueError("config.exppath: must be string of length > 0")
-if not config.expname:
-    raise ValueError("config.expname: must be string of length > 0")
+try:
+    expname = config.exppath.split('/')[1]
+except:
+    raise ValueError("config.exppath: incorrect format")
+
 # TODO: ditto... validate values of other parameters in config.py
 # do this here or in the top-level script?
 
@@ -45,7 +50,7 @@ sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/multi
 import utils
 from pathos.multiprocessing import ProcessingPool
 
-XTC_DIR = '/reg/d/psdm/MEC/' + config.expname + '/xtc/'
+XTC_DIR = '/reg/d/psdm/MEC/' + expname + '/xtc/'
 # Format string to generate the path to a given run's xtc file. Takes an int.
 # XTC filename glob pattern
 #XTC_GLOB = "/reg/d/psdm/MEC/mecd6714/xtc/e441-*-s01-c00.xtc"
@@ -164,7 +169,7 @@ def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
 
     # TODO: refactoring necessary, now that getImg returns indices of both
     # dark and signal frames
-    nfiles, eventlist, blanks = psana_get.getImg(detid, runNum, config.expname)
+    nfiles, eventlist, blanks = psana_get.getImg(detid, runNum, expname)
     if spacing_between(blanks) == 24:
         vetted_blanks = blanks
     else:

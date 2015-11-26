@@ -10,6 +10,7 @@ sys.path.insert(1, '/reg/g/psdm/sw/external/python/2.7.10/x86_64-rhel7-gcc48-opt
 sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
 sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
 sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dataccess-1.0-py2.7.egg')
+sys.path.append('.') # so that config.py can be imported
 import os
 import shutil
 import argparse

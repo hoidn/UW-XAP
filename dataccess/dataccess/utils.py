@@ -1,3 +1,5 @@
+# Author: O. Hoidn
+
 import numpy as np
 import os
 import dill
