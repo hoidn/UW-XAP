@@ -15,4 +15,4 @@ setup(name='dataccess',
     zip_safe = False,
     )
 
-print  find_packages('.')
+print  "Packages are: ", find_packages('.')

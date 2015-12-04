@@ -9,10 +9,13 @@ from scipy.ndimage.filters import gaussian_filter
 from scipy.interpolate import griddata
 import scipy.interpolate as interpolate
 #from scipy.interpolate import interp2d
-#import ipdb
+import ipdb
 
 import config
 from dataccess import data_access as data
+
+# default powder peak width, in degrees
+DEFAULT_PEAK_WIDTH = 1.5
 
 global verbose
 verbose = True
@@ -28,6 +31,7 @@ def get_detid_parameters(detid):
     return (phi, x0, y0, alpha, r)
 
 
+# TODO: add an hdf5 option to data_extractor
 #import h5py
 #hdf5folder = '/reg/d/psdm/MEC/mecd6714/hdf5/'
 #
@@ -220,10 +224,6 @@ def save_data(angles, intensities, save_path):
     np.savetxt(save_path, [angles, intensities])
 
 
-def plot_patterns(patterns, labels):
-    for angles, intensities in patterns:
-        plt.plot(angles, intensities)
-    plt.show()
 
 def combine_masks(imarray, mask_paths):
     """
@@ -337,7 +337,7 @@ def subtract_background(imarray, detid, order = 5, resize_function = trim_array,
     else:
         return imarray[:size, :size] - background
 
-def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10, width = 1.5):
+def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10, width = DEFAULT_PEAK_WIDTH):
     """
     Background-subtract imarray and return the result. 
 
@@ -369,13 +369,20 @@ def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10
 
     # compute interpolated background
     bg_smooth, bg = fit_background(bgfit, detid, smoothing = smoothing)
+    #ipdb.set_trace()
 
     # zero out bad/nonexistent pixels
     bg_smooth[~pixel_mask] = 0.
     result = imarray - bg_smooth
     return result
 
-def make_powder_ring_mask(detid, imarray, compound_list, width = 1.5):
+def get_powder_angles(compound):
+    """
+    Accessor function for powder data in config.py
+    """
+    return config.powder_angles[compound]
+
+def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WIDTH):
     """
     Given a detector ID, assembeled image data array, and list of
     polycrystalline compounds in the target, return a mask that
@@ -384,7 +391,7 @@ def make_powder_ring_mask(detid, imarray, compound_list, width = 1.5):
     angles = []
     for compound in compound_list:
         try:
-            compound_xrd = config.powder_angles[compound]
+            compound_xrd = get_powder_angles(compound)
         except KeyError:
             raise KeyError("No XRD reference data found for compound: " + compound)
         if isinstance(compound_xrd, list): # compound_xrd is a list of angles
@@ -401,6 +408,62 @@ def make_powder_ring_mask(detid, imarray, compound_list, width = 1.5):
         mask = np.where(np.logical_and(betas > ang - width/2., betas < ang + width/2.), False, mask)
     return mask
     
+def plot_patterns(patterns, labels, ax = None, show = True):
+    if ax is None:
+        f, ax = plt.subplots(1)
+    combined = map(lambda x, y: x + [y], patterns, labels)
+    for angles, intensities, label in combined:
+        plt.plot(angles, intensities, label = label)
+    ax.legend()
+    ax.set_xlabel('Scattering angle (deg)')
+    ax.set_ylabel('Integrated intensity')
+    if show:
+        plt.show()
+    else:
+        return ax
+
+
+def mask_peaks_and_iterpolate(x, y, peak_ranges):
+    for peakmin, peakmax in peak_ranges:
+        good_indices = np.where(np.logical_or(x < peakmin, x > peakmax))[0]
+        y = y[good_indices]
+        x = x[good_indices]
+    return interpolate.interp1d(x, y)
+
+def peak_sizes(x, y, peak_ranges):
+    ipdb.set_trace()
+    #backgnd = mask_peaks_and_iterpolate(x, y, peak_ranges)
+    sizeList = []
+    for peakmin, peakmax in peak_ranges:
+        peakIndices = np.where(np.logical_and(x >= peakmin, x <= peakmax))[0]
+        sizeList += [np.sum(y[peakIndices])]
+    return np.array(sizeList)
+
+def peak_progression(labels, patterns, compound_name, peak_width = DEFAULT_PEAK_WIDTH, normalization = 'cold'):
+    """
+    Note: this function may only be called if the elements of labels are
+    google spreadsheet dataset labels, rather than paths to data files.
+    """
+    make_interval = lambda angle: [angle - peak_width, angle + peak_width]
+    make_ranges = lambda angles: map(make_interval, angles)
+    powder_angles = get_powder_angles(compound_name)
+
+    # ranges over which to integrate the powder patterns
+    peak_ranges = make_ranges(powder_angles)
+
+    # get transmission values 
+    label_transmissions = np.array(map(lambda label:
+        data.get_label_property(label, 'transmission'), labels))
+
+    order = np.argsort(label_transmissions)
+    sorted_label_transmissions, sorted_patterns = label_transmissions[order], np.array(patterns)[order]
+    peaksize_array = np.array([peak_sizes(angles, intensities, peak_ranges)
+        for angles, intensities in sorted_patterns])
+    if normalization == 'cold':
+        normalized_peaksize_array = peaksize_array/peaksize_array[0]
+    elif normalization == 'absolute':
+        normalized_peaksize_array = peaksize_array/sorted_label_transmissions[:, np.newaxis]
+    return normalized_peaksize_array
 
 def main(detid, data_identifiers, run_label_filename = 'labels.txt', mode = 'labels',
 plot = True, bgsub = 'yes', fiducial_ellipses = None, compound_list = []):

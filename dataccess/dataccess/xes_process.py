@@ -1,4 +1,4 @@
-# Author: O. Hoidn
+# Authors: O. Hoidn, J. Pacold, and R. Valenza
 
 import sys
 import argparse

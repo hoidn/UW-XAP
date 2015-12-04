@@ -49,6 +49,7 @@ import utils
 from pathos.multiprocessing import ProcessingPool
 
 XTC_DIR = '/reg/d/psdm/MEC/' + expname + '/xtc/'
+XTC_REGEX = r"/reg/d/psdm/" + config.exppath + r"/xtc/e441-r([0-9]{4})-s01-c00.xtc"
 # Format string to generate the path to a given run's xtc file. Takes an int.
 # XTC filename glob pattern
 #XTC_GLOB = "/reg/d/psdm/MEC/mecd6714/xtc/e441-*-s01-c00.xtc"
@@ -76,7 +77,6 @@ def get_run_clusters(interval = None, exppath = config.exppath, max_interval = 5
     run numbers to limit this operation to
     """
     XTC_NAME = "/reg/d/psdm/" + exppath +  r"/xtc/e441-r%04d-s01-c00.xtc"
-    XTC_REGEX = r"/reg/d/psdm/" + exppath + r"/xtc/e441-r([0-9]{4})-s01-c00.xtc"
     key = lambda run_num: os.path.getmtime(XTC_NAME%run_num)
     def cluster(data, maxgap, key = lambda x: x):
         '''Arrange data into groups where successive elements

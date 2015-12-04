@@ -9,8 +9,8 @@ import atexit
 from atomicfile import AtomicFile
 import pkg_resources
 from StringIO import StringIO
+from time import time
 
-#PKG_NAME = 'dataccess'
 PKG_NAME = __name__.split('.')[0]
 
 def resource_f(fpath):
@@ -62,6 +62,29 @@ def hashable_dict(d):
             d[k] = make_hashable(v)
     return d
 
+def memoize(timeout = None):
+    """
+    Memoization decorator with an optional timout parameter.
+    """
+    cache = {}
+    # sad hack to get around python's scoping behavior
+    cache2 = {}
+    def get_timestamp():
+        return cache2[0]
+    def set_timestamp():
+        cache2[0] = time()
+
+    def decorator(f):
+        def new_func(*args):
+            if args in cache:
+                if (not timeout) or (time() - get_timestamp() < timeout):
+                    return cache[args]
+            if timeout:
+                set_timestamp()
+            cache[args] = f(*args)
+            return cache[args]
+        return new_func
+    return decorator
 
 def persist_to_file(file_name):
     """
