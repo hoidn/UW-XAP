@@ -9,10 +9,13 @@ import pdb
 import sys
 import zmq
 import dill
+import re
 
 import utils
 import logbook
+import config
 
+XTC_REGEX = r"/reg/d/psdm/" + config.exppath + r"/xtc/" + config.xtc_prefix + "-r([0-9]{4})-s01-c00.xtc"
 
 """
 Module for accessing data associated with logbook-specified run group labels,
@@ -22,7 +25,7 @@ using a mapping published by a running instance of logbook.main.
 # TODO: description of the defined properties and the modules that use them
 
 # For ZMQ TCP communication to get logbook data
-PORT = "5556"
+PORT = config.port
 
 
 def make_labels(fname = 'labels.txt', min_cluster_size = 2):
@@ -127,17 +130,30 @@ def get_all_runlist(label, fname = 'labels.txt'):
         groups = mapping[label]
         return [range(runRange[0], runRange[1] + 1) for runRange in groups]
     except KeyError:
+        # TODO: make sure that the run number exists
         print "label " + label + " not found"
         label_range = logbook.parse_run(label)
         return [range(label_range[0], label_range[1] + 1)]
         
         #raise KeyError("label " + label + " not found")
 
+def get_all_runs(exppath = config.exppath):
+    """
+    Return numbers of all runs that have been written to the xtc directory.
+    """
+    all_files_in_xtc = os.listdir('/reg/d/psdm/' + exppath + '/xtc')
+    subbed = map(lambda fname: re.sub(os.path.basename(XTC_REGEX), r"\1", fname),\
+            all_files_in_xtc)
+    result = map(int, [name for name in subbed if len(name) == 4])
+    result.sort()
+    return result
 
-def get_label_data(label, detid, default_bg = None, override_bg = None, separate = False, fname = 'labels.txt', **kwargs):
+def get_label_data(label, detid, default_bg = None, override_bg = None,
+    separate = False, event_data_getter = None, event_filter = None, **kwargs):
     """
     Given a label corresponding to a group of runs, returns an array of
-    background-subtracted data
+    background-subtracted data.
+    #TODO: finish docstring
     """
     def concatenated_runlists(lab):
         if lab:
@@ -149,9 +165,13 @@ def get_label_data(label, detid, default_bg = None, override_bg = None, separate
     #signal, bg = None, None
     default_bg_runlist = concatenated_runlists(default_bg)
     override_bg_runlist = concatenated_runlists(override_bg)
-    groups = get_all_runlist(label, fname = fname)
+    groups = get_all_runlist(label)
     for runList in groups:
-        newsignal, newbg = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(runList, detid, default_bg = default_bg_runlist, override_bg = override_bg_runlist, **kwargs)
+        output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
+            runList, detid, default_bg = default_bg_runlist, override_bg =
+            override_bg_runlist, event_data_getter = event_data_getter,
+            event_filter = event_filter, **kwargs)
+        newsignal, newbg, event_data = output
         try:
             signal += newsignal
             bg += newbg
@@ -159,7 +179,10 @@ def get_label_data(label, detid, default_bg = None, override_bg = None, separate
             signal, bg = newsignal.copy(), newbg.copy()
     if separate:
         return (signal) / float(len(groups)), bg / float(len(groups))
-    return (signal - bg) / float(len(groups))
+    if event_data_getter is None:
+        return (signal - bg) / float(len(groups)), None
+    else:
+        return (signal - bg) / float(len(groups)), event_data
 
 def main(label, fname = 'labels.txt'):
     get_label_data(label, 1)

@@ -36,7 +36,7 @@ def data_from_label(detid, run_label_filename = 'labels.txt'):
     Output: Function that takes a string reference to data runs and returns
     a 2D CSPAD data array corresponding to detid and the string reference.
     """
-    return lambda label: data.get_label_data(label, detid, fname = run_label_filename)
+    return lambda label: data.get_label_data(label, detid, fname = run_label_filename)[0]
 
 def center_col(data):
     """

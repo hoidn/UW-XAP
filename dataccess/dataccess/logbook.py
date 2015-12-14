@@ -28,10 +28,11 @@ from dataccess import utils
 import config
 
 
-PORT = "5556"
+PORT = config.port
 
-PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*',\
-    'filter_min': r'.*bgfilter_max.*', 'filter_max': r'.*bgfilter_min.*', 'labels': r'.*[lL]abel.*'}
+PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*',
+    'filter_min': r'.*bgfilter_max.*', 'filter_max': r'.*bgfilter_min.*',
+     'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*'}
 HEADERS = [k for k in PROPERTY_REGEXES]
 
 def get_property_key(col_title):
@@ -39,12 +40,19 @@ def get_property_key(col_title):
         if re.match(v, col_title):
             return k
     raise KeyError(col_title + ": no match found")
-#DEFAULT_ENERGY = 8000.
 
-# TODO: better validation of user input
+# TODO: support the addition of authentication tokens for new users.
 
 def acquire_oauth2_credentials(secrets_file):
-    """Flows through OAuth 2.0 authorization process for credentials."""
+    """
+    Flows through OAuth 2.0 authorization process for obtaining Google API
+    access credentials for a google account's Drive spreadsheets. This requires
+    user authentication.
+
+    Parameters:
+        secrets_file : str
+        secrets file contains this application's client ID and secret
+    """
     flow = client.flow_from_clientsecrets(
         secrets_file,
         scope='https://spreadsheets.google.com/feeds',
@@ -155,6 +163,15 @@ def get_logbook_data(url, sheet_number = 0):
 def parse_float(flt_str):
     return float(flt_str)
 
+def parse_focal_size(flt_str):
+    # TODO: document the allowable notation 
+    if 'best focus' in flt_str:
+        return config.best_focus_size
+    else:
+        if 'um' in flt_str:
+            flt_str = flt_str.strip('um')
+        return parse_float(flt_str)
+
 def parse_string(string):
     return string
 
@@ -182,7 +199,7 @@ def parse_run(run_string):
             raise ValueError("Invalid run range format: ", run_string)
 
 parser_dispatch = {'runs': parse_run, 'transmission': parse_float,
-    'filter_min': parse_float, 'filter_max': parse_float, 'labels': parse_string}
+    'filter_min': parse_float, 'filter_max': parse_float, 'labels': parse_string, 'focal_size': parse_focal_size}
 
 def get_label_mapping(url = config.url):
     # TODO: handle duplicates

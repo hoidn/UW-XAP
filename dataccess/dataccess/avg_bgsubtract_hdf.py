@@ -10,8 +10,10 @@ import Image
 import glob
 import argparse
 import os
+import ipdb
 
-import psana_get
+from dataccess import psana_get
+from dataccess import toscript
 from functools import partial
 import config # config.py in local directory
 
@@ -45,73 +47,58 @@ sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/patho
 # to sys.path
 sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/multiprocess-0.70.3-py2.7-linux-x86_64.egg')
 #sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/multiprocess-0.70.3-py2.7-linux-x86_64.egg')
-import utils
+from dataccess import utils
 from pathos.multiprocessing import ProcessingPool
 
-XTC_DIR = '/reg/d/psdm/MEC/' + expname + '/xtc/'
-XTC_REGEX = r"/reg/d/psdm/" + config.exppath + r"/xtc/e441-r([0-9]{4})-s01-c00.xtc"
-# Format string to generate the path to a given run's xtc file. Takes an int.
-# XTC filename glob pattern
-#XTC_GLOB = "/reg/d/psdm/MEC/mecd6714/xtc/e441-*-s01-c00.xtc"
-# XTC filename regex pattern
-DIMENSIONS_DICT = {1: (400, 400), 2: (400, 400), 3: (830, 825)}
+#XTC_DIR = '/reg/d/psdm/MEC/' + expname + '/xtc/'
+XTC_DIR = '/reg/d/psdm/' + config.exppath + '/xtc/'
 
-def get_all_runs(exppath = config.exppath):
-    """
-    Return numbers of all runs that have been written to the xtc directory
-    """
-    all_files_in_xtc = os.listdir('/reg/d/psdm/' + exppath + '/xtc')
-    subbed = map(lambda fname: re.sub(os.path.basename(XTC_REGEX), r"\1", fname),\
-            all_files_in_xtc)
-    return map(int, [name for name in subbed if len(name) == 4])
-
-
-# TODO: memoize timestamp lookup
-def get_run_clusters(interval = None, exppath = config.exppath, max_interval = 50.):
-    """
-    Returns a list of lists containing clusters of run numbers whose xtc data 
-    files were created within max_interval seconds of each other. Testing with
-    LD67 data showed 50 seconds to be a good max_interval.
-
-    interval is a tuple of the form [run_low, run_high) indicating a  range of 
-    run numbers to limit this operation to
-    """
-    XTC_NAME = "/reg/d/psdm/" + exppath +  r"/xtc/e441-r%04d-s01-c00.xtc"
-    key = lambda run_num: os.path.getmtime(XTC_NAME%run_num)
-    def cluster(data, maxgap, key = lambda x: x):
-        '''Arrange data into groups where successive elements
-           differ by no more than *maxgap*
-
-           selector is a function that extracts values for comparison from the
-           elements of data
-
-            >>> cluster([1, 6, 9, 100, 102, 105, 109, 134, 139], maxgap=10)
-            [[1, 6, 9], [100, 102, 105, 109], [134, 139]]
-
-            >>> cluster([1, 6, 9, 99, 100, 102, 105, 134, 139, 141], maxgap=10)
-            [[1, 6, 9], [99, 100, 102, 105], [134, 139, 141]]
-
-        '''
-        data.sort(key = key)
-        groups = [[data[0]]]
-        for x in data[1:]:
-            if abs(key(x) - key(groups[-1][-1])) <= maxgap:
-                groups[-1].append(x)
-            else:
-                groups.append([x])
-        return groups
-
-    all_runs = get_all_runs(exppath = exppath)
-    if interval:
-        runs = range(*interval)
-        if not set(runs).issubset(set(all_runs)):
-            raise ValueError("invalid range of run numbers given")
-    else:
-        runs = all_runs
-    return cluster(runs, max_interval, key = key)
+## TODO: memoize timestamp lookup
+#def get_run_clusters(interval = None, exppath = config.exppath, max_interval = 50.):
+#    """
+#    Returns a list of lists containing clusters of run numbers whose xtc data 
+#    files were created within max_interval seconds of each other. Testing with
+#    LD67 data showed 50 seconds to be a good max_interval.
+#
+#    interval is a tuple of the form [run_low, run_high) indicating a  range of 
+#    run numbers to limit this operation to
+#    """
+#    XTC_NAME = "/reg/d/psdm/" + exppath +  r"/xtc/e441-r%04d-s01-c00.xtc"
+#    key = lambda run_num: os.path.getmtime(XTC_NAME%run_num)
+#    def cluster(data, maxgap, key = lambda x: x):
+#        '''Arrange data into groups where successive elements
+#           differ by no more than *maxgap*
+#
+#           selector is a function that extracts values for comparison from the
+#           elements of data
+#
+#            >>> cluster([1, 6, 9, 100, 102, 105, 109, 134, 139], maxgap=10)
+#            [[1, 6, 9], [100, 102, 105, 109], [134, 139]]
+#
+#            >>> cluster([1, 6, 9, 99, 100, 102, 105, 134, 139, 141], maxgap=10)
+#            [[1, 6, 9], [99, 100, 102, 105], [134, 139, 141]]
+#
+#        '''
+#        data.sort(key = key)
+#        groups = [[data[0]]]
+#        for x in data[1:]:
+#            if abs(key(x) - key(groups[-1][-1])) <= maxgap:
+#                groups[-1].append(x)
+#            else:
+#                groups.append([x])
+#        return groups
+#
+#    all_runs = get_all_runs(exppath = exppath)
+#    if interval:
+#        runs = range(*interval)
+#        if not set(runs).issubset(set(all_runs)):
+#            raise ValueError("invalid range of run numbers given")
+#    else:
+#        runs = all_runs
+#    return cluster(runs, max_interval, key = key)
 
 
-def outliers(eventlist, blanks, sigma_max = 1.0):
+def filter_events(eventlist, blanks, sigma_max = 1.0):
     """
     Return the indices of outliers (not including blank frames) in the list of 
     data arrays, along with a list of 'good' (neither outlier nor blank) indices.
@@ -130,88 +117,146 @@ def outliers(eventlist, blanks, sigma_max = 1.0):
     return outlier_indices, good_indices
 
 
-@utils.eager_persist_to_file("cache/get_signal_bg_one_run/")
-def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0, **kwargs):
+@utils.eager_persist_to_file("cache/get_signal_bg_one_run/", excluded = ['mode'])
+def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0,
+    event_data_getter = None, event_filter = None, mode = 'interactive', **kwargs):
     """
-    In:
-        runNum: run number
-        -sigma_max, max deviation from the mean of the total signal
-        levels of events we will retain
-        -default_bg: list of run numbers from which to exctract blank frames to use
-            as background subtraction.
     Returns the averaged signal and background (based on blank frames) for the 
     events in one run
 
-    # TODO: move this part of the doctring somewhere else
     The event code-based method that psana_get uses to identify blank events does
     not work with 60 Hz data. We work around this by using default_bg for
     background subtraction if it is provided (or no subtraction if it is not).
+
+    Parameters
+    ---------
+    runNum : int
+        run number
+    sigma_max : float
+        max deviation from the mean of the total signal
+        levels of events we will retain
+    default_bg : list of ints
+        list of run numbers from which to exctract blank frames to use
+        as background subtraction.
+    event_data_getter : function
+        takes an event data array and returns an element of event_data
+    event_filter : function
+        takes an event data array and returns True or False, indicating
+        whether to exclude the event from signal and bg
+
+    Returns
+    -------
+    signal : 2-d np.ndarray
+        signal averaged over 'good' events
+    bg : 2-d np.ndarray
+        dark frames averaged over 'good' events
+    event_data : list of arbitrary object
+        output from mapping event_data_getter over all event data. If
+        event_data_getter is None, event_data is None
     """
-    def spacing_between(arr):
-        """
-        Given an array (intended to be an array of indices of blank runs), return the
-        interval between successive values (assumed to be constant).
+    @toscript.makescript(__file__, "bsub -q psanaq -n 1 -o log.out python %s", 'cache/get_signal_bg_one_run/', mode = mode)
+    def get_signal_bg_one_run_inner(runNum, detid = 1, sigma_max = 1.0,
+    event_data_getter = None, event_filter = None, **kwargs):
+        #ipdb.set_trace()
+        def spacing_between(arr):
+            """
+            Given an array (intended to be an array of indices of blank runs), return the
+            interval between successive values (assumed to be constant).
 
-        The array must be of length >= 1
+            The array must be of length >= 1
 
-        60 Hz datasets should have an interval of 12 between blank indices, 
-        whereas 120Hz datasets should have an interval of 24
-        """
-        diffs = np.diff(arr)[1:]
-        return int(np.sum(diffs))/len(diffs)
+            60 Hz datasets should have an interval of 12 between blank indices, 
+            whereas 120Hz datasets should have an interval of 24
+            """
+            diffs = np.diff(arr)[1:]
+            return int(np.sum(diffs))/len(diffs)
 
-    def get_bg(eventlist, vetted_blanks):
-        if vetted_blanks:
-            return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
-        return np.zeros(np.shape(eventlist[0]))
+        def get_bg(eventlist, vetted_blanks):
+            if vetted_blanks:
+                return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
+            return np.zeros(np.shape(eventlist[0]))
 
-    # TODO: refactoring necessary, now that getImg returns indices of both
-    # dark and signal frames
-    nfiles, eventlist, blanks = psana_get.getImg(detid, runNum, expname)
-    if spacing_between(blanks) == 24:
-        vetted_blanks = blanks
-    else:
-        vetted_blanks = []
-    outlier, good = outliers(eventlist, vetted_blanks, sigma_max = sigma_max)
-    bg = get_bg(eventlist, vetted_blanks)
-    signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
-    return signal, bg
+        nfiles, eventlist, blanks = psana_get.getImg(detid, runNum)
+        if spacing_between(blanks) == 24:
+            vetted_blanks = blanks
+        else:
+            vetted_blanks = []
+        outlier, good = filter_events(eventlist, vetted_blanks, sigma_max = sigma_max)
+        bg = get_bg(eventlist, vetted_blanks)
+        signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
+        if event_data_getter is None:
+            return signal, bg, []
+        else:
+            event_data = map(event_data_getter, eventlist)
+            return signal, bg, event_data
+    #ipdb.set_trace()
+    return get_signal_bg_one_run_inner(runNum, detid = detid, sigma_max = sigma_max,
+        event_data_getter = event_data_getter, event_filter = event_filter, **kwargs)
 
 @utils.persist_to_file("cache/get_signal_bg_many.p")
-def get_signal_bg_many(runList, detid, **kwargs):
+def get_signal_bg_many(runList, detid, event_data_getter = None,
+    event_filter = None, **kwargs):
     """
-    Return the averaged signal and background (based on blank frames) over the given runs
+    Return the averaged signal and background, and accumulated event data,
+    from running get_signal_bg_one_run over all runs specified.
+
+    Parameters
+    ----------
+    runList : list of ints
+    All others: see get_signal_bg_one_run
+
+    Returns
+    ----------
+    signal : 2-d np.ndarray
+        Averaged signal, subject to filtering by event_filter, and default
+        removal of outliers.
+    bg : 2-d np.ndarray
+        Averaged background.
+    event_filter : list of lists
+        Accumulated event data.
     """
-    bg = np.zeros(DIMENSIONS_DICT[detid])
-    signal = np.zeros(DIMENSIONS_DICT[detid]) 
+    bg = np.zeros(config.detinfo_map[detid].dimensions)
+    signal = np.zeros(config.detinfo_map[detid].dimensions) 
+    event_data = []
     for run_number in runList:
-        signal_increment, bg_increment = get_signal_bg_one_run(run_number, detid, **kwargs)
+        output_one_run = get_signal_bg_one_run(run_number, detid,
+            event_data_getter = event_data_getter, event_filter = event_filter,
+            **kwargs)
+        signal_increment, bg_increment, event_data_entry = output_one_run
         signal += (signal_increment / len(runList))
         bg += (bg_increment / len(runList))
-    return signal, bg
+        if event_data_getter is not None:
+            event_data.append(event_data_entry)
+    return signal, bg, event_data
 
 @utils.persist_to_file("cache/get_signal_bg_many_parallel.p")
-def get_signal_bg_many_parallel(runList, detid, **kwargs):
+def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
+    event_filter = None, **kwargs):
     """
-    Return the averaged signal and background (based on blank frames) over the given runs
+    Parallel version of get_signal_bg_many
     """
     def mapfunc(run_number):
-        return get_signal_bg_one_run(run_number, detid, **kwargs)
+        return get_signal_bg_one_run(run_number, detid, event_data_getter =
+            event_data_getter, event_filter = event_filter, **kwargs)
 
     MAXNODES = 14
     pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
-    bg = np.zeros(DIMENSIONS_DICT[detid])
-    signal = np.zeros(DIMENSIONS_DICT[detid]) 
-    run_data = pool.map(mapfunc, runList)
-    for signal_increment, bg_increment in run_data:
+    bg = np.zeros(config.detinfo_map[detid].dimensions)
+    signal = np.zeros(config.detinfo_map[detid].dimensions) 
+    run_data = map(mapfunc, runList)
+    #run_data = pool.map(mapfunc, runList)
+    event_data = []
+    for signal_increment, bg_increment, event_data_entry in run_data:
         signal += (signal_increment / len(runList))
         bg += (bg_increment / len(runList))
-    return signal, bg
+        event_data.append(event_data_entry)
+    return signal, bg, event_data
 
+# TODO: fix this mess with event_data_getter
 def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None,
-override_bg = None):
+override_bg = None, event_data_getter = None, event_filter = None):
     """
-    wraps get_signal_bg_many, additionally allowing a default background 
+    Wraps get_signal_bg_many, additionally allowing a default background 
     subtraction for groups of runs that lack interposed blank frames
 
     Inputs:
@@ -221,14 +266,17 @@ override_bg = None):
 
     If both default_bg and override_bg are provided, override_bg is used
     """
-    signal, bg = get_signal_bg_many_parallel(runList, detid)
+    signal, bg, event_data = get_signal_bg_many_parallel(runList, detid,
+        event_data_getter = event_data_getter, event_filter = event_filter)
     if override_bg:
-        discard, bg = get_signal_bg_many(override_bg, detid)
+        discard, bg, event_data = get_signal_bg_many(override_bg, detid,
+            event_data_getter = event_data_getter, event_filter = event_filter)
     # if a default background runs are supplied AND bg is all zeros (meaning
     # dummy values were inserted by get_signal_bg_many)
     elif default_bg and not np.any(bg):
-        discard, bg = get_signal_bg_many(default_bg, detid)
-    return signal, bg
+        discard, bg, event_data = get_signal_bg_many(default_bg, detid,
+            event_data_getter = event_data_getter, event_filter = event_filter)
+    return signal, bg, event_data
 
 def process_and_save(runList, detid, **kwargs):
     print "processing runs", runList
@@ -255,10 +303,10 @@ def main(runs, detectorList = [1, 2]):
 #        process_all_clusters(det)
         process_and_save(runs, det)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('runs', type = int, nargs = '+',  help = 'run numbers to process')
-
-    args = parser.parse_args()
-
-    main(args.runs)
+#if __name__ == '__main__':
+#    parser = argparse.ArgumentParser()
+#    parser.add_argument('runs', type = int, nargs = '+',  help = 'run numbers to process')
+#
+#    args = parser.parse_args()
+#
+#    main(args.runs)

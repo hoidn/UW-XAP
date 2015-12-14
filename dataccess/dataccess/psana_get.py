@@ -10,7 +10,12 @@ import numpy as np
 sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
 #sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/')
 import utils
+import config
 
+try:
+    expname = config.exppath.split('/')[1]
+except:
+    raise ValueError("config.exppath: incorrect format")
 
 # psana configuration
 configFileName = utils.resource_path('data/tiff_converter_dump_epics.cfg')
@@ -21,19 +26,15 @@ setConfigFile(configFileName)
 
 
 # TODO: add support for small data mode
-def getImg(det_label, run, expname):
+def getImg(detid, run):
     """
-    det == 1, 2, or 3
+    TODO
     """
     DIVERTED_CODE = 162
     #ds = DataSource('exp=MEC/%s:run=%d:smd')% (expname,run) )
-    ds = DataSource('exp=MEC/%s:run=%d:stream=0,1'% (expname,run) )
-    detectors =\
-        {3: Source('DetInfo(MecTargetChamber.0:Cspad.0)'),
-        1: Source('DetInfo(MecTargetChamber.0:Cspad2x2.1)'),
-        2: Source('DetInfo(MecTargetChamber.0:Cspad2x2.2)')}
-    #det = Detector(detectors[det_label], ds.env())
-    det = detectors[det_label]
+    ds = DataSource('exp=%s:run=%d:stream=0,1'% (expname,run) )
+    make_detector_source = lambda key: Source('DetInfo(' + config.detinfo_map[key].device_name + ')')
+    det = make_detector_source(detid)
     nevent = 0
     arraylist = []
     darkevents = []
@@ -52,7 +53,9 @@ def getImg(det_label, run, expname):
         calibframe = evt.get(ndarray_int16_2, det, 'image0')
         #calibframe =  det.image(evt)
         if calibframe is not None:
-            if det.__str__() == 'Source("DetInfo(MecTargetChamber.0:Cspad.0)")':
+            #if det.__str__() == 'Source("DetInfo(MecTargetChamber.0:Cspad.0)")':
+            # detector is a quad CSPAD
+            if config.detinfo_map[detid].dimensions == (830, 825):
                 cropframe = calibframe[70:900,0:825].astype(float)
             else:
                 cropframe = calibframe.astype(float)
