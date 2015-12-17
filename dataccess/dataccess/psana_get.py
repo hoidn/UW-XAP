@@ -12,10 +12,6 @@ sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
 import utils
 import config
 
-try:
-    expname = config.exppath.split('/')[1]
-except:
-    raise ValueError("config.exppath: incorrect format")
 
 # psana configuration
 configFileName = utils.resource_path('data/tiff_converter_dump_epics.cfg')
@@ -32,7 +28,8 @@ def getImg(detid, run):
     """
     DIVERTED_CODE = 162
     #ds = DataSource('exp=MEC/%s:run=%d:smd')% (expname,run) )
-    ds = DataSource('exp=%s:run=%d:stream=0,1'% (expname,run) )
+    ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,run) )
+    # TODO: throw exception if key missing from config
     make_detector_source = lambda key: Source('DetInfo(' + config.detinfo_map[key].device_name + ')')
     det = make_detector_source(detid)
     nevent = 0

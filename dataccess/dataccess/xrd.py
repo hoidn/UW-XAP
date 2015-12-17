@@ -27,7 +27,7 @@ HBARC = 1973.
 global verbose
 verbose = True
 
-# TODO
+# TODO: test with arrays as inputs
 Dataset = namedtuple('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list'])
 
 def get_detid_parameters(detid):
@@ -304,15 +304,6 @@ def save_data(angles, intensities, save_path):
         os.system('mkdir -p ' + os.path.dirname(save_path))
     np.savetxt(save_path, [angles, intensities])
 
-def save_image(save_path, imarr):
-    dirname = os.path.dirname(save_path)
-    if dirname and (not os.path.exists(dirname)):
-        os.system('mkdir -p ' + os.path.dirname(save_path))
-    scipy.misc.imsave(save_path, imarr)
-    
-
-
-
 
 # From: http://stackoverflow.com/questions/7997152/python-3d-polynomial-surface-fit-order-dependent
 def polyfit2d(x, y, z, order=3):
@@ -431,7 +422,7 @@ def get_background_full_frame(imarray, detid, compound_list, smoothing = 10, wid
 
     # mask based on powder peak locations
     powder_mask = make_powder_ring_mask(detid, bgfit, compound_list, width = width)
-    save_image('detector_images/last_powder_mask.png', powder_mask)
+    utils.save_image('detector_images/last_powder_mask.png', powder_mask)
 
     # union of the two masks
     combined_mask = powder_mask & pixel_mask
@@ -460,7 +451,7 @@ def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10
     """
     # TODO: might be good to log intermediate stages
     bg_smooth = get_background_full_frame(imarray, detid, compound_list, smoothing = smoothing, width = width)
-    save_image('detector_images/last_bg.png', bg_smooth)
+    utils.save_image('detector_images/last_bg.png', bg_smooth)
     result = imarray - bg_smooth
     return result
 
@@ -537,7 +528,7 @@ def plot_peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WID
     if log:
         ax.set_xscale('log')
     ax.legend()
-    ax.set_xlabel('Flux density (arb)')
+    ax.set_xlabel('Flux density (J/cm^2)')
     ax.set_ylabel('Relative Bragg peak intensity')
     if show:
         plt.show()
@@ -623,7 +614,8 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
         label = dset.dataref
         transmission = data.get_label_property(label, 'transmission')
         size = data.get_label_property(label, 'focal_size')
-        return transmission / (size**2)
+        # convert length units from microns to cm
+        return config.pulse_energy * transmission / (np.pi * ((size * 0.5 * 1e-4)**2))
 
     # sort by increasing beam intensity
     datasets = sorted(datasets, key = get_flux_density)
@@ -655,6 +647,7 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     heating_progression = normalized_peaksize_array.T
     normalized_heating_progression = heating_progression / heating_progression[:, 0][:, np.newaxis]
     return powder_angles, label_flux_densities, heating_progression, normalized_heating_progression
+
 
 def main(detid, data_identifiers, mode = 'label', peak_progression_compound = None,
     plot = True, bgsub = True, fiducial_ellipses = None, compound_list = [],
@@ -692,7 +685,7 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         path = 'xrd_patterns/' + label + '_' + str(detid)
         save_data(pattern[0], pattern[1], path)
         # TODO: imarray should not be background-subtracted but it appears that it is.
-        save_image('detector_images/' + label + '_' + str(detid) + 'pixel_mask_raw.png', imarray)
+        utils.save_image('detector_images/' + label + '_' + str(detid) + 'pixel_mask_raw.png', imarray)
 
     if plot:
         if len(datasets) > 1:

@@ -104,14 +104,13 @@ def get_label_property(label, property):
     Return the value of a label's property.
     """
     complete_dict = get_pub_logbook_dict()
-    try:
-        label_dict = complete_dict[label]
-        try:
-            return label_dict[property]
-        except KeyError:
-            raise KeyError("attribute: " + property + " of label: " + label + " not found")
-    except KeyError: 
+    if label not in complete_dict:
         raise KeyError("label: " + label + " not found")
+    label_dict = complete_dict[label]
+    try:
+        return label_dict[property]
+    except KeyError:
+        raise KeyError("attribute: " + property + " of label: " + label + " not found")
 
 
 def get_all_runlist(label, fname = 'labels.txt'):
@@ -132,7 +131,10 @@ def get_all_runlist(label, fname = 'labels.txt'):
     except KeyError:
         # TODO: make sure that the run number exists
         print "label " + label + " not found"
-        label_range = logbook.parse_run(label)
+        try:
+            label_range = logbook.parse_run(label)
+        except ValueError:
+            raise ValueError(label + ': dataset label not found')
         return [range(label_range[0], label_range[1] + 1)]
         
         #raise KeyError("label " + label + " not found")
@@ -166,6 +168,8 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
     default_bg_runlist = concatenated_runlists(default_bg)
     override_bg_runlist = concatenated_runlists(override_bg)
     groups = get_all_runlist(label)
+    if not groups:
+        raise ValueError(label + ': no runs found for label')
     for runList in groups:
         output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
             runList, detid, default_bg = default_bg_runlist, override_bg =

@@ -1,3 +1,4 @@
+# Author: O. Hoidn
 
 import time
 import re
@@ -30,6 +31,7 @@ import config
 
 PORT = config.port
 
+# Format specification for column headers in logbook
 PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*',
     'filter_min': r'.*bgfilter_max.*', 'filter_max': r'.*bgfilter_min.*',
      'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*'}
@@ -217,9 +219,12 @@ def get_label_mapping(url = config.url):
                 for k, property in enumerated_properties:
                     property_key = get_property_key(property)
                     if property_key == 'runs':
-                        local_dict.setdefault(property_key, []).append(parse_run(row[k]))
-                        # Delete possible duplicates
-                        local_dict[property_key] = list(set(local_dict[property_key]))
+                        try:
+                            local_dict.setdefault(property_key, []).append(parse_run(row[k]))
+                            # Delete possible duplicates
+                            local_dict[property_key] = list(set(local_dict[property_key]))
+                        except ValueError:
+                            print "Malformed run range: ", row[k]
                     # TODO: make this non-obvious behaviour clear to the user.
                     elif property and (property not in local_dict) and row[k]:
                         local_dict[property_key] = parser_dispatch[property_key](row[k])

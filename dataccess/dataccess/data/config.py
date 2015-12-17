@@ -8,6 +8,10 @@ from collections import namedtuple
 # xtc_prefix = "e441"
 # This must be provided to run any analysis. 
 exppath = None
+try:
+    expname = config.exppath.split('/')[1]
+except:
+    raise ValueError("config.exppath: incorrect format")
 xtc_prefix = None
 
 # url of the google doc logbook
@@ -15,6 +19,8 @@ url = None
 
 # Probe photon energy in eV
 photon_energy = None
+# Energy per pulse, in J
+pulse_energy = None
 
 # structure to store area detector information
 # TODO: interfacing with Testing.nb.

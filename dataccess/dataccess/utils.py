@@ -12,8 +12,15 @@ from StringIO import StringIO
 from time import time
 import hashlib
 import inspect
+import scipy
 
 PKG_NAME = __name__.split('.')[0]
+
+def save_image(save_path, imarr):
+    dirname = os.path.dirname(save_path)
+    if dirname and (not os.path.exists(dirname)):
+        os.system('mkdir -p ' + os.path.dirname(save_path))
+    scipy.misc.imsave(save_path, imarr)
 
 def get_default_args(func):
     """

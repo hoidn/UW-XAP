@@ -7,14 +7,16 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib as mp
 import os
+import pandas as pd
 from scipy import interpolate
 
 from dataccess import data_access as data
-from dataccess import xes_energies
 from dataccess import utils
 
 import pdb
 from scipy.ndimage.filters import gaussian_filter as filt
+
+# TODO: use the same data extractor as in xrd.py
 
 # backsatter energy in eV for graphite 002
 e0 = 1848.303414
@@ -23,20 +25,49 @@ e0 = 1848.303414
 # source-to-dectector axis; i.e., the crystal's curvature diameter
 hopg_diameter = 103.4
 
-# Dict of emission line energies. 
-emission = xes_energies.emission_dict()
 
 # Maps emission line keys to plot labels
 lineidforplot = {'ka1': "$K\\alpha_1$", 'ka2': "$K\\alpha_2$", 'kb': "$K\\beta_{1,3}$", 'Ef': "$E_F$"}
 
-def data_from_label(detid, run_label_filename = 'labels.txt'):
+# row format for XES table:
+# Ele.  A   Trans.  Theory (eV) Unc. (eV)   Direct (eV) Unc. (eV)   Blend  Ef
+# Data source: http://physics.nist.gov/PhysRefData/XrayTrans/Html/search.html
+with open(utils.resource_path('data/fluorescence.txt'), 'rb') as f:
+    tabdata = pd.read_csv(f, sep = '\t')
+
+@utils.memoize(timeout = None)
+def emission_dict():
+    """
+    Returns a dict of dicts mapping element name and emission line label
+    to photon energy in eV.
+
+    The line label keys are: 'ka1', 'ka2', 'kb', and 'Ef' (Fermi energy)
+    The element keys are 'Ne' through 'Fm'
+
+    The energies used are from column 5 in fluorescence.txt. This data file
+    currently contains complete data only for ka1, ka2, and kb. Ef energies
+    for a few elements have been manually added.
+    """
+    line_dict = {}
+    line_lookup = {'KL2': 'ka2', 'KL3': 'ka1', 'KM3': 'kb', 'Ef': 'Ef'}
+    def process_one_row(row):
+        name, line, energy = row[0], line_lookup[row[2]], row[5]
+        elt_dict = line_dict.setdefault(name, {})
+        elt_dict[line] = energy
+    for i, row in tabdata.iterrows():
+        process_one_row(row)
+    return line_dict
+
+#emission = emission_dict()
+
+def data_from_label(detid):
     """
     Input: detector ID
 
     Output: Function that takes a string reference to data runs and returns
     a 2D CSPAD data array corresponding to detid and the string reference.
     """
-    return lambda label: data.get_label_data(label, detid, fname = run_label_filename)[0]
+    return lambda label: data.get_label_data(label, detid)[0]
 
 def center_col(data):
     """
@@ -122,8 +153,8 @@ def get_k_energies_and_positions(eltname, spectrum):
     and k beta peak of a single element
     """
     try:
-        energy_kalpha = emission[eltname]['ka1']
-        energy_kbeta = emission[eltname]['kb']
+        energy_kalpha = emission_dict()[eltname]['ka1']
+        energy_kbeta = emission_dict()[eltname]['kb']
     except KeyError:
         raise KeyError("element identifier not found: " + eltname)
 
@@ -270,13 +301,13 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     txtshift = {'ka1': 0, 'ka2': -20, 'kb': -25, 'Ef': 0}
     txtheight = {'ka1': 1.1, 'ka2': 1.1, 'kb': 0.5, 'Ef': 0.5}
     if eltname:
-        lines = emission[eltname].keys()
+        lines = emission_dict()[eltname].keys()
         for line in lines:
-            if elist[-1] - 50 < emission[eltname][line] < elist[0] + 50:
-                plt.plot( [emission[eltname][line], emission[eltname][line]],
+            if elist[-1] - 50 < emission_dict()[eltname][line] < elist[0] + 50:
+                plt.plot( [emission_dict()[eltname][line], emission_dict()[eltname][line]],
                     [(-0.05)*max_intensity, (txtheight[line])*max_intensity],
                     color = "gray")
-                plt.text(emission[eltname][line]+txtshift[line], (txtheight[line])*max_intensity, lineidforplot[line], size="large")
+                plt.text(emission_dict()[eltname][line]+txtshift[line], (txtheight[line])*max_intensity, lineidforplot[line], size="large")
 
     colorlist = 4 * ["orange", "green", "purple", "red", "brown", "black"]
     ncolors = len(colorlist)
@@ -297,22 +328,22 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     plt.show()
 
 
-def main(detid, data_identifiers, cold_calibration_path = None, pxwidth = 3,
+def main(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
         calib_load_path = None, calib_save_path = None,
-        dark_path = None, energy_ref1_energy_ref2_calibration = True,
-        eltname = '', run_label_filename = 'labels.txt'):
+        dark_label = None, energy_ref1_energy_ref2_calibration = True,
+        eltname = ''):
     # Extract data from labels. 
-    data_extractor = data_from_label(detid, run_label_filename = run_label_filename)
+    data_extractor = data_from_label(detid)
     spectrumList = []
     scale_ev = (energy_ref1_energy_ref2_calibration or calib_load_path)
     if not os.path.exists('xes_spectra/'):
         os.makedirs('xes_spectra')
-    if cold_calibration_path:
-        cold_calibration_data = data_extractor(cold_calibration_path)
+    if cold_calibration_label:
+        cold_calibration_data = data_extractor(cold_calibration_label)
     else:
         cold_calibration_data = None
-    if dark_path:
-        dark = data_extractor(dark_path)
+    if dark_label:
+        dark = data_extractor(dark_label)
     else:
         dark = None
     data_arrays = map(data_extractor, data_identifiers)

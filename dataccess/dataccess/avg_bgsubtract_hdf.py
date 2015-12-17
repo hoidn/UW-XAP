@@ -117,83 +117,163 @@ def filter_events(eventlist, blanks, sigma_max = 1.0):
     return outlier_indices, good_indices
 
 
-@utils.eager_persist_to_file("cache/get_signal_bg_one_run/", excluded = ['mode'])
+#@utils.eager_persist_to_file("cache/get_signal_bg_one_run/", excluded = ['mode'])
+#def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0,
+#    event_data_getter = None, event_filter = None, mode = 'interactive', **kwargs):
+#    """
+#    Returns the averaged signal and background (based on blank frames) for the 
+#    events in one run
+#
+#    The event code-based method that psana_get uses to identify blank events does
+#    not work with 60 Hz data. We work around this by using default_bg for
+#    background subtraction if it is provided (or no subtraction if it is not).
+#
+#    Parameters
+#    ---------
+#    runNum : int
+#        run number
+#    sigma_max : float
+#        max deviation from the mean of the total signal
+#        levels of events we will retain
+#    default_bg : list of ints
+#        list of run numbers from which to exctract blank frames to use
+#        as background subtraction.
+#    event_data_getter : function
+#        takes an event data array and returns an element of event_data
+#    event_filter : function
+#        takes an event data array and returns True or False, indicating
+#        whether to exclude the event from signal and bg
+#
+#    Returns
+#    -------
+#    signal : 2-d np.ndarray
+#        signal averaged over 'good' events
+#    bg : 2-d np.ndarray
+#        dark frames averaged over 'good' events
+#    event_data : list of arbitrary object
+#        output from mapping event_data_getter over all event data. If
+#        event_data_getter is None, event_data is None
+#    """
+#    @toscript.makescript(__file__, "bsub -q psanaq -n 1 -o log.out python %s", 'cache/get_signal_bg_one_run/', mode = mode)
+#    def get_signal_bg_one_run_inner(runNum, detid = 1, sigma_max = 1.0,
+#    event_data_getter = None, event_filter = None, **kwargs):
+#        #ipdb.set_trace()
+#        def spacing_between(arr):
+#            """
+#            Given an array (intended to be an array of indices of blank runs), return the
+#            interval between successive values (assumed to be constant).
+#
+#            The array must be of length >= 1
+#
+#            60 Hz datasets should have an interval of 12 between blank indices, 
+#            whereas 120Hz datasets should have an interval of 24
+#            """
+#            diffs = np.diff(arr)[1:]
+#            return int(np.sum(diffs))/len(diffs)
+#
+#        def get_bg(eventlist, vetted_blanks):
+#            if vetted_blanks:
+#                return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
+#            return np.zeros(np.shape(eventlist[0]))
+#
+#        nfiles, eventlist, blanks = psana_get.getImg(detid, runNum)
+#        if spacing_between(blanks) == 24:
+#            vetted_blanks = blanks
+#        else:
+#            vetted_blanks = []
+#        outlier, good = filter_events(eventlist, vetted_blanks, sigma_max = sigma_max)
+#        bg = get_bg(eventlist, vetted_blanks)
+#        signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
+#        if event_data_getter is None:
+#            return signal, bg, []
+#        else:
+#            event_data = map(event_data_getter, eventlist)
+#            return signal, bg, event_data
+#    #ipdb.set_trace()
+#    return get_signal_bg_one_run_inner(runNum, detid = detid, sigma_max = sigma_max,
+#        event_data_getter = event_data_getter, event_filter = event_filter, **kwargs)
+
+
+@utils.eager_persist_to_file("cache/get_signal_bg_one_run/")
 def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0,
-    event_data_getter = None, event_filter = None, mode = 'interactive', **kwargs):
-    """
-    Returns the averaged signal and background (based on blank frames) for the 
-    events in one run
-
-    The event code-based method that psana_get uses to identify blank events does
-    not work with 60 Hz data. We work around this by using default_bg for
-    background subtraction if it is provided (or no subtraction if it is not).
-
-    Parameters
-    ---------
-    runNum : int
-        run number
-    sigma_max : float
-        max deviation from the mean of the total signal
-        levels of events we will retain
-    default_bg : list of ints
-        list of run numbers from which to exctract blank frames to use
-        as background subtraction.
-    event_data_getter : function
-        takes an event data array and returns an element of event_data
-    event_filter : function
-        takes an event data array and returns True or False, indicating
-        whether to exclude the event from signal and bg
-
-    Returns
-    -------
-    signal : 2-d np.ndarray
-        signal averaged over 'good' events
-    bg : 2-d np.ndarray
-        dark frames averaged over 'good' events
-    event_data : list of arbitrary object
-        output from mapping event_data_getter over all event data. If
-        event_data_getter is None, event_data is None
-    """
-    @toscript.makescript(__file__, "bsub -q psanaq -n 1 -o log.out python %s", 'cache/get_signal_bg_one_run/', mode = mode)
-    def get_signal_bg_one_run_inner(runNum, detid = 1, sigma_max = 1.0,
-    event_data_getter = None, event_filter = None, **kwargs):
-        #ipdb.set_trace()
-        def spacing_between(arr):
-            """
-            Given an array (intended to be an array of indices of blank runs), return the
-            interval between successive values (assumed to be constant).
-
-            The array must be of length >= 1
-
-            60 Hz datasets should have an interval of 12 between blank indices, 
-            whereas 120Hz datasets should have an interval of 24
-            """
-            diffs = np.diff(arr)[1:]
-            return int(np.sum(diffs))/len(diffs)
-
-        def get_bg(eventlist, vetted_blanks):
-            if vetted_blanks:
-                return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
-            return np.zeros(np.shape(eventlist[0]))
-
-        nfiles, eventlist, blanks = psana_get.getImg(detid, runNum)
-        if spacing_between(blanks) == 24:
-            vetted_blanks = blanks
-        else:
-            vetted_blanks = []
-        outlier, good = filter_events(eventlist, vetted_blanks, sigma_max = sigma_max)
-        bg = get_bg(eventlist, vetted_blanks)
-        signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
-        if event_data_getter is None:
-            return signal, bg, []
-        else:
-            event_data = map(event_data_getter, eventlist)
-            return signal, bg, event_data
+event_data_getter = None, event_filter = None, **kwargs):
     #ipdb.set_trace()
-    return get_signal_bg_one_run_inner(runNum, detid = detid, sigma_max = sigma_max,
-        event_data_getter = event_data_getter, event_filter = event_filter, **kwargs)
+    def spacing_between(arr):
+        """
+        Given an array (intended to be an array of indices of blank runs), return the
+        interval between successive values (assumed to be constant).
 
-@utils.persist_to_file("cache/get_signal_bg_many.p")
+        The array must be of length >= 1
+
+        60 Hz datasets should have an interval of 12 between blank indices, 
+        whereas 120Hz datasets should have an interval of 24
+        """
+        diffs = np.diff(arr)[1:]
+        return int(np.sum(diffs))/len(diffs)
+
+    def get_bg(eventlist, vetted_blanks):
+        if vetted_blanks:
+            return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
+        return np.zeros(np.shape(eventlist[0]))
+
+    nfiles, eventlist, blanks = psana_get.getImg(detid, runNum)
+    if spacing_between(blanks) == 24:
+        vetted_blanks = blanks
+    else:
+        vetted_blanks = []
+    outlier, good = filter_events(eventlist, vetted_blanks, sigma_max = sigma_max)
+    bg = get_bg(eventlist, vetted_blanks)
+    signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
+    if event_data_getter is None:
+        return signal, bg, []
+    else:
+        event_data = map(event_data_getter, eventlist)
+        return signal, bg, event_data
+
+def get_signal_bg_one_run_smd(runNum, detid, sigma_max = 1.0,
+        event_data_getter = None, event_filter = None, **kwargs):
+    DIVERTED_CODE = 162
+    ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+    det = config.detinfo_map[detid]
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+    darkevents, event_data = [], []
+    darksum= np.zeros(config.detinfo_map[detid].dimensions, dtype = np.double)
+    signalsum= np.zeros(config.detinfo_map[detid].dimensions, dtype = np.double)
+    def is_darkevent(evr):
+        for fifoEvent in evr.fifoEvents():
+            # In general, this will incorrectly add i = 0 to darkevents
+            if fifoEvent.eventCode() == DIVERTED_CODE:
+                return True
+        return False
+
+    for nevent, evt in enumerate(ds.events):
+        if nevent % size == rank:
+            evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
+            isdark = is_darkevent(evr)
+            if isdark:
+                darkevents.append(i)
+                darksum += det.image(evt)
+            else:
+                incrememnt = det.image(evt)
+                signalsum += increment
+                if event_data_getter:
+                    event_data.append(event_data_getter(increment))
+    nevent += 1
+
+    signalsum_final = np.empty_like(signalsum)
+    darksum_final = np.empty_like(darksum)
+    comm.Reduce(signalsum, signalsum_final)
+    #final_eventdata = []
+    if event_data_getter:
+        comm.gather(event_data)
+    comm.reduce(nevent)
+    return signalsum_final, darksum_final, event_data
+
+    
+
+@utils.eager_persist_to_file("cache/avg_bgsubtract_hdf/")
 def get_signal_bg_many(runList, detid, event_data_getter = None,
     event_filter = None, **kwargs):
     """
@@ -229,7 +309,7 @@ def get_signal_bg_many(runList, detid, event_data_getter = None,
             event_data.append(event_data_entry)
     return signal, bg, event_data
 
-@utils.persist_to_file("cache/get_signal_bg_many_parallel.p")
+@utils.eager_persist_to_file("cache/get_signal_bg_many_parallel/")
 def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
     event_filter = None, **kwargs):
     """
@@ -241,10 +321,13 @@ def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
 
     MAXNODES = 14
     pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
-    bg = np.zeros(config.detinfo_map[detid].dimensions)
+    try:
+        bg = np.zeros(config.detinfo_map[detid].dimensions)
+    except KeyError:
+        raise KeyError(detid + ': detid not found in config.py')
     signal = np.zeros(config.detinfo_map[detid].dimensions) 
-    run_data = map(mapfunc, runList)
-    #run_data = pool.map(mapfunc, runList)
+    #run_data = map(mapfunc, runList)
+    run_data = pool.map(mapfunc, runList)
     event_data = []
     for signal_increment, bg_increment, event_data_entry in run_data:
         signal += (signal_increment / len(runList))
