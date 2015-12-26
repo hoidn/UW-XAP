@@ -18,7 +18,7 @@ from apiclient import discovery
 from oauth2client import client
 from oauth2client.file import Storage
 
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/gspread-0.2.5-py2.7.egg')
+#sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/gspread-0.2.5-py2.7.egg')
 import gspread
 import pandas as pd
 import numpy as np
@@ -214,7 +214,7 @@ def get_label_mapping(url = config.url):
     enumerated_properties = filter(lambda pair: pair[1] and not re.search(PROPERTY_REGEXES['labels'], pair[1]), enumerated_titles)
     for i, row in enumerate(data):
         for j, label in enumerated_labels:
-            if label:
+            if label and row[j]:
                 local_dict = label_dict.setdefault(row[j], {})
                 for k, property in enumerated_properties:
                     property_key = get_property_key(property)

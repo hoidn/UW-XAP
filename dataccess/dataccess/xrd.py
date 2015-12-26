@@ -28,6 +28,8 @@ global verbose
 verbose = True
 
 # TODO: test with arrays as inputs
+# TODO: raise error if transmission and spot size values are not the same for
+# all runs in a dataset.
 Dataset = namedtuple('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list'])
 
 def get_detid_parameters(detid):
@@ -290,6 +292,7 @@ def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = N
         fiducial_ellipses = fiducial_ellipses, bgsub = bgsub, compound_list = dataset.compound_list)
     return binangles, adjInten, imarray
 
+@utils.eager_persist_to_file("cache/xrd.proc_all_datasets/")
 def proc_all_datasets(datasets, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True):
     outputs = map(partial(process_dataset, nbins = nbins,
         verbose = verbose, bgsub = bgsub), datasets)

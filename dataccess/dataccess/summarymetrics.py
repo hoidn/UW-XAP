@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from dataccess import data_access as data
@@ -9,6 +10,9 @@ def get_detector_sum_all_events(label, detid, plot = True, nbins = 100):
     all events in label.
     """
     path = 'intensity_histograms/' + label + '_' + detid + '.png'
+    dirname = os.path.dirname(path)
+    if dirname and (not os.path.exists(dirname)):
+        os.system('mkdir -p ' + os.path.dirname(path))
     event_data_getter = lambda arr: np.sum(arr)
     imarray, event_data = data.get_label_data(label, detid,
         event_data_getter = event_data_getter)
@@ -21,3 +25,6 @@ def get_detector_sum_all_events(label, detid, plot = True, nbins = 100):
         plt.show()
     return result
         
+def main(label, detid, nbins = 100):
+    get_detector_sum_all_events(label, detid, nbins = nbins)
+

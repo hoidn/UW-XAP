@@ -7,8 +7,6 @@ import os
 from psana import *
 import numpy as np
 
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
-#sys.path.insert(1, '/reg/neh/home/ohoidn/Enthought/Canopy_64bit/User/lib/python2.7/site-packages/')
 import utils
 import config
 

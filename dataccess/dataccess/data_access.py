@@ -71,7 +71,7 @@ def make_labels(fname = 'labels.txt', min_cluster_size = 2):
 #        labels.setdefault("%s-%s"%run_range, []).append(run_range)
 #    return labels
 
-@utils.memoize(timeout = 3)
+@utils.memoize(timeout = 5)
 def get_pub_logbook_dict():
     # Socket to talk to server
     context = zmq.Context()
@@ -104,8 +104,30 @@ def get_label_property(label, property):
     Return the value of a label's property.
     """
     complete_dict = get_pub_logbook_dict()
+    def runrange_to_label(run_range):
+        """
+        Given a run range, look for a label whose run range is a superset
+        and return it. If a matching label isn't found, return None.
+        """
+        red = lambda x, y: x + y
+        labels_to_runtuples = {lab: tuple(reduce(red, get_all_runlist(lab))) for lab in
+            complete_dict.keys()}
+        runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
+        target_set = set(range(run_range[0], run_range[1] + 1))
+        for runtuple in runtuples_to_labels:
+            if target_set < set(runtuple):
+                return runtuples_to_labels[runtuple]
+        return None
+
     if label not in complete_dict:
-        raise KeyError("label: " + label + " not found")
+        try:
+            run_range = logbook.parse_run(label)
+        except ValueError:
+            raise ValueError("label: " + label + " is neither a label nor a correctly-formated run range")
+        if runrange_to_label(run_range) is not None:
+            label = runrange_to_label(run_range)
+        else:
+            raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
     label_dict = complete_dict[label]
     try:
         return label_dict[property]

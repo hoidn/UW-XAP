@@ -2,9 +2,9 @@ import os
 import time
 import sys
 import argparse
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dataccess-1.0-py2.7.egg')
+#sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
+#sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
+#sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dataccess-1.0-py2.7.egg')
 from dataccess import data_access
 from dataccess import avg_bgsubtract_hdf
 import config
