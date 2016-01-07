@@ -13,9 +13,72 @@ from time import time
 import hashlib
 import inspect
 import scipy
+import itertools
+import socket
+import ipdb
+
+if 'pslogin' not in socket.gethostname():
+    from mpi4py import MPI
 
 PKG_NAME = __name__.split('.')[0]
 
+def roundrobin(*iterables):
+    """Merges iterables in an interleaved fashion.
+
+    roundrobin('ABC', 'D', 'EF') --> A D E B F C"""
+    # Recipe credited to George Sakkis
+    if not iterables:
+        raise ValueError("Arguments must be 1 or more iterables")
+    nexts = itertools.cycle(iter(it).next for it in iterables)
+    stopcount = 0
+    while 1:
+        try:
+            for i, next in enumerate(nexts):
+                yield next()
+                stopcount = 0
+        except StopIteration:
+            stopcount += 1
+            if stopcount >= len(iterables):
+                break
+
+def mpimap(func, lst):
+    """
+    Map func over list in parallel over all MPI cores.
+
+    The full result is returned in each rank.
+    """
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+    results = \
+        [func(elt)
+        for n, elt in enumerate(lst)
+        if n % size == rank]
+    results = comm.allgather(results)
+    if results:
+        results = list(roundrobin(*results))
+    return results
+
+def isroot():
+    """
+    Return true if the MPI core rank is 0 and false otherwise.
+    """
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    return (rank == 0)
+    
+def ifroot(func):
+    """
+    Decorator that causes the decorated function to execute only if
+    the MPI core rank is 0.
+    """
+    def inner(*args, **kwargs):
+        if isroot():
+            return func(*args, **kwargs)
+    return inner
+        
+
+@ifroot
 def save_image(save_path, imarr):
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
@@ -213,7 +276,7 @@ def eager_persist_to_file(file_name, excluded = None):
                     if k in excluded:
                         merged_dict.pop(k)
             key = tuple(map(make_hashable, [args, merged_dict, closure_dict.items()]))
-            print "key is", key
+            #print "key is", key
 #            for k, v in kwargs.iteritems():
 #                print k, v
             return key
@@ -239,6 +302,7 @@ def eager_persist_to_file(file_name, excluded = None):
                     new_cache = dill.load(f)
                     for k, v in new_cache.items():
                         cache[k] = v
+                print "cache found"
             except (IOError, ValueError):
                 print "no cache found"
             # if the "flush" kwarg is passed, recompute regardless of whether

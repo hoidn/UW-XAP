@@ -175,8 +175,10 @@ def get_all_runs(exppath = config.exppath):
 def get_label_data(label, detid, default_bg = None, override_bg = None,
     separate = False, event_data_getter = None, event_filter = None, **kwargs):
     """
-    Given a label corresponding to a group of runs, returns an array of
-    background-subtracted data.
+    Given a label corresponding to a group of runs, returns:
+        averaged data, event data, 
+    where event data is a list of objects returned by evaluating 
+    event_data_getter on each event frame in the dataset.
     #TODO: finish docstring
     """
     def concatenated_runlists(lab):
@@ -208,6 +210,8 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
     if event_data_getter is None:
         return (signal - bg) / float(len(groups)), None
     else:
+        print "event data is: ", event_data
+        #print "rank is: ", kwargs['MPI'].COMM_WORLD.Get_rank()
         return (signal - bg) / float(len(groups)), event_data
 
 def main(label, fname = 'labels.txt'):

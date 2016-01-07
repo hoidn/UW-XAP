@@ -1,7 +1,8 @@
 from collections import namedtuple
 
-# TODO: figure out a detector ID naming convention based on not-too-verbose
-# names from the psana framework
+# if True, use MPI with the new (psana V4?) smd interface to access data. Otherwise use
+# the old (V3?) API.
+smd = False
 
 # Experiment specification. Example (for LD67):
 # exppath = 'mec/mecd6714'

@@ -18,6 +18,8 @@ import config
 from dataccess import data_access as data
 from dataccess import utils
 
+from mpi4py import MPI
+
 # default powder peak width, in degrees
 DEFAULT_PEAK_WIDTH = 1.5
 
@@ -30,7 +32,7 @@ verbose = True
 # TODO: test with arrays as inputs
 # TODO: raise error if transmission and spot size values are not the same for
 # all runs in a dataset.
-Dataset = namedtuple('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list'])
+Dataset = namedtuple('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list', 'array'])
 
 def get_detid_parameters(detid):
     """
@@ -43,41 +45,6 @@ def get_detid_parameters(detid):
     return (phi, x0, y0, alpha, r)
 
 
-# TODO: add an hdf5 option to data_extractor
-#import h5py
-#hdf5folder = '/reg/d/psdm/MEC/mecd6714/hdf5/'
-#
-## GetArray function:
-## Gets a quad image as an array from the hdf5 file.
-## Pattern of CsPad chips determined from testing.py and old images on 3/30/15.
-## Same function as averager4.py
-## Input:
-##   run: run number
-##   event: event number (starts at 1)
-## Outputs:
-##   numpy array shape 830 x 825
-#def getArray(run, event):
-#    f=h5py.File(hdf5folder+'mecd6714-r%04.i.h5' %run,'r')
-#    quaddata = f['/Configure:0000/Run:0000/CalibCycle:0000/CsPad::ElementV2/MecTargetChamber.0:Cspad.0/data']
-#    output = np.zeros((830,825))
-#    corners = [
-#        [429,421],
-#        [430,634],
-#        [420,1],
-#        [633,0],
-#        [0,213],
-#        [0,1],
-#        [16,424],
-#        [228,424]
-#        ]
-#    rotated = [1,1,0,0,3,3,0,0]
-#    for i, arr in enumerate(quaddata[event-1]):
-#        a = np.rot90(np.insert(arr,(193,193,193,193),0,axis = 1),rotated[i])
-#        if rotated[i]:
-#            output[corners[i][0]:corners[i][0]+392, corners[i][1]:corners[i][1]+185] = a
-#        else:
-#            output[corners[i][0]:corners[i][0]+185, corners[i][1]:corners[i][1]+392] = a
-#    return output
 
 def CSPAD_pieces(arr):
     """
@@ -147,7 +114,11 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
     # Transpose (relative to the shape of the array returned by psana is
     # necessary due to choice of geometry definition in this module.
     # TODO: improve the handling of different types of data references
-    if dataset.ref_type == 'array':
+    if dataset.array is not None:
+        imarray, event_data = dataset.array, None
+        # TODO fix the edge case where we want event data
+    elif dataset.ref_type == 'array':
+        # TODO reorganize this
         if not isinstance(dataset.dataref, np.ndarray):
             raise ValueError("ref_type inconsistent with type of dataref")
         imarray, event_data =  dataset.dataref.T, None
@@ -294,13 +265,16 @@ def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = N
 
 @utils.eager_persist_to_file("cache/xrd.proc_all_datasets/")
 def proc_all_datasets(datasets, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True):
-    outputs = map(partial(process_dataset, nbins = nbins,
+    outputs = utils.mpimap(partial(process_dataset, nbins = nbins,
         verbose = verbose, bgsub = bgsub), datasets)
+#    outputs = map(partial(process_dataset, nbins = nbins,
+#        verbose = verbose, bgsub = bgsub), datasets)
     binangles_list, intensities_list, imarrays = zip(*outputs)
     patterns = map(lambda tup: list(tup), zip(binangles_list, intensities_list))
     return patterns, imarrays
 
 
+@utils.ifroot
 def save_data(angles, intensities, save_path):
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
@@ -673,24 +647,9 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         compound_list: list of compound identifiers corresponding to keys
             of config.powder_angles.
     """
-    if not isinstance(data_identifiers, list):
-        raise ValueError("data_identifiers: must be a list of strings or arrays")
-    # TODO: pass background smoothing as a parameter here
-    if mode == 'array':
-        labels = ['unknown_' + str(detid)]
-    else:
-        labels = data_identifiers
-    datasets = [Dataset(dataref, mode, detid, compound_list) for dataref in data_identifiers]
-    # TODO: parallelize this 
-    patterns, imarrays = proc_all_datasets(datasets, fiducial_ellipses = fiducial_ellipses,
-        bgsub = bgsub)
-    for label, pattern, imarray in zip(labels, patterns, imarrays):
-        path = 'xrd_patterns/' + label + '_' + str(detid)
-        save_data(pattern[0], pattern[1], path)
-        # TODO: imarray should not be background-subtracted but it appears that it is.
-        utils.save_image('detector_images/' + label + '_' + str(detid) + 'pixel_mask_raw.png', imarray)
-
-    if plot:
+    # TODO: don't do peak intensity plot if no scattering angles have been 
+    # provided.
+    def doplot(normalization, peak_progression_compound, maxpeaks, labels):
         if len(datasets) > 1:
             f, axes = plt.subplots(2)
             plot_patterns(datasets, patterns, labels, show = False, ax = axes[0],
@@ -706,4 +665,23 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
             plot_patterns(datasets, patterns, labels, show = False,
                 normalization = normalization)
         plt.show()
+    if not isinstance(data_identifiers, list):
+        raise ValueError("data_identifiers: must be a list of strings or arrays")
+    # TODO: pass background smoothing as a parameter here
+    if mode == 'array':
+        labels = ['unknown_' + str(detid)]
+    else:
+        labels = data_identifiers
+    datasets = [Dataset(dataref, mode, detid, compound_list, None) for dataref in data_identifiers]
+    imarrays, _ = zip(*map(data_extractor, datasets))
+    datasets = [Dataset(dataref, mode, detid, compound_list, imarray) for dataref, imarray in zip(data_identifiers, imarrays)]
+    patterns, imarrays = proc_all_datasets(datasets, fiducial_ellipses = fiducial_ellipses,
+        bgsub = bgsub)
+    for label, pattern, imarray in zip(labels, patterns, imarrays):
+        path = 'xrd_patterns/' + label + '_' + str(detid)
+        save_data(pattern[0], pattern[1], path)
+        # TODO: imarray should not be background-subtracted but it appears that it is.
+        utils.save_image('detector_images/' + label + '_' + str(detid) + 'pixel_mask_raw.png', imarray)
+    if utils.isroot():
+        doplot(normalization, peak_progression_compound, maxpeaks, labels)
     return patterns, imarrays
