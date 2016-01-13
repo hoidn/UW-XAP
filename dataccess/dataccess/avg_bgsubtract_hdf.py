@@ -92,28 +92,41 @@ XTC_DIR = '/reg/d/psdm/' + config.exppath + '/xtc/'
 #    return cluster(runs, max_interval, key = key)
 
 
-def filter_events(eventlist, blanks, sigma_max = 1.0):
-    """
-    Return the indices of outliers (not including blank frames) in the list of 
-    data arrays, along with a list of 'good' (neither outlier nor blank) indices.
-
-    """
-    totalcounts = np.array(map(np.sum, eventlist))
-    nonblank_counts_enumerated = filter(lambda (indx, counts): indx not in blanks, enumerate(totalcounts))
-    nonblank_counts = map(lambda x: x[1], nonblank_counts_enumerated)
-    median = np.median(nonblank_counts)
-    std = np.std(nonblank_counts)
-    print  'signal levels:', totalcounts
-    print median, std
-    # indices of the events in ascending order of total signal
-    outlier_indices = [i  for i, counts in nonblank_counts_enumerated if np.abs(counts - median) > std * sigma_max]
-    good_indices = [i for i in range(len(eventlist)) if ((i not in outlier_indices) and (i not in blanks))]
-    return outlier_indices, good_indices
 
 @utils.eager_persist_to_file("cache/get_signal_bg_one_run/")
-def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1.0,
-event_data_getter = None, event_filter = None, **kwargs):
-    #ipdb.set_trace()
+def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1000.0,
+event_data_getter = None, event_mask = None, **kwargs):
+    # TODO: remove sigma_max discrimination
+    def filter_events(eventlist, blanks):
+        """
+        Return the indices of outliers (not including blank frames) in the list of 
+        data arrays, along with a list of 'good' (neither outlier nor blank) indices.
+
+        """
+        def event_valid(nevent):
+            if event_mask:
+                run_mask = event_mask[runNum]
+                return run_mask[nevent]
+            else:
+                return True
+        totalcounts = np.array(map(np.sum, eventlist))
+        nonblank_counts_enumerated = filter(lambda (indx, counts): indx not in blanks, enumerate(totalcounts))
+        nonblank_counts = map(lambda x: x[1], nonblank_counts_enumerated)
+        median = np.median(nonblank_counts)
+        std = np.std(nonblank_counts)
+        print  'signal levels:', totalcounts
+        print median, std
+        # indices of the events in ascending order of total signal
+        outlier_indices =\
+            [i
+            for i, counts in nonblank_counts_enumerated
+            if (np.abs(counts - median) > std * sigma_max) or not event_valid(i)]
+        good_indices =\
+            [i
+            for i in range(len(eventlist))
+            if ((i not in outlier_indices) and (i not in blanks))]
+        return outlier_indices, good_indices
+
     def spacing_between(arr):
         """
         Given an array (intended to be an array of indices of blank runs), return the
@@ -139,18 +152,28 @@ event_data_getter = None, event_filter = None, **kwargs):
         vetted_blanks = blanks
     else:
         vetted_blanks = []
-    outlier, good = filter_events(eventlist, vetted_blanks, sigma_max = sigma_max)
+    outlier, good = filter_events(eventlist, vetted_blanks)
     bg = get_bg(eventlist, vetted_blanks)
     signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
     if event_data_getter is None:
         return signal, bg, []
     else:
-        event_data = map(event_data_getter, eventlist)
+        if event_mask is not None:
+            event_data = map(event_data_getter, np.array(eventlist)[np.array(event_mask[runNum], dtype = bool)])
+        else:
+            event_data = map(event_data_getter, eventlist)
         return signal, bg, event_data
 
-# TODO: more testing
-def get_signal_bg_one_run_smd(runNum, detid, sigma_max = 1.0,
-        event_data_getter = None, event_filter = None, **kwargs):
+# TODO: more testing and refactor all of this!
+@utils.eager_persist_to_file("cache/get_signal_bg_one_run_smd/")
+def get_signal_bg_one_run_smd(runNum, detid,
+        event_data_getter = None, event_mask = None, **kwargs):
+    def event_valid(nevent):
+        if event_mask:
+            run_mask = event_mask[runNum]
+            return run_mask[nevent]
+        else:
+            return True
     DIVERTED_CODE = 162
     ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
     det = Detector(config.detinfo_map[detid].device_name, ds.env())
@@ -167,9 +190,8 @@ def get_signal_bg_one_run_smd(runNum, detid, sigma_max = 1.0,
             if fifoEvent.eventCode() == DIVERTED_CODE:
                 return True
         return False
-
     for nevent, evt in enumerate(ds.events()):
-        if nevent % size == rank:
+        if (nevent % size == rank) and event_valid():
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
             increment = det.image(evt)
@@ -211,11 +233,10 @@ def get_signal_bg_one_run_smd(runNum, detid, sigma_max = 1.0,
     signalsum_final /= len(signalsum_final)
     return signalsum_final, darksum_final, event_data
 
-    
 
 #@utils.eager_persist_to_file("cache/avg_bgsubtract_hdf/")
 #def get_signal_bg_many(runList, detid, event_data_getter = None,
-#    event_filter = None, **kwargs):
+#    event_mask = None, **kwargs):
 #    """
 #    Return the averaged signal and background, and accumulated event data,
 #    from running get_signal_bg_one_run over all runs specified.
@@ -228,11 +249,11 @@ def get_signal_bg_one_run_smd(runNum, detid, sigma_max = 1.0,
 #    Returns
 #    ----------
 #    signal : 2-d np.ndarray
-#        Averaged signal, subject to filtering by event_filter, and default
+#        Averaged signal, subject to filtering by event_mask, and default
 #        removal of outliers.
 #    bg : 2-d np.ndarray
 #        Averaged background.
-#    event_filter : list of lists
+#    event_mask : list of lists
 #        Accumulated event data.
 #    """
 #    bg = np.zeros(config.detinfo_map[detid].dimensions)
@@ -241,7 +262,7 @@ def get_signal_bg_one_run_smd(runNum, detid, sigma_max = 1.0,
 #    for run_number in runList:
 #        
 #        output_one_run = get_signal_bg_one_run(run_number, detid,
-#            event_data_getter = event_data_getter, event_filter = event_filter,
+#            event_data_getter = event_data_getter, event_mask = event_mask,
 #            **kwargs)
 #        signal_increment, bg_increment, event_data_entry = output_one_run
 #        signal += (signal_increment / len(runList))
@@ -252,17 +273,17 @@ def get_signal_bg_one_run_smd(runNum, detid, sigma_max = 1.0,
 
 @utils.eager_persist_to_file("cache/get_signal_bg_many_parallel/")
 def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
-    event_filter = None, **kwargs):
+    event_mask = None, **kwargs):
     """
     Parallel version of get_signal_bg_many
     """
 
     def mapfunc(run_number):
         return get_signal_bg_one_run(run_number, detid, event_data_getter =
-            event_data_getter, event_filter = event_filter, **kwargs)
+            event_data_getter, event_mask = event_mask, **kwargs)
     def mapfunc_smd(run_number):
         return get_signal_bg_one_run_smd(run_number, detid, event_data_getter =
-            event_data_getter, event_filter = event_filter, **kwargs)
+            event_data_getter, event_mask = event_mask, **kwargs)
 
     if config.smd:
         run_data = map(mapfunc_smd, runList)
@@ -270,18 +291,22 @@ def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
         MAXNODES = 14
         pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
         run_data = pool.map(mapfunc, runList)
+        #run_data = map(mapfunc, runList)
 
-    event_data = []
+    event_data = {}
     bg = np.zeros(config.detinfo_map[detid].dimensions)
     signal = np.zeros(config.detinfo_map[detid].dimensions) 
+    runindx = 0
     for signal_increment, bg_increment, event_data_entry in run_data:
         signal += (signal_increment / len(runList))
         bg += (bg_increment / len(runList))
-        event_data.append(event_data_entry)
+        event_data[runList[runindx]] = event_data_entry
+        runindx += 1
+        #event_data.append(event_data_entry)
     return signal, bg, event_data
 
 def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None,
-override_bg = None, event_data_getter = None, event_filter = None, **kwargs):
+override_bg = None, event_data_getter = None, event_mask = None, **kwargs):
     """
     Wraps get_signal_bg_many, additionally allowing a default background 
     subtraction for groups of runs that lack interposed blank frames
@@ -294,15 +319,15 @@ override_bg = None, event_data_getter = None, event_filter = None, **kwargs):
     If both default_bg and override_bg are provided, override_bg is used
     """
     signal, bg, event_data = get_signal_bg_many_parallel(runList, detid,
-        event_data_getter = event_data_getter, event_filter = event_filter, **kwargs)
+        event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
     if override_bg:
         discard, bg, event_data = get_signal_bg_many_parallel(override_bg, detid,
-            event_data_getter = event_data_getter, event_filter = event_filter, **kwargs)
+            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
     # if a default background runs are supplied AND bg is all zeros (meaning
     # dummy values were inserted by get_signal_bg_many)
     elif default_bg and not np.any(bg):
         discard, bg, event_data = get_signal_bg_many_parallel(default_bg, detid,
-            event_data_getter = event_data_getter, event_filter = event_filter, **kwargs)
+            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
     return signal, bg, event_data
 
 #def process_and_save(runList, detid, **kwargs):

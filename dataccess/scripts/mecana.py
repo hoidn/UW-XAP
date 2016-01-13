@@ -4,10 +4,6 @@
 import sys
 
 
-sys.path.insert(1, '/reg/g/psdm/sw/external/python/2.7.10/x86_64-rhel7-gcc48-opt/lib/python2.7/site-packages')
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages')
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/pathos-0.2a1.dev0-py2.7.egg')
-sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/dataccess-1.0-py2.7.egg')
 sys.path.append('.') # so that config.py can be imported
 import os
 import argparse
@@ -107,6 +103,33 @@ def call_xrd(args):
         bgsub = bgsub, compound_list = compound_list,
         normalization = normalization, maxpeaks = maxpeaks)
 
+def addparser_histogram(subparsers):
+    histogram = subparsers.add_parser('histogram', help =  'For a given dataset and detector ID, generate a histogram of integrated intensity on the detecor from all individual events in the dataset.')
+    histogram.add_argument('detid', type = str, help = 'Detector ID.')
+    histogram.add_argument('label', help = 'Label of dataset to process.')
+    histogram.add_argument('--nbins', '-n', type = int, default = 100, help = 'Number of bins in the histogram')
+
+def call_histogram(args):
+    from dataccess import summarymetrics
+    label = args.label
+    detid = args.detid
+    nbins = args.nbins
+    summarymetrics.main(label, detid, nbins = nbins)
+
+def addparser_datashow(subparsers):
+    datashow = subparsers.add_parser('datashow', help = 'For a given dataset and area detector ID, show the summed detector image and save it to a file in the working directory. Any detector masks specified in config.py can optionally be applied.')
+    datashow.add_argument('detid', type = str, help = 'Detector ID.')
+    datashow.add_argument('label', help = 'Label of dataset to process.')
+    datashow.add_argument('--output', '-o', help = 'Path of output file')
+    datashow.add_argument('--masks', '-m', action = 'store_true',
+        help = 'Apply detector masks from config.py')
+
+def call_datashow(args):
+    from dataccess import datashow
+    label = args.label
+    detid = args.detid
+    datashow.main(label, detid, args.output, masked = args.masks)
+
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(help='sub-command help')
 
@@ -114,6 +137,8 @@ subparsers = parser.add_subparsers(help='sub-command help')
 addparser_init(subparsers)
 addparser_xes(subparsers)
 addparser_xrd(subparsers)
+addparser_histogram(subparsers)
+addparser_datashow(subparsers)
 
 args = parser.parse_args()
 
@@ -128,3 +153,7 @@ else:
         call_xes(args)
     elif 'compounds' in args: # Enter xrd sub-command
         call_xrd(args)
+    elif 'nbins' in args: # Enter histogram sub-command
+        call_histogram(args)
+    else: # Enter datashow sub-command
+        call_datashow(args)

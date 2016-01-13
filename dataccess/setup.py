@@ -6,6 +6,7 @@ import pip
 from setuptools import setup, find_packages
 
 pip.main(['install', '--user',  'pyzmq', '--install-option=--zmq=bundled'])
+#pip.main(['install', '--user',  'requests', '--install-option=--upgrade'])
 
 setup(name='dataccess',
     version='1.0',
@@ -15,7 +16,7 @@ setup(name='dataccess',
     scripts = [
         'scripts/mecana.py', 'scripts/logbooksync.py'
     ],
-    install_requires = ['google-api-python-client', 'httplib2', 'atomicfile', 'urllib3', 'gspread', 'requests', 'multiprocess', 'dill', 'pox', 'ppft', 'ipdb'],
+    install_requires = ['recordclass', 'google-api-python-client', 'httplib2', 'atomicfile', 'urllib3', 'gspread', 'requests>=2.9.1', 'multiprocess', 'dill', 'pox', 'ppft', 'ipdb'],
     zip_safe = False,
     )
 

@@ -11,7 +11,8 @@ from scipy.interpolate import griddata
 import scipy.interpolate as interpolate
 #from scipy.interpolate import interp2d
 from functools import partial
-from collections import namedtuple
+from recordclass import recordclass
+import copy
 import ipdb
 
 import config
@@ -32,7 +33,7 @@ verbose = True
 # TODO: test with arrays as inputs
 # TODO: raise error if transmission and spot size values are not the same for
 # all runs in a dataset.
-Dataset = namedtuple('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list', 'array'])
+Dataset = recordclass('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list', 'array'])
 
 def get_detid_parameters(detid):
     """
@@ -67,28 +68,7 @@ def CSPAD_pieces(arr):
     return result
 
 
-@utils.eager_persist_to_file("cache/xrd.combine_masks/")
-def combine_masks(imarray, mask_paths, verbose = False):
-    """
-    Takes a list of paths to .npy mask files and returns a numpy array
-    consisting of those masks ANDed together.
-    """
-    # Initialize the mask based on zero values in imarray.
-    base_mask = ma.make_mask(np.ones(np.shape(imarray)))
-    base_mask[imarray == 0.] = False
-    if not mask_paths:
-        print "No additional masks provided"
-        return base_mask
-    else:
-        # Data arrays must be transposed here for the same reason that they
-        # are in data_extractor.
-        masks = map(lambda path: np.load(path).T, mask_paths)
-        if verbose:
-            print "Applying mask(s): ", mask_paths
-        return base_mask & reduce(lambda x, y: x & y, masks)
 
-#def data_extractor(path = None, label = None, arr = None, detid = None,
-#    apply_mask = True, event_data_getter = None, event_filter = None):
 def data_extractor(dataset, apply_mask = True, event_data_getter = None,
     event_filter = None):
     """
@@ -110,6 +90,8 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
     apply_mask : boolean
         if detid is provided, mask the ret
     """
+    if event_filter is not None and dataset.ref_type != 'label':
+        raise ValueError("dataset type does not allow data filtering")
     # TODO: improve the handling of different data type references
     # Transpose (relative to the shape of the array returned by psana is
     # necessary due to choice of geometry definition in this module.
@@ -127,15 +109,15 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
         imarray, event_data =  np.genfromtxt(dataset.dataref).T, None
 
     elif dataset.ref_type == 'label':
-        imarray, event_data =  data.get_label_data(dataset.dataref, dataset.detid,
-            event_data_getter = event_data_getter)
+        imarray, event_data = data.get_data_and_filter(dataset.dataref, dataset.detid,
+            event_data_getter = event_data_getter, event_filter = event_filter)
         imarray = imarray.T
 
     else:
         raise ValueError("Invalid argument combination. Data source must be specified by detid and either path or label")
     if apply_mask:
         extra_masks = config.detinfo_map[dataset.detid].extra_masks
-        combined_mask = combine_masks(imarray, extra_masks)
+        combined_mask = utils.combine_masks(imarray, extra_masks, transpose = True)
         imarray *= combined_mask
     return imarray, event_data
 
@@ -394,8 +376,8 @@ def get_background_full_frame(imarray, detid, compound_list, smoothing = 10, wid
     #extra_masks = config.extra_masks[detid]
     
     # mask based on good pixels
-    #pixel_mask = combine_masks(bgfit, extra_masks)
-    pixel_mask = combine_masks(bgfit, [])
+    #pixel_mask = utils.combine_masks(bgfit, extra_masks)
+    pixel_mask = utils.combine_masks(bgfit, [], transpose = True)
 
     # mask based on powder peak locations
     powder_mask = make_powder_ring_mask(detid, bgfit, compound_list, width = width)
@@ -536,7 +518,7 @@ def get_peak_and_background_signal_from_imarray(imarray, detid, compound_list, s
     # TODO: should add a simple getter routing for this compound mask, in either
     # case
     # mask based on good pixels
-    pixel_mask = combine_masks(imarray, [])
+    pixel_mask = utils.combine_masks(imarray, [], transpose = True)
 
     # mask based on powder peaks
     powder_mask = make_powder_ring_mask(detid, imarray, compound_list, width = width)
@@ -626,6 +608,7 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     return powder_angles, label_flux_densities, heating_progression, normalized_heating_progression
 
 
+
 def main(detid, data_identifiers, mode = 'label', peak_progression_compound = None,
     plot = True, bgsub = True, fiducial_ellipses = None, compound_list = [],
     normalization = None, maxpeaks = 'all'):
@@ -664,7 +647,7 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         else:
             plot_patterns(datasets, patterns, labels, show = False,
                 normalization = normalization)
-        plt.show()
+        utils.global_save_and_show('xrd_plot/' + str(detid) + '_'.join(labels) + '.png')
     if not isinstance(data_identifiers, list):
         raise ValueError("data_identifiers: must be a list of strings or arrays")
     # TODO: pass background smoothing as a parameter here
@@ -681,7 +664,7 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         path = 'xrd_patterns/' + label + '_' + str(detid)
         save_data(pattern[0], pattern[1], path)
         # TODO: imarray should not be background-subtracted but it appears that it is.
-        utils.save_image('detector_images/' + label + '_' + str(detid) + 'pixel_mask_raw.png', imarray)
+        utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray)
     if utils.isroot():
         doplot(normalization, peak_progression_compound, maxpeaks, labels)
     return patterns, imarrays

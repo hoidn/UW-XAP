@@ -33,8 +33,9 @@ PORT = config.port
 
 # Format specification for column headers in logbook
 PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*',
-    'filter_min': r'.*bgfilter_max.*', 'filter_max': r'.*bgfilter_min.*',
-     'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*'}
+     'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*',
+    'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
+    'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*'}
 HEADERS = [k for k in PROPERTY_REGEXES]
 
 def get_property_key(col_title):
@@ -201,7 +202,8 @@ def parse_run(run_string):
             raise ValueError("Invalid run range format: ", run_string)
 
 parser_dispatch = {'runs': parse_run, 'transmission': parse_float,
-    'filter_min': parse_float, 'filter_max': parse_float, 'labels': parse_string, 'focal_size': parse_focal_size}
+    'param1': parse_float, 'param2': parse_float, 'filter_det': parse_string,
+     'labels': parse_string, 'focal_size': parse_focal_size, 'filter_func': parse_string}
 
 def get_label_mapping(url = config.url):
     # TODO: handle duplicates

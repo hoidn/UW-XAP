@@ -21,13 +21,11 @@ assert os.path.exists(configFileName), "Config file not found, looked for: %s" \
 setConfigFile(configFileName)
 
 
-# TODO: add support for small data mode
 def getImg(detid, run):
     """
     TODO
     """
     DIVERTED_CODE = 162
-    #ds = DataSource('exp=MEC/%s:run=%d:smd')% (expname,run) )
     ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,run) )
     # TODO: throw exception if key missing from config
     make_detector_source = lambda key: Source('DetInfo(' + config.detinfo_map[key].device_name + ')')

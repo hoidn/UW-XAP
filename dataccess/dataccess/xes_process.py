@@ -67,7 +67,8 @@ def data_from_label(detid):
     Output: Function that takes a string reference to data runs and returns
     a 2D CSPAD data array corresponding to detid and the string reference.
     """
-    return lambda label: data.get_label_data(label, detid)[0]
+    #return lambda label: data.get_label_data(label, detid)[0]
+    return lambda label: data.get_data_and_filter(label, detid)[0]
 
 def center_col(data):
     """

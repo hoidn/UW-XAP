@@ -16,6 +16,9 @@ import scipy
 import itertools
 import socket
 import ipdb
+import matplotlib.pyplot as plt
+from scipy import misc
+import numpy.ma as ma
 
 if 'pslogin' not in socket.gethostname():
     from mpi4py import MPI
@@ -79,11 +82,35 @@ def ifroot(func):
         
 
 @ifroot
-def save_image(save_path, imarr):
+def save_image(save_path, imarr, fmt = 'png'):
+    """
+    Save a 2d array to file as an image.
+    """
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
-    scipy.misc.imsave(save_path, imarr)
+    misc.imsave(save_path + '.' + fmt, imarr)
+
+@ifroot
+def save_image_and_show(save_path, imarr):
+    """
+    Save a 2d array to file as an image and then display it.
+    """
+    save_image(save_path, imarr)
+    plt.imshow(imarr)
+    plt.show()
+
+
+@ifroot
+def global_save_and_show(save_path):
+    """
+    Save current matplotlib plot to file and then show it.
+    """
+    dirname = os.path.dirname(save_path)
+    if dirname and (not os.path.exists(dirname)):
+        os.system('mkdir -p ' + os.path.dirname(save_path))
+    plt.savefig(save_path)
+    plt.show()
 
 def get_default_args(func):
     """
@@ -275,50 +302,75 @@ def eager_persist_to_file(file_name, excluded = None):
                 for k in merged_dict.keys():
                     if k in excluded:
                         merged_dict.pop(k)
-            key = tuple(map(make_hashable, [args, merged_dict, closure_dict.items()]))
+            key = make_hashable(tuple(map(make_hashable, [args, merged_dict, closure_dict.items()])))
             #print "key is", key
 #            for k, v in kwargs.iteritems():
 #                print k, v
             return key
 
+        #@ifroot TODO: fix this
+        def dump_to_file(d, file_name):
+            with open(file_name, 'w') as f:
+                dill.dump(d, f)
+            print "Dumped cache to file"
+    
         def compute(*args, **kwargs):
-            local_cache = {}
             file_name = kwargs.pop('file_name', None)
             key = gen_key(*args, **kwargs)
-            local_cache[key] = func(*args, **kwargs)
-            cache[key] = local_cache[key]
+            value = func(*args, **kwargs)
+            cache[key] = value
             os.system('mkdir -p ' + os.path.dirname(file_name))
-            with open(file_name, 'w') as f:
-                dill.dump(local_cache, f)
+            dump_to_file(value, file_name)
+            return value
 
         def new_func(*args, **kwargs):
-
             # Because we're splitting into multiple files, we can't retrieve the
             # cache until here
             print "entering ", func.func_name
-            full_name = file_name + '_' + str(hash(dill.dumps(args)))
-            try:
-                with open(full_name, 'r') as f:
-                    new_cache = dill.load(f)
-                    for k, v in new_cache.items():
-                        cache[k] = v
-                print "cache found"
-            except (IOError, ValueError):
-                print "no cache found"
+            key = gen_key(*args, **kwargs)
+            full_name = file_name + key
+            if key not in cache:
+                try:
+                    with open(full_name, 'r') as f:
+                        cache[key] = dill.load(f)
+                    print "cache found"
+                except (IOError, ValueError):
+                    print "no cache found; computing"
+                    compute(*args, file_name = full_name, **kwargs)
             # if the "flush" kwarg is passed, recompute regardless of whether
             # the result is cached
             if "flush" in kwargs.keys():
                 kwargs.pop("flush", None)
                 # TODO: refactor
                 compute(*args, file_name = full_name, **kwargs)
-            key = gen_key(*args, **kwargs)
-            if key not in cache:
-                compute(*args, file_name = full_name, **kwargs)
             print "returning from ", func.func_name
             return cache[key]
         return new_func
 
     return decorator
+
+@eager_persist_to_file("cache/xrd.combine_masks/")
+def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
+    """
+    Takes a list of paths to .npy mask files and returns a numpy array
+    consisting of those masks ANDed together.
+    """
+    # Initialize the mask based on zero values in imarray.
+    base_mask = ma.make_mask(np.ones(np.shape(imarray)))
+    base_mask[imarray == 0.] = False
+    if not mask_paths:
+        print "No additional masks provided"
+        return base_mask
+    else:
+        # Data arrays must be transposed here for the same reason that they
+        # are in data_extractor.
+        if transpose:
+            masks = map(lambda path: np.load(path).T, mask_paths)
+        else:
+            masks = map(lambda path: np.load(path), mask_paths)
+        if verbose:
+            print "Applying mask(s): ", mask_paths
+        return base_mask & reduce(lambda x, y: x & y, masks)
 
 #def eager_persist_to_file(file_name):
 #    """

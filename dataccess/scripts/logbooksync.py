@@ -4,7 +4,6 @@ import os
 
 sys.path.append('.') # so that config.py can be imported
 from dataccess import logbook
-import config
 
 'Synchronize google spreadsheet logbook data by running this script on pslogin03'
 
@@ -15,5 +14,9 @@ args = parser.parse_args()
 if args.url:
     url = args.url
 else:
-    url = config.url
+    try:
+        import config
+        url = config.url
+    except ImportError:
+        raise ImportError("config.py not found. config.py is necessary to load logbook URL if the optional argument --url is not provided.")
 logbook.main(url)

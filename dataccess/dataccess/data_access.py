@@ -15,6 +15,9 @@ import utils
 import logbook
 import config
 
+# TODO: make logbook data not required for labels that can be parsed as run
+# ranges.
+
 XTC_REGEX = r"/reg/d/psdm/" + config.exppath + r"/xtc/" + config.xtc_prefix + "-r([0-9]{4})-s01-c00.xtc"
 
 """
@@ -44,32 +47,6 @@ def make_labels(fname = 'labels.txt', min_cluster_size = 2):
     np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, label1, label2', delimiter = ',')
     return bounds
 
-#def get_label_map(fname = 'labels.txt', **kwargs):
-#    """
-#    Return a dictionary mapping each user-supplied label string from
-#    labels.txt to its corresponding groups of run numbers. The 
-#    values default to strings based on the run ranges.
-#
-#    Output type: Dict mapping strings to lists of tuples.
-#    """
-#    if not os.path.exists(fname):
-#        make_labels(fname = fname)
-#        print "File",fname,"not found. It will be created."
-#    labels = {}
-#    labdat = np.array(pd.read_csv(fname, delimiter = ','))
-#    #labdat = np.genfromtxt(fname, dtype = None)
-#    shape = np.shape(labdat)
-#    if len(shape) != 2 or shape[1] > 4:
-#        raise StandardError(fname + ' : incorrect format. Must be no more than 4 comma-delimited columns.')
-#    for row in labdat:
-#        run_range = tuple(map(int, row[:2]))
-#        # remove whitespace
-#        if isinstance(row[2], str) and row[2].strip() != '' and row[2].strip() != 'None':
-#            labels.setdefault(row[2].strip(), []).append(run_range)
-#        if isinstance(row[3], str) and row[3].strip() != '' and row[3].strip() != 'None':
-#            labels.setdefault(row[3].strip(), []).append(run_range)
-#        labels.setdefault("%s-%s"%run_range, []).append(run_range)
-#    return labels
 
 @utils.memoize(timeout = 5)
 def get_pub_logbook_dict():
@@ -135,6 +112,16 @@ def get_label_property(label, property):
         raise KeyError("attribute: " + property + " of label: " + label + " not found")
 
 
+def eventmask_params(label):
+    handles = ['param1', 'param2']
+    result = []
+    for p in handles:
+        try:
+            result.append(get_label_property(label, p))
+        except KeyError:
+            pass
+    return result
+
 def get_all_runlist(label, fname = 'labels.txt'):
     """
     Get list of run numbers associated with a label.
@@ -173,7 +160,7 @@ def get_all_runs(exppath = config.exppath):
     return result
 
 def get_label_data(label, detid, default_bg = None, override_bg = None,
-    separate = False, event_data_getter = None, event_filter = None, **kwargs):
+    separate = False, event_data_getter = None, event_mask = None, **kwargs):
     """
     Given a label corresponding to a group of runs, returns:
         averaged data, event data, 
@@ -198,7 +185,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
             runList, detid, default_bg = default_bg_runlist, override_bg =
             override_bg_runlist, event_data_getter = event_data_getter,
-            event_filter = event_filter, **kwargs)
+            event_mask = event_mask, **kwargs)
         newsignal, newbg, event_data = output
         try:
             signal += newsignal
@@ -213,6 +200,36 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         print "event data is: ", event_data
         #print "rank is: ", kwargs['MPI'].COMM_WORLD.Get_rank()
         return (signal - bg) / float(len(groups)), event_data
+
+def get_data_and_filter(label, detid, event_data_getter = None,
+    event_filter = None):
+    """
+    # TODO: update this
+    """
+    def get_event_mask(filterfunc):
+        """
+        TODO
+        """
+        # filterfunc is a function that takes a np array and returns a boolean
+        detid = get_label_property(label, 'filter_det')
+        imarray, event_data = get_label_data(label, detid,
+            event_data_getter = filterfunc)
+        return event_data
+
+    try:
+        if event_filter:
+            event_mask = get_event_mask(event_filter)
+        else:
+            funcstr = get_label_property(label, 'filter_func')
+            args = eventmask_params(label)
+            filterfunc = eval('config.' + funcstr)(*args)
+            event_mask = get_event_mask(filterfunc)
+        imarray, event_data =  get_label_data(label, detid,
+            event_data_getter = event_data_getter, event_mask = event_mask)
+    except KeyError:
+        imarray, event_data =  get_label_data(label, detid,
+            event_data_getter = event_data_getter)
+    return imarray, event_data
 
 def main(label, fname = 'labels.txt'):
     get_label_data(label, 1)
