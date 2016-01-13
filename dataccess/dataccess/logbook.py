@@ -18,7 +18,6 @@ from apiclient import discovery
 from oauth2client import client
 from oauth2client.file import Storage
 
-#sys.path.append('/reg/neh/home/ohoidn/anaconda/lib/python2.7/site-packages/gspread-0.2.5-py2.7.egg')
 import gspread
 import pandas as pd
 import numpy as np
@@ -31,7 +30,24 @@ import config
 
 PORT = config.port
 
-# Format specification for column headers in logbook
+# Format specification for column headers in logbook. Column descriptions:
+# runs: range of run numbers in the format 'integer' or 'integer-integer'.
+#   Used by: all.
+# labels: dataset label, an arbitrary string. This is the only column of which
+#   there can be more than one (i.e. a dataset may have more than one label).
+#   Used by: all.
+# transmission: The fraction of XFEL photons transmitted through upstream filters,
+#   in decimal format. Used by: xrd.
+# focal_size: focal spot size diameter, in microns. Used by: xrd.
+# filter_func: name of a function, defined in config.py, that returns an event-
+#   filtering function given 0, 1, or two arguments provided in the param1 and
+#   param2 columns. Optional; used by: all.
+# param1: first parameter to constructor for event filtering function.
+#   Used by: all.
+# param2: second parameter to constructor for event filtering function.
+#   Used by: all.
+# filter_det: detector id of detector whose data is fed to filter_func for
+#   event-based filtering. Used by: all
 PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*',
      'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*',
     'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
