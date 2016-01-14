@@ -47,24 +47,30 @@ batch_command = "bsub -q psanaq -n 1 -o log.out python %s"
 #   -Multiple masks are ANDed together.
 #   -Mask files must be boolean arrays saved in .npy format.
 #   -Masks must be positive (i.e., bad/dummy pixels are False).
-DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra_masks'])
+DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra_masks', 'subregion_index'])
 
 detinfo_map =\
     {'quad':
-        DetInfo('MecTargetChamber.0:Cspad.0',
+        DetInfo(
+        'MecTargetChamber.0:Cspad.0',
         (830, 825),
         {'phi': 0.027763, 'x0': 322.267, 'y0': 524.473, 'alpha': 0.787745, 'r': 1082.1},
-        {'masks/mask_ld67_12_2015.npy'}),
+        {'masks/mask_ld67_12_2015.npy'},
+        -1),
      'xrts1':
-        DetInfo('MecTargetChamber.0:Cspad2x2.1',
+        DetInfo(
+        'MecTargetChamber.0:Cspad2x2.1',
         (400, 400),
         {},
-        {}),
+        {},
+        -1),
     'xrts2':
-        DetInfo('MecTargetChamber.0:Cspad2x2.2', 
+        DetInfo(
+        'MecTargetChamber.0:Cspad2x2.2', 
         (400, 400),
         {},
-        {})}
+        {},
+        -1)}
 
 
 
