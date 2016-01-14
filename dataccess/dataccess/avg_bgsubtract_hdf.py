@@ -164,9 +164,25 @@ event_data_getter = None, event_mask = None, **kwargs):
             event_data = map(event_data_getter, eventlist)
         return signal, bg, event_data
 
+def get_image_quadrant(arr, i):
+    """
+    Takes a 2d array and returns the specified quadrant as a contiguous array
+    if i = 0, 1, 2, or 3. Returns the array unaltered if i == -1.
+    """
+    dimy, dimx = np.shape(arr)
+    split_x = [0, dimx/2, dimx]
+    split_y = [0, dimy/2, dimy]
+    result = []
+    def piece(n, m):
+        return  arr[split_y[n]: split_y[n + 1], split_x[m]: split_x[m + 1]]
+    if i == -1:
+        return arr
+    else:
+        return np.ascontiguousarray(piece(i / 2, i %2))
+
 # TODO: more testing and refactor all of this!
 @utils.eager_persist_to_file("cache/get_signal_bg_one_run_smd/")
-def get_signal_bg_one_run_smd(runNum, detid,
+def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
     def event_valid(nevent):
         if event_mask:
@@ -182,41 +198,48 @@ def get_signal_bg_one_run_smd(runNum, detid,
     size = comm.Get_size()
     darkevents, event_data = [], []
     events_processed = 0
-    darksum= np.zeros(config.detinfo_map[detid].dimensions, dtype = np.double)
-    signalsum= np.zeros(config.detinfo_map[detid].dimensions, dtype = np.double)
     def is_darkevent(evr):
-        for fifoEvent in evr.fifoEvents():
-            # In general, this will incorrectly add i = 0 to darkevents
-            if fifoEvent.eventCode() == DIVERTED_CODE:
-                return True
+        # temporary patch, valid for LK20 because end station A isn't running
+#        for fifoEvent in evr.fifoEvents():
+#            # In general, this will incorrectly add i = 0 to darkevents
+#            if fifoEvent.eventCode() == DIVERTED_CODE:
+#                return True
         return False
     for nevent, evt in enumerate(ds.events()):
-        if (nevent % size == rank) and event_valid():
+        if (nevent % size == rank) and event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
             increment = det.image(evt)
-            if isdark:
-                darkevents.append(nevent)
-                try:
-                    darksum += increment
-                except ValueError:
-                    raise ValueError("Array dimensions: " + str(increment.shape) + " do not match those provided in config.py: " + str(signalsum.shape))
-            else:
-                try:
-                    signalsum += increment
-                except ValueError:
-                    raise ValueError("Array dimensions: " + str(increment.shape) + " do not match those provided in config.py: " + str(signalsum.shape))
-                if event_data_getter:
-                    event_data.append(event_data_getter(increment))
-                events_processed += 1
+            #increment = get_image_quadrant(det.image(evt), subregion_index)
+            if increment is not None:
+                if isdark:
+                    darkevents.append(nevent)
+                    try:
+                        darksum += increment
+                    except UnboundLocalError:
+                        darksum = increment
+                else:
+                    try:
+                        signalsum += increment
+                    except UnboundLocalError:
+                        signalsum = increment
+                    if event_data_getter:
+                        event_data.append(event_data_getter(get_image_quadrant(increment, subregion_index)))
+                    events_processed += 1
         # TODO: for testing only. remove later.
-        if nevent >= rank:
-            break
-
+#        if nevent >= rank:
+#            break
+    signalsum /= events_processed
     signalsum_final = np.empty_like(signalsum)
-    darksum_final = np.empty_like(darksum)
     comm.Allreduce(signalsum, signalsum_final)
-    comm.Allreduce(darksum, darksum_final)
+    signalsum_final = get_image_quadrant(signalsum_final, subregion_index)
+    darksum_final = np.empty_like(signalsum)
+    try:
+        darksum /= events_processed
+        comm.Allreduce(darksum, darksum_final)
+        darksum_final = get_image_quadrant(darksum_final, subregion_index)
+    except UnboundLocalError:
+        darksum_final = np.empty_like(signalsum_final)
     darkevents = comm.allgather(darkevents)
     events_processed = comm.allreduce(events_processed)
     if event_data_getter:
@@ -229,8 +252,6 @@ def get_signal_bg_one_run_smd(runNum, detid,
         darkevents = reduce(lambda x, y: x + y, darkevents)
     if event_data:
         event_data = reduce(lambda x, y: x + y, event_data)
-    darksum_final /= len(darksum_final)
-    signalsum_final /= len(signalsum_final)
     return signalsum_final, darksum_final, event_data
 
 
@@ -294,12 +315,16 @@ def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
         #run_data = map(mapfunc, runList)
 
     event_data = {}
-    bg = np.zeros(config.detinfo_map[detid].dimensions)
-    signal = np.zeros(config.detinfo_map[detid].dimensions) 
     runindx = 0
     for signal_increment, bg_increment, event_data_entry in run_data:
-        signal += (signal_increment / len(runList))
-        bg += (bg_increment / len(runList))
+        try:
+            signal += (signal_increment / len(runList))
+        except UnboundLocalError:
+            signal = signal_increment / len(runList)
+        try:
+            bg += (bg_increment / len(runList))
+        except UnboundLocalError:
+            bg = bg_increment / len(runList)
         event_data[runList[runindx]] = event_data_entry
         runindx += 1
         #event_data.append(event_data_entry)

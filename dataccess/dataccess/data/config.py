@@ -37,7 +37,7 @@ pulse_energy = None
 #   -Multiple masks are ANDed together.
 #   -Mask files must be boolean arrays saved in .npy format.
 #   -Masks must be positive (i.e., bad/dummy pixels are False).
-DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra_masks'])
+DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra_masks', 'subregion_index'])
 
 # Example (from LD67):
 #detinfo_map =\

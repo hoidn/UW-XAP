@@ -185,7 +185,8 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
             runList, detid, default_bg = default_bg_runlist, override_bg =
             override_bg_runlist, event_data_getter = event_data_getter,
-            event_mask = event_mask, **kwargs)
+            event_mask = event_mask, subregion_index = config.detinfo_map[detid].subregion_index,
+            **kwargs)
         newsignal, newbg, event_data = output
         try:
             signal += newsignal

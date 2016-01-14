@@ -245,7 +245,8 @@ def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = N
         fiducial_ellipses = fiducial_ellipses, bgsub = bgsub, compound_list = dataset.compound_list)
     return binangles, adjInten, imarray
 
-@utils.eager_persist_to_file("cache/xrd.proc_all_datasets/")
+# Todo: memoize mpimap instead of this function?
+@utils.eager_persist_to_file("cache/xrd.proc_all_datasets/", rootonly = False)
 def proc_all_datasets(datasets, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True):
     outputs = utils.mpimap(partial(process_dataset, nbins = nbins,
         verbose = verbose, bgsub = bgsub), datasets)

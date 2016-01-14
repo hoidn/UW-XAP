@@ -66,9 +66,12 @@ def isroot():
     """
     Return true if the MPI core rank is 0 and false otherwise.
     """
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    return (rank == 0)
+    if 'pslogin' in socket.gethostname():
+        return True
+    else:
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        return (rank == 0)
     
 def ifroot(func):
     """
@@ -263,7 +266,7 @@ def persist_to_file(file_name):
 
     return decorator
 
-def eager_persist_to_file(file_name, excluded = None):
+def eager_persist_to_file(file_name, excluded = None, rootonly = True):
     """
     Decorator for memoizing function calls to disk.
     Differs from persist_to_file in that the cache file is accessed and updated
@@ -274,6 +277,8 @@ def eager_persist_to_file(file_name, excluded = None):
 
     Inputs:
         file_name: File name prefix for the cache file(s)
+        rootonly : boolean
+                If true, caching is only applied for the MPI process of rank 0.
     """
     cache = {}
 
@@ -291,6 +296,7 @@ def eager_persist_to_file(file_name, excluded = None):
             """
             #return tuple(map(make_hashable, [args, kwargs.items()]))
             # union of default bindings in func and the kwarg bindings in new_func
+            # TODO: merged_dict: why aren't changes in kwargs reflected in it?
             merged_dict = get_default_args(func)
             if not merged_dict:
                 merged_dict = kwargs
@@ -302,10 +308,10 @@ def eager_persist_to_file(file_name, excluded = None):
                 for k in merged_dict.keys():
                     if k in excluded:
                         merged_dict.pop(k)
-            key = make_hashable(tuple(map(make_hashable, [args, merged_dict, closure_dict.items()])))
-            #print "key is", key
-#            for k, v in kwargs.iteritems():
-#                print k, v
+            key = make_hashable(tuple(map(make_hashable, [args, merged_dict, closure_dict.items(), list(kwargs.iteritems())])))
+            print "key is", key
+            for k, v in kwargs.iteritems():
+                print k, v
             return key
 
         #@ifroot TODO: fix this
@@ -320,7 +326,9 @@ def eager_persist_to_file(file_name, excluded = None):
             value = func(*args, **kwargs)
             cache[key] = value
             os.system('mkdir -p ' + os.path.dirname(file_name))
-            dump_to_file(value, file_name)
+            # Write to disk if the cache file doesn't already exist
+            if not os.path.isfile(file_name):
+                dump_to_file(value, file_name)
             return value
 
         def new_func(*args, **kwargs):
@@ -345,7 +353,14 @@ def eager_persist_to_file(file_name, excluded = None):
                 compute(*args, file_name = full_name, **kwargs)
             print "returning from ", func.func_name
             return cache[key]
-        return new_func
+
+        def identity(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        if rootonly and not isroot():
+            return identity
+        else:
+            return new_func
 
     return decorator
 
