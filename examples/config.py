@@ -25,13 +25,6 @@ best_focus_size = 2.
 # url of the google doc logbook
 url =  "https://docs.google.com/spreadsheets/d/1Ejz-kyf-eoCtI1A76f1qfpS2m6nThosWDrh2dXUjv5g/edit#gid=0&vpid=A1"
 
-# List of detector identifiers
-#detID_list = [1, 2, 3]
-
-# Format string for batch job submission
-batch_command = "bsub -q psanaq -n 1 -o log.out python %s"
-
-
 
 # structure to store area detector information
 # TODO: interfacing with Testing.nb.
