@@ -100,8 +100,12 @@ def save_image_and_show(save_path, imarr):
     Save a 2d array to file as an image and then display it.
     """
     save_image(save_path, imarr)
-    plt.imshow(imarr)
-    plt.show()
+    import pyimgalgos.GlobalGraphics as gg
+    ave, rms = imarr.mean(), imarr.std()
+    gg.plotImageLarge(imarr, amp_range=(ave-rms, ave+5*rms))
+    gg.show()
+#    plt.imshow(imarr)
+#    plt.show()
 
 
 @ifroot

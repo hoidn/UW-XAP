@@ -13,6 +13,7 @@ import os
 import ipdb
 import dill
 import sys
+from time import time
 
 
 import config
@@ -20,6 +21,8 @@ if not config.smd:
     from dataccess import psana_get
 else:
     from psana import *
+from PSCalib.GeometryAccess import img_from_pixel_arrays
+from Detector.GlobalUtils import print_ndarr
 from dataccess import toscript
 from functools import partial
 import config # config.py in local directory
@@ -164,21 +167,42 @@ event_data_getter = None, event_mask = None, **kwargs):
             event_data = map(event_data_getter, eventlist)
         return signal, bg, event_data
 
-def get_image_quadrant(arr, i):
+
+def get_quad_data(ds, det, quad):
     """
-    Takes a 2d array and returns the specified quadrant as a contiguous array
-    if i = 0, 1, 2, or 3. Returns the array unaltered if i == -1.
+    Extracts data from an individual quad detector.
     """
-    dimy, dimx = np.shape(arr)
-    split_x = [0, dimx/2, dimx]
-    split_y = [0, dimy/2, dimy]
-    result = []
-    def piece(n, m):
-        return  arr[split_y[n]: split_y[n + 1], split_x[m]: split_x[m + 1]]
-    if i == -1:
-        return arr
+    if quad>3 : quad = 3
+    evt = ds.events().next()
+    if quad >= 0:
+        rnum = evt.run()
+        geo = det.geometry(rnum)        # for >ana-0.17.5
+
+        # get pixel index array for quad, shape=(8, 185, 388)
+        iX, iY = geo.get_pixel_coord_indexes('QUAD:V1', quad)
+        print_ndarr(iX, 'iX')
+        print_ndarr(iY, 'iY')
+
+        t0_sec = time()
+
+        nda = det.raw(evt)
+
+        print 'Consumed time = %7.3f sec' % (time()-t0_sec)
+        #print_ndarr(nda, 'raw')
+
+    #    if nda is None :
+    #        sys.exit('Exit: DO NOT plot anything for nda=None...')
+
+        # get intensity array for quad, shape=(8, 185, 388)
+        nda.shape = (4, 8, 185, 388)
+        ndaq = nda[quad,:]
+        #print_ndarr(ndaq, 'nda[%d,:]'%quad)
+
+        # reconstruct image for quad
+        img = img_from_pixel_arrays(iX, iY, W=ndaq)
+        return img
     else:
-        return np.ascontiguousarray(piece(i / 2, i %2))
+        return det.image(evt)
 
 # TODO: more testing and refactor all of this!
 @utils.eager_persist_to_file("cache/get_signal_bg_one_run_smd/")
@@ -209,8 +233,7 @@ def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
         if (nevent % size == rank) and event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
-            increment = det.image(evt)
-            #increment = get_image_quadrant(det.image(evt), subregion_index)
+            increment = get_quad_data(ds, det, subregion_index)
             if increment is not None:
                 if isdark:
                     darkevents.append(nevent)
@@ -224,20 +247,18 @@ def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
                     except UnboundLocalError:
                         signalsum = increment
                     if event_data_getter:
-                        event_data.append(event_data_getter(get_image_quadrant(increment, subregion_index)))
+                        event_data.append(event_data_getter(increment))
                     events_processed += 1
         # TODO: for testing only. remove later.
-#        if nevent >= rank:
-#            break
+        if nevent >= rank:
+            break
     signalsum /= events_processed
     signalsum_final = np.empty_like(signalsum)
     comm.Allreduce(signalsum, signalsum_final)
-    signalsum_final = get_image_quadrant(signalsum_final, subregion_index)
     darksum_final = np.empty_like(signalsum)
     try:
         darksum /= events_processed
         comm.Allreduce(darksum, darksum_final)
-        darksum_final = get_image_quadrant(darksum_final, subregion_index)
     except UnboundLocalError:
         darksum_final = np.empty_like(signalsum_final)
     darkevents = comm.allgather(darkevents)
