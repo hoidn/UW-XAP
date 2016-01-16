@@ -58,22 +58,6 @@ DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra
 #        {})}
 
 
-# Map from sample composition designator to either (1) a list of powder peak
-# angles (units of degrees) or (2) a path to a file containing a simulated
-# powder pattern from which this information can be extracted. This
-# data is used for applying background subtraction in XRD analysis.
-# For example:
-# TODO: refer to powder peaks by momentum transfer instead of energy. At the
-# same time that's done, incident photon energy has to be added as a parameter,
-# eiher a parameter in this file, a command-line parameter for XRD, or one
-# provided through the google spreadsheet log. 
-# TODO: index the peaks?
-#powder_angles = {
-#    'Fe3O4': [31.3, 37.0, 45.1, 52.4, 56.0, 59.7, 65.7]
-#}
-powder_angles = {
-}
-
 # Size in microns of the beam spot at best focus
 best_focus_size = 2.
 

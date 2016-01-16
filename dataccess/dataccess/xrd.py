@@ -415,16 +415,22 @@ def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10
     result = imarray - bg_smooth
     return result
 
-def get_powder_angles(compound):
+def get_powder_angles(compound, peak_threshold = 0.05):
     """
     Accessor function for powder data in config.py
 
     Returns a list of Bragg peak angles.
     """
-#    powder_q = config.powder_q[compound]
-#    powder_angles = 4 * np.arcsin(powder_q * HBARC / (2 * config.photon_energy)
-    # TODO: finish this
-    return config.powder_angles[compound]
+    energy = config.photon_energy
+    fname = utils.resource_path('data/' + compound + '.csv')
+    try:
+        powder_q, intensities = np.genfromtxt(fname, delimiter = ',').T
+    except IOError:
+        raise IOError("Simulated diffraction file " + fname + ": not found")
+    powder_q = powder_q[intensities > np.max(intensities) * peak_threshold]
+    powder_angles = 2 * np.arcsin(powder_q * HBARC / (2 * energy))
+    powder_angles = powder_angles[~np.isnan(powder_angles)]
+    return np.rad2deg(powder_angles)
 
 def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WIDTH):
     """
@@ -628,8 +634,8 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         fiducial_ellipses: list of angles at which to insert fiducial curves
             in the CSPAD data. This can serve as a consistency check for
             geometry.
-        compound_list: list of compound identifiers corresponding to keys
-            of config.powder_angles.
+        compound_list: list of compound identifiers corresponding to crystals
+            for which simulated diffraction data is available.
     """
     # TODO: don't do peak intensity plot if no scattering angles have been 
     # provided.
