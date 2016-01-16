@@ -84,14 +84,6 @@ detinfo_map =\
 extra_masks = {
 }
 
-# Map from sample composition designator to either (1) a list of powder peak
-# angles (units of degrees) or (2) a path to a file containing a simulated
-# powder pattern from which peak angles can be extracted. This data is used
-# for applying background subtraction in XRD analysis.
-powder_angles = {
-    'Fe3O4': [31.3, 37.0, 38.8, 45.1, 52.4, 56.0, 59.7, 65.7]
-}
-
 # TODO (maybe): parameters for xes analysis script
 
 # port for ZMQ sockets
