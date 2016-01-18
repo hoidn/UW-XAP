@@ -182,17 +182,24 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
     if not groups:
         raise ValueError(label + ': no runs found for label')
     for runList in groups:
+        if detid in config.nonarea:
+            subregion_index = None
+        else:
+            subregion_index = config.detinfo_map[detid].subregion_index
         output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
             runList, detid, default_bg = default_bg_runlist, override_bg =
             override_bg_runlist, event_data_getter = event_data_getter,
-            event_mask = event_mask, subregion_index = config.detinfo_map[detid].subregion_index,
+            event_mask = event_mask, subregion_index = subregion_index,
             **kwargs)
         newsignal, newbg, event_data = output
         try:
             signal += newsignal
             bg += newbg
         except NameError:
-            signal, bg = newsignal.copy(), newbg.copy()
+            try:
+                signal, bg = newsignal.copy(), newbg.copy()
+            except AttributeError:
+                signal, bg = newsignal, newbg
     if separate:
         return (signal) / float(len(groups)), bg / float(len(groups))
     if event_data_getter is None:

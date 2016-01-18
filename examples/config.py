@@ -66,6 +66,10 @@ detinfo_map =\
         -1)}
 
 
+nonarea =\
+    {'d1': 'MEC-TCTR-DI-01',
+    'ipm2': 'MEC-XT2-IPM-02',
+    'ipm3': 'MEC-XT2-IPM-03'}
 
 # Map from detector IDs to a list of 0 or more paths for additional mask files
 # (beyond what psana applies to 'calibrated' frames). 

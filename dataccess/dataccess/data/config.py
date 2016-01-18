@@ -57,17 +57,24 @@ DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra
 #        {},
 #        {})}
 
+# Map from BLD non-area detector labels to their full psana source names
+nonarea = {}
 
-# Size in microns of the beam spot at best focus
-best_focus_size = 2.
+#Example (from LD67):
+#nonarea =\
+#    {'d1': 'MEC-TCTR-DI-01',
+#    'ipm2': 'MEC-XT2-IPM-02',
+#    'ipm3': 'MEC-XT2-IPM-03'}
+
+
 
 # Identifier for google spreadsheet from which to download label data
-# (optional)
-# TODO: implement this
 spreadsheet_url = None
-sheet_indices = []
 
 # TODO (maybe): parameters for XES script
 
 # port for ZMQ sockets
 port = "5558"
+
+# Size in microns of the beam spot at best focus
+best_focus_size = 2.

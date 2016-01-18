@@ -19,8 +19,7 @@ from time import time
 import config
 if not config.smd:
     from dataccess import psana_get
-else:
-    from psana import *
+from psana import *
 from PSCalib.GeometryAccess import img_from_pixel_arrays
 from Detector.GlobalUtils import print_ndarr
 from dataccess import toscript
@@ -50,56 +49,15 @@ from pathos.multiprocessing import ProcessingPool
 #XTC_DIR = '/reg/d/psdm/MEC/' + expname + '/xtc/'
 XTC_DIR = '/reg/d/psdm/' + config.exppath + '/xtc/'
 
-## TODO: memoize timestamp lookup
-#def get_run_clusters(interval = None, exppath = config.exppath, max_interval = 50.):
-#    """
-#    Returns a list of lists containing clusters of run numbers whose xtc data 
-#    files were created within max_interval seconds of each other. Testing with
-#    LD67 data showed 50 seconds to be a good max_interval.
-#
-#    interval is a tuple of the form [run_low, run_high) indicating a  range of 
-#    run numbers to limit this operation to
-#    """
-#    XTC_NAME = "/reg/d/psdm/" + exppath +  r"/xtc/e441-r%04d-s01-c00.xtc"
-#    key = lambda run_num: os.path.getmtime(XTC_NAME%run_num)
-#    def cluster(data, maxgap, key = lambda x: x):
-#        '''Arrange data into groups where successive elements
-#           differ by no more than *maxgap*
-#
-#           selector is a function that extracts values for comparison from the
-#           elements of data
-#
-#            >>> cluster([1, 6, 9, 100, 102, 105, 109, 134, 139], maxgap=10)
-#            [[1, 6, 9], [100, 102, 105, 109], [134, 139]]
-#
-#            >>> cluster([1, 6, 9, 99, 100, 102, 105, 134, 139, 141], maxgap=10)
-#            [[1, 6, 9], [99, 100, 102, 105], [134, 139, 141]]
-#
-#        '''
-#        data.sort(key = key)
-#        groups = [[data[0]]]
-#        for x in data[1:]:
-#            if abs(key(x) - key(groups[-1][-1])) <= maxgap:
-#                groups[-1].append(x)
-#            else:
-#                groups.append([x])
-#        return groups
-#
-#    all_runs = get_all_runs(exppath = exppath)
-#    if interval:
-#        runs = range(*interval)
-#        if not set(runs).issubset(set(all_runs)):
-#            raise ValueError("invalid range of run numbers given")
-#    else:
-#        runs = all_runs
-#    return cluster(runs, max_interval, key = key)
-
-
 
 @utils.eager_persist_to_file("cache/get_signal_bg_one_run/")
 def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1000.0,
 event_data_getter = None, event_mask = None, **kwargs):
     # TODO: remove sigma_max discrimination
+    if detid in config.nonarea:
+        return get_signal_bg_one_run_nonarea(runNum, detid,
+            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
+
     def filter_events(eventlist, blanks):
         """
         Return the indices of outliers (not including blank frames) in the list of 
@@ -204,9 +162,85 @@ def get_quad_data(ds, det, quad):
     else:
         return det.image(evt)
 
+# TODO: have this run only on the root rank
+def get_signal_bg_one_run_nonarea(runNum, detid,
+        event_data_getter = None, event_mask = None, **kwargs):
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+    if config.smd:
+        ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+    else:
+        ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
+    def event_valid(nevent):
+        if event_mask:
+            run_mask = event_mask[runNum]
+            return run_mask[nevent]
+        else:
+            return True
+    def mapfunc(event):
+        try:
+            result = event.get(Lusi.IpmFexV1, Source(config.nonarea[detid])).channel()[0]
+        # Event is None, or something like that
+        except AttributeError:
+            result = np.nan
+        return result
+    det_values = []
+    for nevent, evt in enumerate(ds.events()):
+        if  (nevent % size == rank) and event_valid(nevent):
+            k = evt.get(Lusi.IpmFexV1, Source(config.nonarea[detid]))
+            if k:
+                det_values.append(k.channel()[0])
+#    det_values =\
+#        [evt.get(Lusi.IpmFexV1, Source(config.nonarea[detid])).channel()[0]
+#        for nevent, evt in enumerate(ds.events())
+#        if event_valid(nevent) and (nevent % size == rank)]
+    det_values = reduce(lambda x, y: x + y, comm.allgather(det_values))
+#    det_values = utils.mpimap(mapfunc, ds.events())
+#    det_values = filter(lambda x: x != np.isnan, det_values)
+    event_mean = np.sum(det_values) / len(det_values)
+    if event_data_getter:
+        event_data = map(event_data_getter, det_values)
+    else:
+        event_data = []
+    return event_mean, 0., event_data
+
+#def get_signal_bg_one_run_nonarea_mproc(runNum, detid,
+#        event_data_getter = None, event_mask = None, **kwargs):
+#    rank = comm.Get_rank()
+#    size = comm.Get_size()
+#    if config.smd:
+#        ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+#    else:
+#        ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
+#    def event_valid(nevent):
+#        if event_mask:
+#            run_mask = event_mask[runNum]
+#            return run_mask[nevent]
+#        else:
+#            return True
+#    def mapfunc(event):
+#        try:
+#            result = event.get(Lusi.IpmFexV1, Source(config.nonarea[detid])).channel()[0]
+#        # Event is None, or something like that
+#        except AttributeError:
+#            result = np.nan
+#        return result
+#    pool = ProcessingPool(nodes=14)
+#    det_values = pool.map(mapfunc, ds.events())
+#    det_values = filter(lambda x: x != np.isnan, det_values)
+#    event_mean = np.sum(det_values) / len(det_values)
+#    if event_data_getter:
+#        event_data = map(event_data_getter, det_values)
+#    else:
+#        event_data = []
+#    return event_mean, 0., event_data
+
+
+
+
 # TODO: more testing and refactor all of this!
 @utils.eager_persist_to_file("cache/get_signal_bg_one_run_smd/")
-def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
+def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
     def event_valid(nevent):
         if event_mask:
@@ -214,7 +248,7 @@ def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
             return run_mask[nevent]
         else:
             return True
-    DIVERTED_CODE = 162
+    #DIVERTED_CODE = 162
     ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
     det = Detector(config.detinfo_map[detid].device_name, ds.env())
     rank = comm.Get_rank()
@@ -255,6 +289,7 @@ def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
     signalsum /= events_processed
     signalsum_final = np.empty_like(signalsum)
     comm.Allreduce(signalsum, signalsum_final)
+    # TODO: refactor
     darksum_final = np.empty_like(signalsum)
     try:
         darksum /= events_processed
@@ -276,42 +311,17 @@ def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
     return signalsum_final, darksum_final, event_data
 
 
-#@utils.eager_persist_to_file("cache/avg_bgsubtract_hdf/")
-#def get_signal_bg_many(runList, detid, event_data_getter = None,
-#    event_mask = None, **kwargs):
-#    """
-#    Return the averaged signal and background, and accumulated event data,
-#    from running get_signal_bg_one_run over all runs specified.
-#
-#    Parameters
-#    ----------
-#    runList : list of ints
-#    All others: see get_signal_bg_one_run
-#
-#    Returns
-#    ----------
-#    signal : 2-d np.ndarray
-#        Averaged signal, subject to filtering by event_mask, and default
-#        removal of outliers.
-#    bg : 2-d np.ndarray
-#        Averaged background.
-#    event_mask : list of lists
-#        Accumulated event data.
-#    """
-#    bg = np.zeros(config.detinfo_map[detid].dimensions)
-#    signal = np.zeros(config.detinfo_map[detid].dimensions) 
-#    event_data = []
-#    for run_number in runList:
-#        
-#        output_one_run = get_signal_bg_one_run(run_number, detid,
-#            event_data_getter = event_data_getter, event_mask = event_mask,
-#            **kwargs)
-#        signal_increment, bg_increment, event_data_entry = output_one_run
-#        signal += (signal_increment / len(runList))
-#        bg += (bg_increment / len(runList))
-#        if event_data_getter is not None:
-#            event_data.append(event_data_entry)
-#    return signal, bg, event_data
+@utils.eager_persist_to_file("cache/get_signal_bg_one_run_smd/")
+def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
+        event_data_getter = None, event_mask = None, **kwargs):
+    if detid in config.nonarea:
+        return get_signal_bg_one_run_nonarea(runNum, detid,
+            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
+    else: # Assume detid to be an area detector
+        return get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = subregion_index,
+            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
+
+
 
 @utils.eager_persist_to_file("cache/get_signal_bg_many_parallel/")
 def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,

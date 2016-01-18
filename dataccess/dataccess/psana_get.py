@@ -11,8 +11,8 @@ import utils
 import config
 
 
-# TODO: rename this module so that it's clear that it's only used with V3 of the 
-# psana python API
+# TODO: rename this module so that it's clear that it's only used with the deprecated version
+# of the python psana API
 # psana configuration
 configFileName = utils.resource_path('data/tiff_converter_dump_epics.cfg')
 print configFileName
