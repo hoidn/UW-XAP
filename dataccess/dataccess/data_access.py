@@ -10,6 +10,7 @@ import sys
 import zmq
 import dill
 import re
+import ipdb
 
 import utils
 import logbook
@@ -83,7 +84,7 @@ def get_label_property(label, property):
     complete_dict = get_pub_logbook_dict()
     def runrange_to_label(run_range):
         """
-        Given a run range, look for a label whose run range is a superset
+        Given a run range, look for a label whose run range matches
         and return it. If a matching label isn't found, return None.
         """
         red = lambda x, y: x + y
@@ -92,7 +93,7 @@ def get_label_property(label, property):
         runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
         target_set = set(range(run_range[0], run_range[1] + 1))
         for runtuple in runtuples_to_labels:
-            if target_set < set(runtuple):
+            if target_set == set(runtuple):
                 return runtuples_to_labels[runtuple]
         return None
 
@@ -225,6 +226,7 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         return event_data
 
     try:
+        #ipdb.set_trace()
         if event_filter:
             event_mask = get_event_mask(event_filter)
         else:
@@ -234,7 +236,10 @@ def get_data_and_filter(label, detid, event_data_getter = None,
             event_mask = get_event_mask(filterfunc)
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)
-    except KeyError:
+    except KeyError, e:
+        print "!!!!!!!!!!!!!!!!!!"
+        print "WARNING: ", e, ". Event filtering will not be performed."
+        print "!!!!!!!!!!!!!!!!!!"
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter)
     return imarray, event_data

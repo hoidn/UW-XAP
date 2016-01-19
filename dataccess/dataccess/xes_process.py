@@ -60,15 +60,21 @@ def emission_dict():
 
 #emission = emission_dict()
 
-def data_from_label(detid):
+def data_from_label(detid, transpose = False):
     """
     Input: detector ID
 
     Output: Function that takes a string reference to data runs and returns
     a 2D CSPAD data array corresponding to detid and the string reference.
     """
-    #return lambda label: data.get_label_data(label, detid)[0]
-    return lambda label: data.get_data_and_filter(label, detid)[0]
+    def data_getter(label):
+        arr = data.get_data_and_filter(label, detid)[0]
+        if transpose:
+            return arr.T
+        else:
+            return arr
+    #return lambda label: data.get_data_and_filter(label, detid)[0]
+    return data_getter
 
 def center_col(data):
     """
@@ -256,8 +262,8 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
             calibration at all.
     Output: array, array -> energy or index, normalized intensity
     """
-    if np.shape(data) != (391, 370):
-        print "WARNING: array dimensions ", np.shape(data), " differ from recorded shape of CSPAD140k"
+#    if np.shape(data) != (391, 370):
+#        print "WARNING: array dimensions ", np.shape(data), " differ from recorded shape of CSPAD140k"
     if energy_ref1_energy_ref2_calibration or calib_load_path:
         peak_width = 150
     else:
@@ -320,7 +326,7 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     if scale_ev:
         plt.xlabel("Energy (eV)", size="large")
     else:
-        plt.xlabel("CSPAD index", size="large")
+        plt.xlabel("pixel index", size="large")
     plt.ylabel("Counts", size="large")
     plt.ylim((0, 1.15 * max_intensity))
     if name:
@@ -332,9 +338,9 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
 def main(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
         calib_load_path = None, calib_save_path = None,
         dark_label = None, energy_ref1_energy_ref2_calibration = True,
-        eltname = ''):
+        eltname = '', transpose = False):
     # Extract data from labels. 
-    data_extractor = data_from_label(detid)
+    data_extractor = data_from_label(detid, transpose = transpose)
     spectrumList = []
     scale_ev = (energy_ref1_energy_ref2_calibration or calib_load_path)
     if not os.path.exists('xes_spectra/'):

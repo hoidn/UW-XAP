@@ -10,11 +10,13 @@ import Image
 import glob
 import argparse
 import os
+import random
 import ipdb
 import dill
 import sys
 from time import time
 
+random.seed(os.getpid())
 
 import config
 if not config.smd:
@@ -264,7 +266,13 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
 #                return True
         return False
     for nevent, evt in enumerate(ds.events()):
+        # TODO: testing only, remove later.
+#        if nevent > 200:
+#            break
         if (nevent % size == rank) and event_valid(nevent):
+#            if random.randint(0, 10) != 5:
+#                continue
+
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
             increment = get_quad_data(ds, det, subregion_index)
@@ -283,9 +291,7 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
                     if event_data_getter:
                         event_data.append(event_data_getter(increment))
                     events_processed += 1
-        # TODO: for testing only. remove later.
-        if nevent >= rank:
-            break
+                    print 'processed event: ', nevent
     signalsum /= events_processed
     signalsum_final = np.empty_like(signalsum)
     comm.Allreduce(signalsum, signalsum_final)
@@ -329,7 +335,6 @@ def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
     """
     Parallel version of get_signal_bg_many
     """
-
     def mapfunc(run_number):
         return get_signal_bg_one_run(run_number, detid, event_data_getter =
             event_data_getter, event_mask = event_mask, **kwargs)
@@ -344,7 +349,6 @@ def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
         pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
         run_data = pool.map(mapfunc, runList)
         #run_data = map(mapfunc, runList)
-
     event_data = {}
     runindx = 0
     for signal_increment, bg_increment, event_data_entry in run_data:

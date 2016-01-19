@@ -14,5 +14,4 @@ def main(label, detid, path = None, masked = False):
         imarray = apply_default_masks(imarray, detid)
     if not path:
         path = label + '_' + str(detid)
-    #utils.save_image_and_show(path, imarray)
-
+    utils.save_image_and_show(path, imarray)

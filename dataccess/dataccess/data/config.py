@@ -1,8 +1,9 @@
 from collections import namedtuple
+import numpy as np
 
 # if True, use MPI with the new (psana V4?) smd interface to access data. Otherwise use
 # the old (V3?) API.
-smd = False
+smd = True
 
 # Experiment specification. Example (for LD67):
 # exppath = 'mec/mecd6714'
@@ -57,7 +58,7 @@ DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra
 #        {},
 #        {})}
 
-# Map from BLD non-area detector labels to their full psana source names
+# Map from BLD non-area detector ids to their full psana source names
 nonarea = {}
 
 #Example (from LD67):

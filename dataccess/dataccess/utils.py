@@ -318,7 +318,7 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
                 print k, v
             return key
 
-        #@ifroot TODO: fix this
+        @ifroot# TODO: fix this
         def dump_to_file(d, file_name):
             with open(file_name, 'w') as f:
                 dill.dump(d, f)
@@ -358,13 +358,7 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
             print "returning from ", func.func_name
             return cache[key]
 
-        def identity(*args, **kwargs):
-            return func(*args, **kwargs)
-
-        if rootonly and not isroot():
-            return identity
-        else:
-            return new_func
+        return new_func
 
     return decorator
 
