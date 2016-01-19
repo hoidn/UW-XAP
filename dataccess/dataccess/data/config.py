@@ -9,9 +9,9 @@ smd = True
 # exppath = 'mec/mecd6714'
 # xtc_prefix = "e441"
 # This must be provided to run any analysis. 
-exppath = None
+exppath = "mec/meck2016"
 try:
-    expname = config.exppath.split('/')[1]
+    expname = exppath.split('/')[1]
 except:
     raise ValueError("config.exppath: incorrect format")
 xtc_prefix = None
