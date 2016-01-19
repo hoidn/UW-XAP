@@ -259,6 +259,7 @@ def main(url = config.url, port = PORT):
         mapping = get_label_mapping(url = url)
         messagedata = dill.dumps(mapping)
         print mapping
-        socket.send(messagedata)
+        topic = config.expname
+        socket.send("%s%s" % (topic, messagedata))
         time.sleep(1)
 

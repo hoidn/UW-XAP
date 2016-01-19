@@ -275,24 +275,30 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
 
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
-            increment = get_quad_data(ds, det, subregion_index)
-            if increment is not None:
-                if isdark:
-                    darkevents.append(nevent)
-                    try:
-                        darksum += increment
-                    except UnboundLocalError:
-                        darksum = increment
-                else:
-                    try:
-                        signalsum += increment
-                    except UnboundLocalError:
-                        signalsum = increment
-                    if event_data_getter:
-                        event_data.append(event_data_getter(increment))
-                    events_processed += 1
-                    print 'processed event: ', nevent
-    signalsum /= events_processed
+            try:
+                increment = get_quad_data(ds, det, subregion_index)
+                if increment is not None:
+                    if isdark:
+                        darkevents.append(nevent)
+                        try:
+                            darksum += increment
+                        except UnboundLocalError:
+                            darksum = increment
+                    else:
+                        try:
+                            signalsum += increment
+                        except UnboundLocalError:
+                            signalsum = increment
+                        if event_data_getter:
+                            event_data.append(event_data_getter(increment))
+                        events_processed += 1
+                        print 'processed event: ', nevent
+            except StopIteration:
+                break
+    try:
+        signalsum /= events_processed
+    except UnboundLocalError:
+        raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum))
     signalsum_final = np.empty_like(signalsum)
     comm.Allreduce(signalsum, signalsum_final)
     # TODO: refactor

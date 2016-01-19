@@ -57,9 +57,9 @@ def get_pub_logbook_dict():
 
     print "Waiting for data..."
     socket.connect ("tcp://pslogin03:%s" % PORT)
-    topicfilter = ""
+    topicfilter = config.expname
     socket.setsockopt(zmq.SUBSCRIBE, topicfilter)
-    messagedata = socket.recv()
+    messagedata = socket.recv()[len(config.expname):]
     socket.close()
     return dill.loads(messagedata)
 
@@ -232,7 +232,10 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         else:
             funcstr = get_label_property(label, 'filter_func')
             args = eventmask_params(label)
-            filterfunc = eval('config.' + funcstr)(*args)
+            try:
+                filterfunc = eval('config.' + funcstr)(*args)
+            except AttributeError:
+                raise ValueError("Function " + funcstr + " not found in config.py")
             event_mask = get_event_mask(filterfunc)
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)

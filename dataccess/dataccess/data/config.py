@@ -38,25 +38,40 @@ pulse_energy = None
 #   -Multiple masks are ANDed together.
 #   -Mask files must be boolean arrays saved in .npy format.
 #   -Masks must be positive (i.e., bad/dummy pixels are False).
-DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra_masks', 'subregion_index'])
+DetInfo = namedtuple('DetInfo', ['device_name', 'geometry', 'extra_masks', 'subregion_index'])
 
-# Example (from LD67):
+# Example (from lk20):
 #detinfo_map =\
-#    {'quad':
+#    {'quad1':
 #        DetInfo('MecTargetChamber.0:Cspad.0',
-#        (830, 825),
 #        {'phi': None, 'x0': None, 'y0': None, 'alpha': None, 'r': None},
-#        {}),
+#        {},
+#        0),
+#    'quad2':
+#        DetInfo('MecTargetChamber.0:Cspad.0',
+#        {'phi': None, 'x0': None, 'y0': None, 'alpha': None, 'r': None},
+#        {},
+#        1),
+#    'allquads':
+#        DetInfo('MecTargetChamber.0:Cspad.0',
+#        {'phi': None, 'x0': None, 'y0': None, 'alpha': None, 'r': None},
+#        {},
+#        -1),
 #     'xrts1':
 #        DetInfo('MecTargetChamber.0:Cspad2x2.1',
-#        (400, 400),
 #        {},
-#        {}),
+#        {},
+#        -1),
 #    'xrts2':
 #        DetInfo('MecTargetChamber.0:Cspad2x2.2', 
-#        (400, 400),
 #        {},
-#        {})}
+#        {},
+#        -1),
+#    'si':
+#        DetInfo('MecTargetChamber.0:Opal1000.1', 
+#        {},
+#        {},
+#        -1)}
 
 # Map from BLD non-area detector ids to their full psana source names
 nonarea = {}
