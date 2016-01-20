@@ -11,6 +11,7 @@ import zmq
 import dill
 import re
 import ipdb
+import hashlib
 
 import utils
 import logbook
@@ -29,7 +30,7 @@ using a mapping published by a running instance of logbook.main.
 # TODO: description of the defined properties and the modules that use them
 
 # For ZMQ TCP communication to get logbook data
-PORT = config.port
+#PORT = config.port
 
 
 def make_labels(fname = 'labels.txt', min_cluster_size = 2):
@@ -52,11 +53,13 @@ def make_labels(fname = 'labels.txt', min_cluster_size = 2):
 @utils.memoize(timeout = 5)
 def get_pub_logbook_dict():
     # Socket to talk to server
+    url = config.url
+    port = int(5000 + int(hashlib.sha1(url).hexdigest(), 16) % 1000)
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
 
     print "Waiting for data..."
-    socket.connect ("tcp://pslogin03:%s" % PORT)
+    socket.connect ("tcp://pslogin03:%s" % port)
     topicfilter = config.expname
     socket.setsockopt(zmq.SUBSCRIBE, topicfilter)
     messagedata = socket.recv()[len(config.expname):]

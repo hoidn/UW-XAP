@@ -84,13 +84,10 @@ nonarea = {}
 
 
 
-# Identifier for google spreadsheet from which to download label data
-spreadsheet_url = None
-
 # TODO (maybe): parameters for XES script
 
 # port for ZMQ sockets
-port = "5558"
+#port = "5558"
 
 # Size in microns of the beam spot at best focus
 best_focus_size = 2.

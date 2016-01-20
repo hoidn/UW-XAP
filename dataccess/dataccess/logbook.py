@@ -8,6 +8,7 @@ import webbrowser
 import logging
 import argparse
 import zmq
+import hashlib
 import ipdb
 
 import httplib2
@@ -28,7 +29,7 @@ from dataccess import utils
 import config
 
 
-PORT = config.port
+#PORT = config.port
 
 # Format specification for column headers in logbook. Column descriptions:
 # runs: range of run numbers in the format 'integer' or 'integer-integer'.
@@ -248,7 +249,9 @@ def get_label_mapping(url = config.url):
                         local_dict[property_key] = parser_dispatch[property_key](row[k])
     return label_dict
 
-def main(url = config.url, port = PORT):
+def main(url = config.url, port = None):
+    if port is None:
+        port = int(5000 + int(hashlib.sha1(url).hexdigest(), 16) % 1000)
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind("tcp://*:%s" % port)
