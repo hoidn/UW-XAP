@@ -29,8 +29,6 @@ from dataccess import utils
 import config
 
 
-#PORT = config.port
-
 # Format specification for column headers in logbook. Column descriptions:
 # runs: range of run numbers in the format 'integer' or 'integer-integer'.
 #   Used by: all.
@@ -54,6 +52,9 @@ PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*
     'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
     'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*'}
 HEADERS = [k for k in PROPERTY_REGEXES]
+
+# Format for the flag that designates logbook header row
+HEADER_REGEX = r'.*[hH]eader.*'
 
 def get_property_key(col_title):
     for k, v in PROPERTY_REGEXES.iteritems():
@@ -93,13 +94,12 @@ def prefix_add(*args):
 def list_vstack(*args):
     return reduce(prefix_add, args)
 
-def make_rect(list2d):
-    maxlen = np.max(map(len, list2d))
-    for a in list2d:
-        difference = maxlen - len(a)
-        if difference:
-            a.extend([None] * difference)
-    return list2d
+def get_cell_coords(sheet_list2d, regex):
+    for i, row in enumerate(sheet_list2d):
+        for j, cell in enumerate(row):
+            if re.search(regex, cell):
+                return i, j
+    raise ValueError(regex + ": matching cell not found")
 
 @utils.memoize(timeout = 10)
 def get_logbook_data(url, sheet_number = 0):
@@ -127,11 +127,16 @@ def get_logbook_data(url, sheet_number = 0):
         Returns None if the sheet doesn't contain at least two rows of values.
         """
         raw_data = sheet.get_all_values()
+        try:
+            header_i, header_j = get_cell_coords(raw_data, HEADER_REGEX)
+        except ValueError:
+            header_i = 0
+        #ipdb.set_trace()
         if len(np.shape(raw_data)) != 2: # sheet has 0 or 1 filled rows
             print "sheet ", str(sheet), ": no data found"
             return
-        col_titles = raw_data[0]
-        values = raw_data[1:]
+        col_titles = raw_data[header_i]
+        values = raw_data[header_i + 1:]
         num_rows = len(values)
         def get_column_data(regex):
             """

@@ -240,7 +240,8 @@ def persist_to_file(file_name):
                         for k, v in to_load.items():
                             cache[k] = v
                 except (IOError, ValueError):
-                    print "no cache file found"
+                    #print "no cache file found"
+                    pass
                 flag_cache_loaded()
             if not key in cache.keys():
                 cache[key] = func(*dill.loads(key[0]), **{k: v for k, v in key[1]})
@@ -313,16 +314,16 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
                     if k in excluded:
                         merged_dict.pop(k)
             key = make_hashable(tuple(map(make_hashable, [args, merged_dict, closure_dict.items(), list(kwargs.iteritems())])))
-            print "key is", key
-            for k, v in kwargs.iteritems():
-                print k, v
+            #print "key is", key
+#            for k, v in kwargs.iteritems():
+#                print k, v
             return key
 
         @ifroot# TODO: fix this
         def dump_to_file(d, file_name):
             with open(file_name, 'w') as f:
                 dill.dump(d, f)
-            print "Dumped cache to file"
+            #print "Dumped cache to file"
     
         def compute(*args, **kwargs):
             file_name = kwargs.pop('file_name', None)
@@ -338,16 +339,16 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
         def new_func(*args, **kwargs):
             # Because we're splitting into multiple files, we can't retrieve the
             # cache until here
-            print "entering ", func.func_name
+            #print "entering ", func.func_name
             key = gen_key(*args, **kwargs)
             full_name = file_name + key
             if key not in cache:
                 try:
                     with open(full_name, 'r') as f:
                         cache[key] = dill.load(f)
-                    print "cache found"
+                    #print "cache found"
                 except (IOError, ValueError):
-                    print "no cache found; computing"
+                    #print "no cache found; computing"
                     compute(*args, file_name = full_name, **kwargs)
             # if the "flush" kwarg is passed, recompute regardless of whether
             # the result is cached
@@ -355,7 +356,7 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
                 kwargs.pop("flush", None)
                 # TODO: refactor
                 compute(*args, file_name = full_name, **kwargs)
-            print "returning from ", func.func_name
+            #print "returning from ", func.func_name
             return cache[key]
 
         return new_func

@@ -70,6 +70,11 @@ DetInfo = namedtuple('DetInfo', ['device_name', 'geometry', 'extra_masks', 'subr
 #        {},
 #        {},
 #        -1),
+#    'vuv':
+#        DetInfo('MecTargetChamber.0:Princeton.1', 
+#        {},
+#        {},
+#        -1),
 #    'si':
 #        DetInfo('MecTargetChamber.0:Opal1000.1', 
 #        {},
