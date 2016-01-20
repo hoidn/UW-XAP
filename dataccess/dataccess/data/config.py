@@ -14,10 +14,13 @@ try:
     expname = exppath.split('/')[1]
 except:
     raise ValueError("config.exppath: incorrect format")
-xtc_prefix = None
+
+# For lk20:
+xtc_prefix = 'e691'
 
 # url of the google doc logbook
-url = None
+# This is the one we've been using for testing:
+url = "https://docs.google.com/spreadsheets/d/1Ejz-kyf-eoCtI1A76f1qfpS2m6nThosWDrh2dXUjv5g/edit?pref=2&pli=1#gid=0"
 
 # Probe photon energy in eV
 photon_energy = None
@@ -85,9 +88,6 @@ nonarea = {}
 
 
 # TODO (maybe): parameters for XES script
-
-# port for ZMQ sockets
-#port = "5558"
 
 # Size in microns of the beam spot at best focus
 best_focus_size = 2.
