@@ -128,12 +128,12 @@ event_data_getter = None, event_mask = None, **kwargs):
         return signal, bg, event_data
 
 
-def get_quad_data(ds, det, quad):
+def get_area_detector_subregion(quad, det, evt):
     """
     Extracts data from an individual quad detector.
     """
     if quad>3 : quad = 3
-    evt = ds.events().next()
+    #evt = ds.events().next()
     if quad >= 0:
         rnum = evt.run()
         geo = det.geometry(rnum)        # for >ana-0.17.5
@@ -276,7 +276,7 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
             try:
-                increment = get_quad_data(ds, det, subregion_index)
+                increment = get_area_detector_subregion(subregion_index, det, evt)
                 if increment is not None:
                     if isdark:
                         darkevents.append(nevent)
