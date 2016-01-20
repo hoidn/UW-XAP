@@ -430,7 +430,7 @@ def get_powder_angles(compound, peak_threshold = 0.05):
     powder_q = powder_q[intensities > np.max(intensities) * peak_threshold]
     powder_angles = 2 * np.arcsin(powder_q * HBARC / (2 * energy))
     powder_angles = powder_angles[~np.isnan(powder_angles)]
-    return np.rad2deg(powder_angles)
+    return list(np.rad2deg(powder_angles))
 
 def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WIDTH):
     """
@@ -618,7 +618,7 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
 
 def main(detid, data_identifiers, mode = 'label', peak_progression_compound = None,
     plot = True, bgsub = True, fiducial_ellipses = None, compound_list = [],
-    normalization = None, maxpeaks = 'all'):
+    normalization = None, maxpeaks = 6):
     """
     Arguments:
         detid: id of a quad CSPAD detector

@@ -273,6 +273,8 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
 #            if random.randint(0, 10) != 5:
 #                continue
 
+#            if detid == 'vuv' and nevent == 24:
+#                ipdb.set_trace()
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
             #try:

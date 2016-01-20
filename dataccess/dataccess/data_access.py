@@ -58,7 +58,7 @@ def get_pub_logbook_dict():
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
 
-    print "Waiting for data..."
+    print "Waiting for data on ZMQ pub socket, port ", port
     socket.connect ("tcp://pslogin03:%s" % port)
     topicfilter = config.expname
     socket.setsockopt(zmq.SUBSCRIBE, topicfilter)
