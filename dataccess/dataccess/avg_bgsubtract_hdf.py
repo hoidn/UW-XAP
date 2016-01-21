@@ -162,7 +162,9 @@ def get_area_detector_subregion(quad, det, evt, detid):
 
         # reconstruct image for quad
         img = img_from_pixel_arrays(iX, iY, W=ndaq)
-        return img
+        new = np.empty_like(img)
+        new[:] = img
+        return new
     else:
         if 'Cspad' in config.detinfo_map[detid].device_name:
             return det.image(evt)
