@@ -49,8 +49,8 @@ def make_labels(fname = 'labels.txt', min_cluster_size = 2):
 @utils.memoize(timeout = 5)
 def get_pub_logbook_dict():
     # Socket to talk to server
-    url = config.url
-    port = int(5000 + int(hashlib.sha1(url).hexdigest(), 16) % 1000)
+    url_list = config.urls
+    port = logbook.url_list_porthash(url_list)
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
 
@@ -202,12 +202,16 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
                 signal, bg = newsignal, newbg
     if separate:
         return (signal) / float(len(groups)), bg / float(len(groups))
+    # TODO: background levels are broken for the XRTS CSPADS. scrapping bg subtraction,
+    # provisionally. 
     if event_data_getter is None:
-        return (signal - bg) / float(len(groups)), None
+        return (signal) / float(len(groups)), None
+        #return (signal - bg) / float(len(groups)), None
     else:
         print "event data is: ", event_data
         #print "rank is: ", kwargs['MPI'].COMM_WORLD.Get_rank()
-        return (signal - bg) / float(len(groups)), event_data
+        return (signal) / float(len(groups)), event_data
+        #return (signal - bg) / float(len(groups)), event_data
 
 def get_data_and_filter(label, detid, event_data_getter = None,
     event_filter = None):

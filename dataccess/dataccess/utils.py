@@ -25,6 +25,12 @@ if 'pslogin' not in socket.gethostname():
 
 PKG_NAME = __name__.split('.')[0]
 
+def merge_dicts(*args):
+    final = {}
+    for d in args:
+        final.update(d)
+    return final
+
 def roundrobin(*iterables):
     """Merges iterables in an interleaved fashion.
 

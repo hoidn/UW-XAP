@@ -172,29 +172,36 @@ def get_k_energies_and_positions(eltname, spectrum):
     return energy_kalpha, energy_kbeta, n_kalpha, n_kbeta
 
 
+# TODO: temporarily using a linear energy calibration. Fix this.
 def energies_from_two_points(spectrum_num_points, energy_ref1, energy_ref2, n_ref1, n_ref2):
     """
     Calculate an array of energy values corresponding to pixel indices using
     two reference points
     """
-    # calculate position of peak positions on spectrometer
-    thalpha = math.asin(e0/energy_ref1)
-    posalpha = hopg_diameter/(math.tan(thalpha))
-    thbeta = math.asin(e0/energy_ref2)
-    posbeta = hopg_diameter/(math.tan(thbeta))
-
-    # calculate pixel size
-    pxsize = (posbeta - posalpha)/(n_ref1 - n_ref2)
-
-    # calculate pixel horizontal positions relative to source point
-    pixels = range(n_ref1-spectrum_num_points, n_ref1)
-    pixels = [ posalpha + pxsize*n for n in pixels ]
-
-    # calculate Bragg angles and energies for graphite 002
-    thetalist = [ math.atan(hopg_diameter/p) for p in pixels ]
-    elist = [ e0/(math.sin(theta)) for theta in thetalist ]
-
-    return elist
+#    # calculate position of peak positions on spectrometer
+#    thalpha = math.asin(e0/energy_ref1)
+#    posalpha = hopg_diameter/(math.tan(thalpha))
+#    thbeta = math.asin(e0/energy_ref2)
+#    posbeta = hopg_diameter/(math.tan(thbeta))
+#
+#    # calculate pixel size
+#    pxsize = (posbeta - posalpha)/(n_ref1 - n_ref2)
+#
+#    # calculate pixel horizontal positions relative to source point
+#    pixels = range(n_ref1-spectrum_num_points, n_ref1)
+#    pixels = [ posalpha + pxsize*n for n in pixels ]
+#
+#    # calculate Bragg angles and energies for graphite 002
+#    thetalist = [ math.atan(hopg_diameter/p) for p in pixels ]
+#    elist = [ e0/(math.sin(theta)) for theta in thetalist ]
+#
+#    return elist
+    m = (energy_ref2 - energy_ref1) / (n_ref2 - n_ref1)
+    start = energy_ref1 - n_ref1 * m
+    end = energy_ref2 + (spectrum_num_points - n_ref2) * m
+    if start > end:
+        start, end = end, start
+    return np.linspace(start, end, num = spectrum_num_points)
 
 def energies_from_data(data, cencol, save_path = None, eltname = '', calibration_mode = 'k alpha k beta', **kwargs):
     """

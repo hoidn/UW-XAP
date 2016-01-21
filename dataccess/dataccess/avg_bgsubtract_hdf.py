@@ -133,7 +133,6 @@ def get_area_detector_subregion(quad, det, evt, detid):
     Extracts data from an individual quad detector.
     """
     if quad>3 : quad = 3
-    #evt = ds.events().next()
     if quad >= 0:
         if 'Cspad' not in config.detinfo_map[detid].device_name:
             raise ValueError("Can't take subregion of non-CSPAD detector")
@@ -151,9 +150,6 @@ def get_area_detector_subregion(quad, det, evt, detid):
 
         print 'Consumed time = %7.3f sec' % (time()-t0_sec)
         #print_ndarr(nda, 'raw')
-
-    #    if nda is None :
-    #        sys.exit('Exit: DO NOT plot anything for nda=None...')
 
         # get intensity array for quad, shape=(8, 185, 388)
         nda.shape = (4, 8, 185, 388)
@@ -282,6 +278,7 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
 
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
+            #ipdb.set_trace()
             increment = get_area_detector_subregion(subregion_index, det, evt, detid)
             if increment is not None:
                 if isdark:

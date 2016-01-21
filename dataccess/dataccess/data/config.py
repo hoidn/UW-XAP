@@ -18,9 +18,9 @@ except:
 # For lk20:
 xtc_prefix = 'e691'
 
-# url of the google doc logbook
+# urls of the google doc spreadsheets
 # This is the one we've been using for testing:
-url = "https://docs.google.com/spreadsheets/d/1Ejz-kyf-eoCtI1A76f1qfpS2m6nThosWDrh2dXUjv5g/edit?pref=2&pli=1#gid=0"
+urls = ["https://docs.google.com/spreadsheets/d/1Ejz-kyf-eoCtI1A76f1qfpS2m6nThosWDrh2dXUjv5g/edit?pref=2&pli=1#gid=0"]
 
 # Probe photon energy in eV
 photon_energy = None
