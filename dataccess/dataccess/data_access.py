@@ -29,10 +29,6 @@ using a mapping published by a running instance of logbook.main.
 
 # TODO: description of the defined properties and the modules that use them
 
-# For ZMQ TCP communication to get logbook data
-#PORT = config.port
-
-
 def make_labels(fname = 'labels.txt', min_cluster_size = 2):
     """
     Generate list of time-clustered run ranges in a text file. Pairs with 

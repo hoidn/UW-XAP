@@ -128,13 +128,15 @@ event_data_getter = None, event_mask = None, **kwargs):
         return signal, bg, event_data
 
 
-def get_area_detector_subregion(quad, det, evt):
+def get_area_detector_subregion(quad, det, evt, detid):
     """
     Extracts data from an individual quad detector.
     """
     if quad>3 : quad = 3
     #evt = ds.events().next()
     if quad >= 0:
+        if 'Cspad' not in config.detinfo_map[detid].device_name:
+            raise ValueError("Can't take subregion of non-CSPAD detector")
         rnum = evt.run()
         geo = det.geometry(rnum)        # for >ana-0.17.5
 
@@ -162,7 +164,10 @@ def get_area_detector_subregion(quad, det, evt):
         img = img_from_pixel_arrays(iX, iY, W=ndaq)
         return img
     else:
-        return det.image(evt)
+        if 'Cspad' in config.detinfo_map[detid].device_name:
+            return det.image(evt)
+        else:
+            return det.raw(evt)
 
 # TODO: have this run only on the root rank
 def get_signal_bg_one_run_nonarea(runNum, detid,
@@ -273,12 +278,9 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
 #            if random.randint(0, 10) != 5:
 #                continue
 
-#            if detid == 'vuv' and nevent == 24:
-#                ipdb.set_trace()
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             isdark = is_darkevent(evr)
-            #try:
-            increment = get_area_detector_subregion(subregion_index, det, evt)
+            increment = get_area_detector_subregion(subregion_index, det, evt, detid)
             if increment is not None:
                 if isdark:
                     darkevents.append(nevent)
@@ -290,13 +292,12 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
                     try:
                         signalsum += increment
                     except UnboundLocalError:
-                        signalsum = increment
+                        signalsum = np.zeros_like(increment)
+                        signalsum += increment
                     if event_data_getter:
                         event_data.append(event_data_getter(increment))
                     events_processed += 1
                     print 'processed event: ', nevent
-#            except StopIteration:
-#                break
     try:
         signalsum /= events_processed
     except UnboundLocalError:
