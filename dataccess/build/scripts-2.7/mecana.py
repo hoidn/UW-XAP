@@ -1,4 +1,4 @@
-#!/reg/g/psdm/sw/releases/ana-current/arch/x86_64-rhel7-gcc48-opt/bin/python2.7
+#!/reg/neh/home/ohoidn/anaconda2/bin/python
 
 # Author: O. Hoidn
 import sys

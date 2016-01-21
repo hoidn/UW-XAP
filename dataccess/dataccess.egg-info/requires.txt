@@ -1,0 +1,12 @@
+recordclass
+google-api-python-client
+httplib2
+atomicfile
+urllib3
+gspread
+requests>=2.9.1
+multiprocess
+dill
+pox
+ppft
+ipdb
