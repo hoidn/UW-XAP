@@ -54,6 +54,7 @@ def get_pub_logbook_dict():
     port = config.port
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
+    
 
     print "Waiting for data on ZMQ pub socket, port ", port
     socket.connect ("tcp://pslogin03:%s" % port)
@@ -81,36 +82,42 @@ def get_label_property(label, property):
     """
     Return the value of a label's property.
     """
-    complete_dict = get_pub_logbook_dict()
-    def runrange_to_label(run_range):
-        """
-        Given a run range, look for a label whose run range matches
-        and return it. If a matching label isn't found, return None.
-        """
-        red = lambda x, y: x + y
-        labels_to_runtuples = {lab: tuple(reduce(red, get_all_runlist(lab))) for lab in
-            complete_dict.keys()}
-        runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
-        target_set = set(range(run_range[0], run_range[1] + 1))
-        for runtuple in runtuples_to_labels:
-            if target_set == set(runtuple):
-                return runtuples_to_labels[runtuple]
-        return None
-
-    if label not in complete_dict:
+#    complete_dict = get_pub_logbook_dict()
+#    def runrange_to_label(run_range):
+#        """
+#        Given a run range, look for a label whose run range matches
+#        and return it. If a matching label isn't found, return None.
+#        """
+#        red = lambda x, y: x + y
+#        labels_to_runtuples = {lab: tuple(reduce(red, get_all_runlist(lab))) for lab in
+#            complete_dict.keys()}
+#        runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
+#        target_set = set(range(run_range[0], run_range[1] + 1))
+#        for runtuple in runtuples_to_labels:
+#            if target_set == set(runtuple):
+#                return runtuples_to_labels[runtuple]
+#        return None
+#
+#    if label not in complete_dict:
+#        try:
+#            run_range = logbook.parse_run(label)
+#        except ValueError:
+#            raise ValueError("label: " + label + " is neither a label nor a correctly-formated run range")
+#        if runrange_to_label(run_range) is not None:
+#            label = runrange_to_label(run_range)
+#        else:
+#            raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
+#    label_dict = complete_dict[label]
+#    try:
+#        return label_dict[property]
+#    except KeyError:
+#        raise KeyError("attribute: " + property + " of label: " + label + " not found")
+    if property == 'runs':
         try:
-            run_range = logbook.parse_run(label)
-        except ValueError:
-            raise ValueError("label: " + label + " is neither a label nor a correctly-formated run range")
-        if runrange_to_label(run_range) is not None:
-            label = runrange_to_label(run_range)
-        else:
-            raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
-    label_dict = complete_dict[label]
-    try:
-        return label_dict[property]
-    except KeyError:
-        raise KeyError("attribute: " + property + " of label: " + label + " not found")
+            label_range = logbook.parse_run(label)
+            return range(label_range[0], label_range[1] + 1)
+        except:
+            raise KeyError
 
 
 def eventmask_params(label):
@@ -130,22 +137,23 @@ def get_all_runlist(label, fname = 'labels.txt'):
     A label may be either a string specified in the google drive logbook or
     a run range of the format 'abcd' or 'abcd-efgh'.
     """
-
-    mapping = get_label_runranges()
-    # list of tuples denoting run ranges
-    # TODO: reorder this and remove fname as a parameter throughout this
-    # module once spreadsheet synchronization has been sufficiently tested.
-    try:
-        groups = mapping[label]
-        return [range(runRange[0], runRange[1] + 1) for runRange in groups]
-    except KeyError:
-        # TODO: make sure that the run number exists
-        print "label " + label + " not found"
-        try:
-            label_range = logbook.parse_run(label)
-        except ValueError:
-            raise ValueError(label + ': dataset label not found')
-        return [range(label_range[0], label_range[1] + 1)]
+    label_range = logbook.parse_run(label)
+#    mapping = get_label_runranges()
+#    # list of tuples denoting run ranges
+#    # TODO: reorder this and remove fname as a parameter throughout this
+#    # module once spreadsheet synchronization has been sufficiently tested.
+#    try:
+#        groups = mapping[label]
+#        return [range(runRange[0], runRange[1] + 1) for runRange in groups]
+#    except KeyError:
+#        # TODO: make sure that the run number exists
+#        print "label " + label + " not found"
+#        try:
+#            label_range = logbook.parse_run(label)
+#        except ValueError:
+#            raise ValueError(label + ': dataset label not found')
+#        return [range(label_range[0], label_range[1] + 1)]
+    return [range(label_range[0], label_range[1] + 1)]
         
         #raise KeyError("label " + label + " not found")
 
@@ -243,9 +251,9 @@ def get_data_and_filter(label, detid, event_data_getter = None,
             event_mask = get_event_mask(filterfunc)
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)
-    except KeyError, e:
+    except:
         print "!!!!!!!!!!!!!!!!!!"
-        print "WARNING: ", e, ". Event filtering will not be performed."
+        print "WARNING: Event filtering will not be performed."
         print "!!!!!!!!!!!!!!!!!!"
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter)
