@@ -173,8 +173,8 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
     rank = comm.Get_rank()
     size = comm.Get_size()
     if config.smd:
-        ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
-        #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
+        #ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+        ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     else:
         ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
     def event_valid(nevent):
@@ -255,8 +255,8 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
         else:
             return True
     #DIVERTED_CODE = 162
-    ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
-    #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
+    #ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+    ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     det = Detector(config.detinfo_map[detid].device_name, ds.env())
     rank = comm.Get_rank()
     print "rank is", rank
