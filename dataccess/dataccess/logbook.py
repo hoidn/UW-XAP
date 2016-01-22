@@ -258,7 +258,7 @@ def url_list_porthash(url_list):
     return int(5000 + int(hashlib.sha1(''.join(url_list)).hexdigest(), 16) % 1000)
 
 def main(url_list = config.urls, port = None):
-    ipdb.set_trace()
+    #ipdb.set_trace()
     start = time.time()
     timeout = 40.
     if port is None:
@@ -272,6 +272,8 @@ def main(url_list = config.urls, port = None):
         logbook_dicts =\
             [get_label_mapping(url = url)
             for url in url_list]
+        for map in mapping:
+            print map
         mapping = utils.merge_dicts(*logbook_dicts)
         messagedata = dill.dumps(mapping)
         print mapping
