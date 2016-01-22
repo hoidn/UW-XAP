@@ -258,6 +258,7 @@ def url_list_porthash(url_list):
     return int(5000 + int(hashlib.sha1(''.join(url_list)).hexdigest(), 16) % 1000)
 
 def main(url_list = config.urls, port = None):
+    ipdb.set_trace()
     start = time.time()
     timeout = 40.
     if port is None:
