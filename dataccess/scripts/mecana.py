@@ -27,8 +27,6 @@ def call_init(config_source, config_dst):
     shutil.copyfile(config_source, config_dst)
 
 
-
-
 def addparser_xes(subparsers):
     # XES analysis sub-command
     xes = subparsers.add_parser('spectrum', help = 'Process area detector data into spectra.')
@@ -127,12 +125,25 @@ def addparser_datashow(subparsers):
     datashow.add_argument('--output', '-o', help = 'Path of output file')
     datashow.add_argument('--masks', '-m', action = 'store_true',
         help = 'Apply detector masks from config.py')
+    datashow.add_argument('--max', '-a', type = int, help = "Maximum amplitude of color scale")
+
+def addparser_eventframes(subparsers):
+    datashow = subparsers.add_parser('eventframes', help = 'For a given dataset and area detector ID, show the summed detector image and save it to a file in the working directory. Any detector masks specified in config.py can optionally be applied.')
+    datashow.add_argument('detid', type = str, help = 'Detector ID.')
+    datashow.add_argument('label', help = 'Label of dataset to process.')
+    datashow.add_argument('--output', '-o', help = 'Path of output file')
+    datashow.add_argument('--masks', '-m', action = 'store_true',
+        help = 'Apply detector masks from config.py')
 
 def call_datashow(args):
     from dataccess import datashow
     label = args.label
     detid = args.detid
-    datashow.main(label, detid, args.output, masked = args.masks)
+    if args.max:
+        rmax = args.max
+    else:
+        rmax = 3000
+    datashow.main(label, detid, args.output, masked = args.masks, rmax = rmax)
 
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(help='sub-command help')
