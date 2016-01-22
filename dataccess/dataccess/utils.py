@@ -19,6 +19,7 @@ import ipdb
 import matplotlib.pyplot as plt
 from scipy import misc
 import numpy.ma as ma
+#from libtiff import TIFF
 
 if 'pslogin' not in socket.gethostname():
     from mpi4py import MPI
@@ -91,14 +92,18 @@ def ifroot(func):
         
 
 @ifroot
-def save_image(save_path, imarr, fmt = 'png'):
+def save_image(save_path, imarr, fmt = 'tiff'):
     """
     Save a 2d array to file as an image.
     """
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
-    misc.imsave(save_path + '.' + fmt, imarr)
+    #misc.imsave(save_path + '.' + fmt, imarr)
+#    tiff = TIFF.open(save_path + '.tiff', mode = 'w')
+#    tiff.write_image(imarr)
+#    tiff.close()
+    imarr.tofile(save_path + '.npy')
 
 @ifroot
 def save_image_and_show(save_path, imarr, title = 'Image'):
