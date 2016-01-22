@@ -40,6 +40,11 @@ def addparser_xes(subparsers):
     xes.add_argument('--eltname', '-e', default = '', help = 'Element name. This parameter is required for XES-based calibration; i.e., for generating an energy scale using ENERGY_REF1_ENERGY_REF2_CALIBRATION.')
     xes.add_argument('--calibration_save_path', '-s', type = str, help = 'Path to which to save energy calibration data if calibration_load_path is unspecified and --energy_ref1_energy_ref2_calibration is selected.')
     xes.add_argument('--calibration_load_path', '-l', type = str, help = 'Path from which to load energy calibration data.')
+    xes.add_argument('--variation', '-v', action="store_const", default = False, const=True, help ="Plot shot to shot variation")
+    xes.add_argument('--variation_n', '-vn', type=int, default = 50, help="How many shots to use for variation")
+    xes.add_argument('--variation_center', '-vc', type = int, default = 408, help="to the right is the pump, to the left is the probe")
+    xes.add_argument('--variation_skip_width', '-vs', type=int, default=0, help="from vc skip this many inds before summing pump and probe area")
+    xes.add_argument('--variation_width', '-vw', type=int, default=50, help="from vc sum out this many inds")
 
 def call_xes(args):
     """
@@ -56,17 +61,27 @@ def call_xes(args):
         calibration = labels[0]
     cold_calibration_label = calibration
     pxwidth = args.pxwidth
-    pxwidth = args.pxwidth
     calibration_save_path = args.calibration_save_path
     calibration_load_path = args.calibration_load_path
     dark_label = args.subtraction
     energy_ref1_energy_ref2_calibration = args.energy_ref1_energy_ref2_calibration
-    xes_process.main(args.detid, labels, cold_calibration_label = cold_calibration_label,
-        pxwidth = pxwidth,
-        calib_save_path = calibration_save_path, calib_load_path =
-            calibration_load_path, dark_label = dark_label,
-            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
-            eltname = eltname, transpose = args.rotate)
+    if args.variation:
+        # plot shot to shot variation
+        xes_process.main_variation(args.detid, labels, cold_calibration_label = cold_calibration_label,
+            pxwidth = pxwidth,
+            calib_save_path = calibration_save_path, calib_load_path =
+                calibration_load_path, dark_label = dark_label,
+                energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
+                eltname = eltname, transpose = args.rotate, vn=args.variation_n, vc=args.variation_center,
+                vs=args.variation_skip_width, vw=args.variation_width)
+    else:
+        # plot summed spectra
+        xes_process.main(args.detid, labels, cold_calibration_label = cold_calibration_label,
+            pxwidth = pxwidth,
+            calib_save_path = calibration_save_path, calib_load_path =
+                calibration_load_path, dark_label = dark_label,
+                energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
+                eltname = eltname, transpose = args.rotate)
 
 def addparser_xrd(subparsers):
     xrd = subparsers.add_parser('xrd', help = 'Process quad CSPAD data into powder patterns.')
@@ -154,7 +169,8 @@ addparser_histogram(subparsers)
 addparser_datashow(subparsers)
 
 args = parser.parse_args()
-
+print "print args"
+print args
 config_source = utils.resource_path('data/config.py')
 config_dst = 'config.py'
 if 'initcalled' in args: # Enter init sub-command

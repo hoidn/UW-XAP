@@ -12,6 +12,7 @@ from scipy import interpolate
 
 from dataccess import data_access as data
 from dataccess import utils
+from dataccess import data_access
 
 import pdb
 from scipy.ndimage.filters import gaussian_filter as filt
@@ -382,3 +383,104 @@ def main(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
     else:
         name = 'plots_xes/' + '_'.join(labels)
     plot_spectra(spectrumList, labels, scale_ev, name = name, eltname = eltname)
+
+
+def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
+        calib_load_path = None, calib_save_path = None,
+        dark_label = None, energy_ref1_energy_ref2_calibration = True,
+        eltname = '', transpose = False, vn=0, vc=0, vs=0, vw=0):
+    print("starting xes_process.main_variation")
+    # Extract data from labels. 
+    data_extractor = data_from_label(detid, transpose = transpose)
+    spectrumList = []
+    scale_ev = (energy_ref1_energy_ref2_calibration or calib_load_path)
+    if not os.path.exists('xes_spectra/'):
+        os.makedirs('xes_spectra')
+    if cold_calibration_label:
+        cold_calibration_data = data_extractor(cold_calibration_label)
+    else:
+        cold_calibration_data = None
+    if dark_label:
+        dark = data_extractor(dark_label)
+    else:
+        dark = None
+    data_arrays = map(data_extractor, data_identifiers)
+    labels = map(os.path.basename, data_identifiers)
+
+    def evg(x): return x
+
+    al, ah, bl, bh = vc-vw, vc-vs, vc+vs, vc+vw
+
+    ax = 0
+    if transpose: ax=1
+    for data,label in zip(data_arrays, labels):
+        #get_label_data(label, detid, default_bg = None, override_bg = None,
+        # separate = False, event_data_getter = None, event_mask = None, **kwargs):
+        a,b = data_access.get_label_data(label, detid, event_data_getter=evg)
+
+        print label
+        ilabel = int(label)
+        plt.figure()
+        for i in range(vn):
+            imagei = b[ilabel][i]
+            #print(i)
+            #print(type(imagei))
+            #print(imagei.shape)
+            linei = imagei.sum(axis=ax)
+            bg = linei[-100:].mean()
+            #print(linei.shape)
+            plt.plot(linei-bg)
+        plt.plot([al,al],plt.ylim(),'k')
+        plt.plot([ah,ah],plt.ylim(),'k')
+        plt.plot([bl,bl],plt.ylim(),'k')
+        plt.plot([bh,bh],plt.ylim(),'k')
+
+        plt.xlabel("index")
+        plt.ylabel("spectral intensity (arb)")
+        plt.title("run %s, %i events, summed along axis %i, detid: %s"%(label, vn, ax, detid))
+
+        aa=[]
+        bb=[]
+        for i in range(len(b[ilabel])):
+            imagei = b[ilabel][i]
+            linei = imagei.sum(axis=ax)
+            bg = linei[-300:-100:].mean()
+            linei-=bg
+            aa.append( linei[al:ah].sum())
+            bb.append( linei[bl:bh].sum())
+        aa=np.array(aa,dtype="float")
+        bb=np.array(bb,dtype="float")
+
+        plt.figure()
+        ymax = np.median(bb/aa)+np.std(bb/aa)*3
+        plt.hist(bb/aa,np.linspace(0, ymax,100))
+        plt.ylabel("number of occurences")
+        plt.xlabel("pump sum / probe sum")
+        plt.title("run %s"%(label))
+
+        plt.ylim(0,ymax)
+
+
+  
+    for data, label in zip(data_arrays, labels):
+        energies, intensities = get_spectrum(data,
+            cencol_calibration_data = data,
+            dark = dark, cold_calibration_data = cold_calibration_data,
+            pxwidth = pxwidth, calib_load_path = calib_load_path,
+            calib_save_path = calib_save_path,
+            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration, eltname = eltname)
+        spectrumList.append([energies, intensities])
+        if eltname:
+            np.savetxt('xes_spectra/' + label + '_' + eltname,
+                [energies, intensities], header = 'energy (eV)\tintensity (arb)')
+        else:
+            np.savetxt('xes_spectra/' + label,
+                [energies, intensities], header = 'energy (eV)\tintensity (arb)')
+    if eltname:
+        name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
+    else:
+        name = 'plots_xes/' + '_'.join(labels)
+    plt.figure()
+    plot_spectra(spectrumList, labels, scale_ev, name = name, eltname = eltname)
+
+
