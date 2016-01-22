@@ -1,5 +1,6 @@
 # Author: O. Hoidn
 
+import Image
 import numpy as np
 import os
 import dill
@@ -104,6 +105,8 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 #    tiff.write_image(imarr)
 #    tiff.close()
     np.save(save_path + '.npy', imarr)
+    im = Image.fromarray(imarr)
+    im.save(save_path + '.tiff')
     #imarr.tofile(save_path + '.npy')
 
 @ifroot
@@ -114,7 +117,9 @@ def save_image_and_show(save_path, imarr, title = 'Image'):
     save_image(save_path, imarr)
     import pyimgalgos.GlobalGraphics as gg
     ave, rms = imarr.mean(), imarr.std()
-    gg.plotImageLarge(imarr, amp_range=(ave-rms, ave+5*rms), title = title)
+#    pltmin = np.min(imarr)
+#    pltmax = np.percentile(imarr, 95)
+    gg.plotImageLarge(imarr, amp_range=(ave-rms, ave + 5*rms), title = title)
     gg.show()
 #    plt.imshow(imarr)
 #    plt.show()
