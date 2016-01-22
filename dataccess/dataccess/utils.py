@@ -103,7 +103,8 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 #    tiff = TIFF.open(save_path + '.tiff', mode = 'w')
 #    tiff.write_image(imarr)
 #    tiff.close()
-    imarr.tofile(save_path + '.npy')
+    np.save(save_path + '.npy', imarr)
+    #imarr.tofile(save_path + '.npy')
 
 @ifroot
 def save_image_and_show(save_path, imarr, title = 'Image'):
