@@ -400,8 +400,7 @@ def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
             masks = map(lambda path: np.load(path).T, mask_paths)
         else:
             masks = map(lambda path: np.load(path), mask_paths)
-        if verbose:
-            print "Applying mask(s): ", mask_paths
+        print "Applying mask(s): ", mask_paths
         return base_mask & reduce(lambda x, y: x & y, masks)
 
 #def eager_persist_to_file(file_name):

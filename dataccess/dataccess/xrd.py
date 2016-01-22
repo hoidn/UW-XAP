@@ -22,7 +22,7 @@ from dataccess import utils
 from mpi4py import MPI
 
 # default powder peak width, in degrees
-DEFAULT_PEAK_WIDTH = 4.5
+DEFAULT_PEAK_WIDTH = 2.
 
 # hbar c in eV * Angstrom
 HBARC = 1973. 
@@ -421,16 +421,19 @@ def get_powder_angles(compound, peak_threshold = 0.05):
 
     Returns a list of Bragg peak angles.
     """
-    energy = config.photon_energy
-    fname = utils.resource_path('data/' + compound + '.csv')
-    try:
-        powder_q, intensities = np.genfromtxt(fname, delimiter = ',').T
-    except IOError:
-        raise IOError("Simulated diffraction file " + fname + ": not found")
-    powder_q = powder_q[intensities > np.max(intensities) * peak_threshold]
-    powder_angles = 2 * np.arcsin(powder_q * HBARC / (2 * energy))
-    powder_angles = powder_angles[~np.isnan(powder_angles)]
-    return list(np.rad2deg(powder_angles))
+    if compound in config.powder_angles:
+        return config.powder_angles[compound]
+    else:
+        energy = config.photon_energy
+        fname = utils.resource_path('data/' + compound + '.csv')
+        try:
+            powder_q, intensities = np.genfromtxt(fname, delimiter = ',').T
+        except IOError:
+            raise IOError("Simulated diffraction file " + fname + ": not found")
+        powder_q = powder_q[intensities > np.max(intensities) * peak_threshold]
+        powder_angles = 2 * np.arcsin(powder_q * HBARC / (2 * energy))
+        powder_angles = powder_angles[~np.isnan(powder_angles)]
+        return list(np.rad2deg(powder_angles))
 
 def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WIDTH):
     """
@@ -459,7 +462,8 @@ def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WI
     return mask
     
 # TODO: normalize
-def plot_patterns(datasets, patterns, labels, ax = None, show = False, normalization = None):
+def plot_patterns(datasets, patterns, labels, ax = None, show = False, normalization = None,
+    label_angles = None):
     if normalization:
         norm_array = list(get_normalization(datasets, type = normalization))
     else:
@@ -469,6 +473,10 @@ def plot_patterns(datasets, patterns, labels, ax = None, show = False, normaliza
     combined = map(lambda x, y, z: x + [y, z], patterns, labels, norm_array)
     for angles, intensities, label, norm in combined:
         ax.plot(angles, intensities/norm, label = label)
+    #ipdb.set_trace()
+    if label_angles:
+        for ang in filter(lambda a: np.min(angles) < a < np.max(angles), label_angles):
+            ax.plot([ang, ang], [np.min(intensities/norm), np.max(intensities/norm)], color = 'k')
     ax.legend()
     ax.set_xlabel('Scattering angle (deg)')
     ax.set_ylabel('Integrated intensity')
@@ -579,7 +587,12 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     def get_flux_density(dset):
         label = dset.dataref
         transmission = data.get_label_property(label, 'transmission')
-        size = data.get_label_property(label, 'focal_size')
+        try:
+            size = data.get_label_property(label, 'focal_size')
+            if not size:
+                size = 1.
+        except:
+            size = 1.
         # convert length units from microns to cm
         return config.pulse_energy * transmission / (np.pi * ((size * 0.5 * 1e-4)**2))
 
@@ -618,7 +631,7 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
 
 def main(detid, data_identifiers, mode = 'label', peak_progression_compound = None,
     plot = True, bgsub = True, fiducial_ellipses = None, compound_list = [],
-    normalization = None, maxpeaks = 6):
+    normalization = None, maxpeaks = 6, plot_progression = False):
     """
     Arguments:
         detid: id of a quad CSPAD detector
@@ -640,20 +653,28 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
     # TODO: don't do peak intensity plot if no scattering angles have been 
     # provided.
     def doplot(normalization, peak_progression_compound, maxpeaks, labels):
-        if len(datasets) > 1:
+        if not peak_progression_compound and compound_list:
+            peak_progression_compound = compound_list[0]
+        if peak_progression_compound:
+            label_angles = get_powder_angles(peak_progression_compound)
+        else:
+            label_angles = None
+
+        if len(datasets) > 1 and plot_progression:
             f, axes = plt.subplots(2)
             plot_patterns(datasets, patterns, labels, show = False, ax = axes[0],
-                normalization = normalization)
+                normalization = normalization,
+                label_angles = label_angles)
             if not peak_progression_compound and compound_list:
-                peak_progression_compound = compound_list[0]
                 if not normalization:
                     normalization = 'transmission'
                 plot_peak_progression(datasets, peak_progression_compound,
                     show = False, ax = axes[1], normalization = normalization,
-                    maxpeaks = maxpeaks)
+                    maxpeaks = maxpeaks, **kwargs)
         else:
             plot_patterns(datasets, patterns, labels, show = False,
-                normalization = normalization)
+                normalization = normalization,
+                label_angles = label_angles)
         utils.global_save_and_show('xrd_plot/' + str(detid) + '_'.join(labels) + '.png')
     if not isinstance(data_identifiers, list):
         raise ValueError("data_identifiers: must be a list of strings or arrays")

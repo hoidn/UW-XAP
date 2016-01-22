@@ -223,16 +223,17 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         #return (signal - bg) / float(len(groups)), event_data
 
 def get_data_and_filter(label, detid, event_data_getter = None,
-    event_filter = None):
+    event_filter = None, event_filter_detid = None):
     """
     # TODO: update this
     """
-    def get_event_mask(filterfunc):
+    def get_event_mask(filterfunc, detid = None):
         """
         TODO
         """
         # filterfunc is a function that takes a np array and returns a boolean
-        detid = get_label_property(label, 'filter_det')
+        if detid is None:
+            detid = get_label_property(label, 'filter_det')
         imarray, event_data = get_label_data(label, detid,
             event_data_getter = filterfunc)
         return event_data
@@ -240,7 +241,7 @@ def get_data_and_filter(label, detid, event_data_getter = None,
     try:
         #ipdb.set_trace()
         if event_filter:
-            event_mask = get_event_mask(event_filter)
+            event_mask = get_event_mask(event_filter, detid = event_filter_detid)
         else:
             funcstr = get_label_property(label, 'filter_func')
             args = eventmask_params(label)

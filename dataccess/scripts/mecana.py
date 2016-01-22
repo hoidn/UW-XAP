@@ -78,6 +78,7 @@ def addparser_xrd(subparsers):
     xrd.add_argument('--peak_progression_compound', '-p', type = str, help = 'Compound for which to plot the progression of Bragg peak intensities as a function of incident flux if two or more datasets are being processed. If not specified, this option defaults to the first value of COMPOUNDS.')
     xrd.add_argument('--normalization', '-n', type = str, default = None, help = "Normalization option.\n\tIf == 'transmission', normalize by beam transmission specified in logbook;\n\tIf == 'background', normalize by background level (requires --compounds).\nBy default no normalization is applied to powder patterns, and peak progression plots are normalized by background level.")
     xrd.add_argument('--maxpeaks', '-m', type = int, default = None, help = "Limit the plot of peak intensities as a function of incident flux to the MAXPEAKS most intense ones")
+    xrd.add_argument('--plot_progression', '-r', action = 'store_true', help = "Plot the progression of Bragg peak intensities as a function of x ray intensity (requires logbook data).")
 
 def call_xrd(args):
     """
@@ -100,7 +101,7 @@ def call_xrd(args):
     xrd.main(detid, data_identifiers, mode = mode,
         peak_progression_compound = peak_progression_compound,
         bgsub = bgsub, compound_list = compound_list,
-        normalization = normalization, maxpeaks = maxpeaks)
+        normalization = normalization, maxpeaks = maxpeaks, plot_progression = args.plot_progression)
 
 def addparser_histogram(subparsers):
     import numpy as np
