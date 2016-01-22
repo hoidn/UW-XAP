@@ -26,12 +26,15 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', plot = True, 
             event_data_getter = event_data_getter)
     event_data_list = dict_to_list(event_data)
     result = np.array(event_data_list)#.flatten()
-    if plot:
+    @utils.ifroot
+    def plot():
         plt.hist(result, bins = nbins)
         plt.xlabel('output of ' + funcstr)
         plt.ylabel('number of events')
         plt.savefig(path)
         plt.show()
+    if plot:
+        plot()
     return result
 
 def main(label, detid, funcstr = 'np.sum', nbins = 100, filtered = False):

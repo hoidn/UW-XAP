@@ -8,7 +8,7 @@ def apply_default_masks(imarray, detid):
     combined_mask = utils.combine_masks(imarray, extra_masks)
     return imarray * combined_mask
 
-def main(label, detid, path = None, masked = False, rmin = 0, rmax = 3000):
+def main(label, detid, path = None, masked = False, rmin = None, rmax = None):
     imarray, _ = data_access.get_data_and_filter(label, detid)
     if masked:
         imarray = apply_default_masks(imarray, detid)

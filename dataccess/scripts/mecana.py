@@ -139,10 +139,7 @@ def call_datashow(args):
     from dataccess import datashow
     label = args.label
     detid = args.detid
-    if args.max:
-        rmax = args.max
-    else:
-        rmax = 3000
+    rmax = args.max
     datashow.main(label, detid, args.output, masked = args.masks, rmax = rmax)
 
 parser = argparse.ArgumentParser()
