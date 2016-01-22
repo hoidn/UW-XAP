@@ -310,7 +310,7 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     max_intensity = np.max(map(lambda x: x[1], spectrumList))
     plt.plot(elist, spectrumList[0][1], label = labels[0])
     plt.axhline(y=0, color = "black")
-    plt.title(eltname + " XES")
+    #plt.title(eltname + " XES")
 
     #add vertical lines to identify peaks within observed range
     txtshift = {'ka1': 0, 'ka2': -20, 'kb': -25, 'Ef': 0}
