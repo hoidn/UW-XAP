@@ -110,19 +110,20 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     #imarr.tofile(save_path + '.npy')
 
 @ifroot
-def save_image_and_show(save_path, imarr, title = 'Image'):
+def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = None):
     """
     Save a 2d array to file as an image and then display it.
     """
     save_image(save_path, imarr)
     import pyimgalgos.GlobalGraphics as gg
     ave, rms = imarr.mean(), imarr.std()
-#    pltmin = np.min(imarr)
-#    pltmax = np.percentile(imarr, 95)
-    gg.plotImageLarge(imarr, amp_range=(ave-rms, ave + 5*rms), title = title)
+    #gg.plotImageLarge(imarr, amp_range=(ave-rms, ave + 5*rms), title = title)
+    if not rmin:
+        rmin = ave - rms
+    if not rmax:
+        rmax = ave + 5 * rms
+    gg.plotImageLarge(imarr, amp_range=(rmin, rmax), title = title)
     gg.show()
-#    plt.imshow(imarr)
-#    plt.show()
 
 
 @ifroot
