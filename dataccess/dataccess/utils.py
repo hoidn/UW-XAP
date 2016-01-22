@@ -1,6 +1,7 @@
 # Author: O. Hoidn
 
 import Image
+import matplotlib
 import numpy as np
 import os
 import dill
@@ -106,7 +107,8 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 #    tiff.close()
     np.save(save_path + '.npy', imarr)
     im = Image.fromarray(imarr)
-    im.save(save_path + '.tiff')
+    matplotlib.image.imsave(save_path + '.png', imarr)
+    #im.save(save_path + '.bmp')
     #imarr.tofile(save_path + '.npy')
 
 @ifroot
