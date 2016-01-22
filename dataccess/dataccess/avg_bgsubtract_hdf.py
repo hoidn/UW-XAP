@@ -166,6 +166,7 @@ def get_area_detector_subregion(quad, det, evt, detid):
         t0_sec = time()
 
         nda = det.raw(evt)
+        ped = det.pedestals(evt)
 
         print 'Consumed time = %7.3f sec' % (time()-t0_sec)
         #print_ndarr(nda, 'raw')
@@ -173,12 +174,16 @@ def get_area_detector_subregion(quad, det, evt, detid):
         # get intensity array for quad, shape=(8, 185, 388)
         nda.shape = (4, 8, 185, 388)
         ndaq = nda[quad,:]
+        
+        ped.shape = (4, 8, 185, 388)
+        pedq = ped[quad,:]
         #print_ndarr(ndaq, 'nda[%d,:]'%quad)
 
         # reconstruct image for quad
         img = img_from_pixel_arrays(iX, iY, W=ndaq)
+        bg = img_from_pixel_arrays(iX, iY, W=pedq)
         new = np.empty_like(img)
-        new[:] = img
+        new[:] = (img - bg)
         return new
     else:
         if 'Cspad' in config.detinfo_map[detid].device_name:
