@@ -142,6 +142,7 @@ def addparser_datashow(subparsers):
     datashow.add_argument('--masks', '-m', action = 'store_true',
         help = 'Apply detector masks from config.py')
     datashow.add_argument('--max', '-a', type = int, help = "Maximum amplitude of color scale")
+    datashow.add_argument('--min', '-l', type = int, help = "Min amplitude of color scale")
 
 def addparser_eventframes(subparsers):
     datashow = subparsers.add_parser('eventframes', help = 'For a given dataset and area detector ID, show the summed detector image and save it to a file in the working directory. Any detector masks specified in config.py can optionally be applied.')
@@ -156,7 +157,8 @@ def call_datashow(args):
     label = args.label
     detid = args.detid
     rmax = args.max
-    datashow.main(label, detid, args.output, masked = args.masks, rmax = rmax)
+    rmin = args.min
+    datashow.main(label, detid, args.output, masked = args.masks, rmin = rmin, rmax = rmax)
 
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(help='sub-command help')

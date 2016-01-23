@@ -114,6 +114,8 @@ def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = N
     """
     Save a 2d array to file as an image and then display it.
     """
+    print "rmin", rmin
+    print "rmax", rmax
     save_image(save_path, imarr)
     import pyimgalgos.GlobalGraphics as gg
     ave, rms = imarr.mean(), imarr.std()

@@ -12,7 +12,8 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', plot = True, 
     in the dataset and generate a histogram of resulting values.
     """
     def dict_to_list(event_data_dict):
-        return reduce(lambda x, y: x + y, event_data_dict.values())
+        return utils.merge_dicts(*event_data_dict.values()).values()
+        #return reduce(lambda x, y: x + y, event_data_dict.values())
     event_data_getter = eval('config.' + funcstr)
     path = 'intensity_histograms/' + label + '_' + detid + '.png'
     dirname = os.path.dirname(path)

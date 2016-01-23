@@ -28,6 +28,7 @@ import dill
 from dataccess import utils
 import config
 
+PORT = config.port
 
 # Format specification for column headers in logbook. Column descriptions:
 # runs: range of run numbers in the format 'integer' or 'integer-integer'.
@@ -50,7 +51,8 @@ import config
 PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*',
      'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*|.*[hH]eader.*',
     'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
-    'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*'}
+    'param3': r'.*[pP]aram3.*', 'param4': r'.*[pP]aram4.*',
+'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*'}
 HEADERS = [k for k in PROPERTY_REGEXES]
 
 # Format for the flag that designates logbook header row
@@ -224,10 +226,11 @@ def parse_run(run_string):
             raise ValueError("Invalid run range format: ", run_string)
 
 parser_dispatch = {'runs': parse_run, 'transmission': parse_float,
-    'param1': parse_float, 'param2': parse_float, 'filter_det': parse_string,
+    'param1': parse_float, 'param2': parse_float, 'param3': parse_float,
+    'param4': parse_float, 'filter_det': parse_string,
      'labels': parse_string, 'focal_size': parse_focal_size, 'filter_func': parse_string}
 
-def get_label_mapping(url = config.urls):
+def get_label_mapping(url = config.url):
     # TODO: handle duplicates
     if not url:
         raise ValueError("No logbook URL provided")
@@ -254,31 +257,46 @@ def get_label_mapping(url = config.urls):
                         local_dict[property_key] = parser_dispatch[property_key](row[k])
     return label_dict
 
-def url_list_porthash(url_list):
-    return int(5000 + int(hashlib.sha1(''.join(url_list)).hexdigest(), 16) % 1000)
+#def url_list_porthash(url_list):
+#    return int(5000 + int(hashlib.sha1(''.join(url_list)).hexdigest(), 16) % 1000)
 
-def main(url_list = config.urls, port = None):
-    #ipdb.set_trace()
-    start = time.time()
-    timeout = 40.
-    if port is None:
-        port = config.port
-        #port = url_list_porthash(url_list)
+#def main(url_list = config.url, port = None):
+#    #ipdb.set_trace()
+#    start = time.time()
+#    timeout = 40.
+#    if port is None:
+#        port = config.port
+#        #port = url_list_porthash(url_list)
+#    context = zmq.Context()
+#    socket = context.socket(zmq.PUB)
+#    socket.bind("tcp://*:%s" % port)
+#    while time.time() - start < 20:
+#        #ipdb.set_trace()
+#        logbook_dicts =\
+#            [get_label_mapping(url = url)
+#            for url in url_list]
+#        for map in mapping:
+#            print map
+#        mapping = utils.merge_dicts(*logbook_dicts)
+#        messagedata = dill.dumps(mapping)
+#        print mapping
+#        topic = config.expname
+#        socket.send("%s%s" % (topic, messagedata))
+#        time.sleep(1)
+#    socket.close()
+#    context.term()
+
+def main(url = config.url, port = PORT):
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
     socket.bind("tcp://*:%s" % port)
-    while time.time() - start < 20:
-        #ipdb.set_trace()
-        logbook_dicts =\
-            [get_label_mapping(url = url)
-            for url in url_list]
-        for map in mapping:
-            print map
-        mapping = utils.merge_dicts(*logbook_dicts)
+
+    while True:
+        #topic = 0
+        # TODO: topic shouldn't be null
+        mapping = get_label_mapping(url = url)
         messagedata = dill.dumps(mapping)
         print mapping
         topic = config.expname
         socket.send("%s%s" % (topic, messagedata))
         time.sleep(1)
-    socket.close()
-    context.term()

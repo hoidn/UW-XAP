@@ -88,7 +88,10 @@ event_data_getter = None, event_mask = None, **kwargs):
         def event_valid(nevent):
             if event_mask:
                 run_mask = event_mask[runNum]
-                return run_mask[nevent]
+                if nevent in run_mask:
+                    return run_mask[nevent]
+                else:
+                    return False
             else:
                 return True
         totalcounts = np.array(map(np.sum, eventlist))
@@ -276,7 +279,10 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
     def event_valid(nevent):
         if event_mask:
             run_mask = event_mask[runNum]
-            return run_mask[nevent]
+            if nevent in run_mask:
+                return run_mask[nevent]
+            else:
+                return False
         else:
             return True
     #DIVERTED_CODE = 162
@@ -287,7 +293,7 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
     rank = comm.Get_rank()
     print "rank is", rank
     size = comm.Get_size()
-    darkevents, event_data = [], []
+    darkevents, event_data = [], {}
     events_processed = 0
     def is_darkevent(evr):
         # temporary patch, valid for LK20 because end station A isn't running
@@ -326,7 +332,8 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
                         signalsum = np.zeros_like(increment)
                         signalsum += increment
                     if event_data_getter:
-                        event_data.append(event_data_getter(increment))
+                        #event_data.append(event_data_getter(increment))
+                        event_data[nevent] = event_data_getter(increment)
                     events_processed += 1
         if nevent % 100 == 0:
             now = time()
@@ -359,7 +366,9 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
     if darkevents:
         darkevents = reduce(lambda x, y: x + y, darkevents)
     if event_data:
-        event_data = reduce(lambda x, y: x + y, event_data)
+        #print event_data
+        #event_data = reduce(lambda x, y: x + y, event_data)
+        event_data = utils.merge_dicts(*event_data)
     return signalsum_final, darksum_final, event_data
 
 

@@ -415,7 +415,7 @@ def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10
     result = imarray - bg_smooth
     return result
 
-def get_powder_angles(compound, peak_threshold = 0.05):
+def get_powder_angles(compound, peak_threshold = 0.01):
     """
     Accessor function for powder data in config.py
 
@@ -490,6 +490,7 @@ def plot_peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WID
     labels = np.array(map(lambda x: x.dataref, datasets))
     powder_angles, label_fluxes, progression, normalized_progression = peak_progression(
         datasets, compound_name, peak_width = peak_width, normalization = normalization)
+    print "normalized progression ", normalized_progression
     if maxpeaks != 'all':
         intensity_reference = progression[:, 0]
         goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
@@ -666,11 +667,12 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
                 normalization = normalization,
                 label_angles = label_angles)
             if not peak_progression_compound and compound_list:
-                if not normalization:
-                    normalization = 'transmission'
-                plot_peak_progression(datasets, peak_progression_compound,
-                    show = False, ax = axes[1], normalization = normalization,
-                    maxpeaks = maxpeaks, **kwargs)
+                peak_progression_compound = compound_list[0]
+            if not normalization:
+                normalization = 'transmission'
+            plot_peak_progression(datasets, peak_progression_compound,
+                show = False, ax = axes[1], normalization = normalization,
+                maxpeaks = maxpeaks) 
         else:
             plot_patterns(datasets, patterns, labels, show = False,
                 normalization = normalization,

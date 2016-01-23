@@ -8,15 +8,15 @@ from dataccess import logbook
 'Synchronize google spreadsheet logbook data by running this script on pslogin03'
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--urls', nargs = '+', help = 'URLs of the google drive spreadsheets. Defaults to the URLs provided in config.py.')
+parser.add_argument('--url', help = 'URLs of the google drive spreadsheet. Defaults to the URL provided in config.py.')
 args = parser.parse_args()
 
-if args.urls:
-    urls = args.urls
+if args.url:
+    url = args.url
 else:
     try:
         import config
-        urls = config.urls
+        url = config.url
     except ImportError:
-        raise ImportError("config.py not found. config.py is necessary to load logbook URL if the optional argument --urls is not provided.")
-logbook.main(urls)
+        raise ImportError("config.py not found. config.py is necessary to load logbook URL if the optional argument --url is not provided.")
+logbook.main(url)
