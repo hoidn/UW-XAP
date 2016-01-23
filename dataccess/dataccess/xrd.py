@@ -469,10 +469,17 @@ def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WI
 # TODO: normalize
 def plot_patterns(datasets, patterns, labels, ax = None, show = False, normalization = None,
     label_angles = None):
-    if normalization:
+    def get_max(pattern):
+        angles, intensities = map(lambda x: np.array(x), pattern)
+        return np.max(intensities[angles > 15.])
+    if normalization == 'maximum':
+        norm_array = map(get_max, patterns)
+    elif normalization:
         norm_array = list(get_normalization(datasets, type = normalization))
     else:
         norm_array = [1.] * len(datasets)
+    print "NORM", norm_array
+    #print patterns
     if ax is None:
         f, ax = plt.subplots(1)
     combined = map(lambda x, y, z: x + [y, z], patterns, labels, norm_array)

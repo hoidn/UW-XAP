@@ -246,19 +246,23 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         if event_filter:
             event_mask = get_event_mask(event_filter, detid = event_filter_detid)
         else:
-            funcstr = get_label_property(label, 'filter_func')
             args = eventmask_params(label)
+#            try:
+#                filterfunc = config.filter_function
+#                filter_detid = config.filter_detid
+#            except AttributeError:
             try:
-                filterfunc = config.filter_function
-                filter_detid = config.filter_detid
+                funcstr = get_label_property(label, 'filter_func')
+                filterfunc = eval('config.' + funcstr)(*args)
+                filter_detid = get_label_property(label, 'filter_det')
+                print "DETID IS ", filter_detid
+                print "ARGS ARE ", args
+                print "FUNCSTR IS", funcstr
             except AttributeError:
-                try:
-                    filterfunc = eval('config.' + funcstr)(*args)
-                    filter_detid = None
-                except AttributeError:
-                    raise ValueError("Function " + funcstr + " not found, and no filter_function/filter_detid in config.py")
+                raise ValueError("Function " + funcstr + " not found, and no filter_function/filter_detid in config.py")
             event_mask = get_event_mask(filterfunc, detid = filter_detid)
-        merged_mask = reduce(lambda x, y: x + y, event_mask.values())
+        #merged_mask = reduce(lambda x, y: x + y, event_mask.values())
+        merged_mask = utils.merge_dicts(*event_mask.values())
         print "Event mask True entries: ", sum(merged_mask), "Event mask length: ", len(merged_mask)
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)

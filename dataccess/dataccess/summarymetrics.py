@@ -27,6 +27,7 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', plot = True, 
             event_data_getter = event_data_getter)
     event_data_list = dict_to_list(event_data)
     result = np.array(event_data_list)#.flatten()
+    print "RESULT IS", event_data
     @utils.ifroot
     def plot():
         plt.hist(result, bins = nbins)
