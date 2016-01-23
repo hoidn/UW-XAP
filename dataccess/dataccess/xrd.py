@@ -22,7 +22,7 @@ from dataccess import utils
 from mpi4py import MPI
 
 # default powder peak width, in degrees
-DEFAULT_PEAK_WIDTH = 2.
+DEFAULT_PEAK_WIDTH = 1.5
 
 # hbar c in eV * Angstrom
 HBARC = 1973. 
@@ -119,7 +119,12 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
         extra_masks = config.detinfo_map[dataset.detid].extra_masks
         combined_mask = utils.combine_masks(imarray, extra_masks, transpose = True)
         imarray *= combined_mask
-    return imarray, event_data
+    min_val =  np.min(imarray)
+    #print "PERCENTILES", np.percentile(imarray, 1), np.percentile(imarray, 2), np.percentile(imarray, 5), np.percentile(imarray, 10), np.percentile(imarray, 15)
+    if min_val < 0:
+        return np.abs(min_val) + imarray, event_data
+    else:
+        return imarray, event_data
 
 def get_x_y(imarray, phi, x0, y0, alpha, r):
     """
@@ -415,7 +420,7 @@ def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10
     result = imarray - bg_smooth
     return result
 
-def get_powder_angles(compound, peak_threshold = 0.01):
+def get_powder_angles(compound, peak_threshold = 0.02):
     """
     Accessor function for powder data in config.py
 
@@ -587,7 +592,10 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
 #        raise ValueError('data reference must be a logbook label')
     def get_flux_density(dset):
         label = dset.dataref
-        transmission = data.get_label_property(label, 'transmission')
+        try:
+            transmission = data.get_label_property(label, 'transmission')
+        except KeyError:
+            transmission = 1.
         try:
             size = data.get_label_property(label, 'focal_size')
             if not size:
@@ -613,8 +621,11 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     peak_ranges = make_ranges(powder_angles)
 
     # get transmission values 
-    label_transmissions = np.array(map(lambda label:
-        data.get_label_property(label, 'transmission'), labels))
+    try:
+        label_transmissions = np.array(map(lambda label:
+            data.get_label_property(label, 'transmission'), labels))
+    except:
+        raise ValueError("Can't plot peak intensity progression with missing transmission data")
     label_flux_densities = map(get_flux_density, datasets)
 
     # indices: label, peak
