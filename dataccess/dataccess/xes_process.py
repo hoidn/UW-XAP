@@ -429,13 +429,22 @@ def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwid
             linei = imagei.sum(axis=ax)
             bg = linei[-100:].mean()
             #print(linei.shape)
-            plt.plot(linei-bg)
-        plt.plot([al,al],plt.ylim(),'k')
-        plt.plot([ah,ah],plt.ylim(),'k')
-        plt.plot([bl,bl],plt.ylim(),'k')
-        plt.plot([bh,bh],plt.ylim(),'k')
+            if calib_load_path:
+                energies = load_calib(calib_load_path)
+                plt.plot([energies[al],energies[al]],plt.ylim(),'k')
+                plt.plot([energies[ah],energies[ah]],plt.ylim(),'k')
+                plt.plot([energies[bl],energies[bl]],plt.ylim(),'k')
+                plt.plot([energies[bh],energies[bh]],plt.ylim(),'k')
+                plt.plot(energies, linei-bg)
+                plt.xlabel("Energy (eV)")
+            else:
+                plt.plot(linei-bg)
+                plt.plot([al,al],plt.ylim(),'k')
+                plt.plot([ah,ah],plt.ylim(),'k')
+                plt.plot([bl,bl],plt.ylim(),'k')
+                plt.plot([bh,bh],plt.ylim(),'k')
+                plt.xlabel("index")
 
-        plt.xlabel("index")
         plt.ylabel("spectral intensity (arb)")
         plt.title("run %s, %i events, summed along axis %i, detid: %s"%(label, vn, ax, detid))
 

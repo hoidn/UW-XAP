@@ -20,6 +20,7 @@ import ipdb
 import matplotlib.pyplot as plt
 from scipy import misc
 import numpy.ma as ma
+import Image
 #from libtiff import TIFF
 
 if 'pslogin' not in socket.gethostname():
@@ -105,6 +106,8 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 #    tiff.write_image(imarr)
 #    tiff.close()
     np.save(save_path + '.npy', imarr)
+    im = Image.fromarray(imarr)
+    im.save(save_path + '.tif')
     matplotlib.image.imsave(save_path + '.png', imarr)
     #im.save(save_path + '.bmp')
     #imarr.tofile(save_path + '.npy')
