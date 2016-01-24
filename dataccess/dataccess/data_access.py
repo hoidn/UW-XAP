@@ -95,8 +95,9 @@ def get_label_property(label, property):
         and return it. If a matching label isn't found, return None.
         """
         red = lambda x, y: x + y
+        filtered_dict = {k: v for k, v in complete_dict.iteritems() if v['runs'][0] != (None, None)}
         labels_to_runtuples = {lab: tuple(reduce(red, get_all_runlist(lab))) for lab in
-            complete_dict.keys()}
+            filtered_dict}
         runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
         target_set = set(range(run_range[0], run_range[1] + 1))
         for runtuple in runtuples_to_labels:
@@ -147,7 +148,6 @@ def get_all_runlist(label, fname = 'labels.txt'):
         # module once spreadsheet synchronization has been sufficiently tested.
         try:
             groups = mapping[label]
-            print "GROUPS", groups
             return [range(runRange[0], runRange[1] + 1) for runRange in groups]
         except KeyError:
             # TODO: make sure that the run number exists

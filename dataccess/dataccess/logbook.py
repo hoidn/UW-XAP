@@ -258,6 +258,7 @@ def get_label_mapping(url = config.url):
                     elif property and (property not in local_dict) and row[k]:
                         local_dict[property_key] = parser_dispatch[property_key](row[k])
     return label_dict
+    #return {k: v for k, v in label_dict.iteritems() if v['runs'] != (None, None)}
 
 #def url_list_porthash(url_list):
 #    return int(5000 + int(hashlib.sha1(''.join(url_list)).hexdigest(), 16) % 1000)
