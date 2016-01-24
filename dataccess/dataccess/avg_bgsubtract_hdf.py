@@ -163,8 +163,8 @@ def get_area_detector_subregion(quad, det, evt, detid):
 
         # get pixel index array for quad, shape=(8, 185, 388)
         iX, iY = geo.get_pixel_coord_indexes('QUAD:V1', quad)
-        print_ndarr(iX, 'iX')
-        print_ndarr(iY, 'iY')
+#        print_ndarr(iX, 'iX')
+#        print_ndarr(iY, 'iY')
 
         t0_sec = time()
 
@@ -345,7 +345,7 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
     try:
         signalsum /= events_processed
     except UnboundLocalError:
-        raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum))
+        raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum) + ": " + str(events_processed))
     signalsum_final = np.empty_like(signalsum)
     comm.Allreduce(signalsum, signalsum_final)
     # TODO: refactor

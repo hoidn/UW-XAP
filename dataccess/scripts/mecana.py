@@ -8,6 +8,7 @@ sys.path.append('.') # so that config.py can be imported
 import os
 import argparse
 from dataccess import utils
+from mpi4py import MPI
 
 def addparser_init(subparsers):
     init = subparsers.add_parser('init', help =  'Initialize config.py in local directory.')
@@ -117,6 +118,7 @@ def call_xrd(args):
         peak_progression_compound = peak_progression_compound,
         bgsub = bgsub, compound_list = compound_list,
         normalization = normalization, maxpeaks = maxpeaks, plot_progression = args.plot_progression)
+    MPI.Finalize()
 
 def addparser_histogram(subparsers):
     import numpy as np
@@ -143,6 +145,7 @@ def addparser_datashow(subparsers):
         help = 'Apply detector masks from config.py')
     datashow.add_argument('--max', '-a', type = int, help = "Maximum amplitude of color scale")
     datashow.add_argument('--min', '-l', type = int, help = "Min amplitude of color scale")
+    datashow.add_argument('--run', '-r', type = int, help = 'Individual event number to plot')
 
 def addparser_eventframes(subparsers):
     datashow = subparsers.add_parser('eventframes', help = 'For a given dataset and area detector ID, show the summed detector image and save it to a file in the working directory. Any detector masks specified in config.py can optionally be applied.')
@@ -158,7 +161,7 @@ def call_datashow(args):
     detid = args.detid
     rmax = args.max
     rmin = args.min
-    datashow.main(label, detid, args.output, masked = args.masks, rmin = rmin, rmax = rmax)
+    datashow.main(label, detid, args.output, masked = args.masks, rmin = rmin, rmax = rmax, run = args.run)
 
 parser = argparse.ArgumentParser()
 subparsers = parser.add_subparsers(help='sub-command help')
@@ -188,3 +191,4 @@ else:
         call_histogram(args)
     else: # Enter datashow sub-command
         call_datashow(args)
+

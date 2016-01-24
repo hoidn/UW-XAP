@@ -22,7 +22,7 @@ from dataccess import utils
 from mpi4py import MPI
 
 # default powder peak width, in degrees
-DEFAULT_PEAK_WIDTH = 1.5
+DEFAULT_PEAK_WIDTH = 2.5
 
 # hbar c in eV * Angstrom
 HBARC = 1973. 

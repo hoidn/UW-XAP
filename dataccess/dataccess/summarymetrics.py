@@ -34,6 +34,7 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', plot = True, 
         plt.xlabel('output of ' + funcstr)
         plt.ylabel('number of events')
         plt.savefig(path)
+        plt.title(label)
         plt.show()
     if plot:
         plot()
