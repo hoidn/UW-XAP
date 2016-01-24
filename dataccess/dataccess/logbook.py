@@ -52,7 +52,8 @@ PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*
      'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*|.*[hH]eader.*',
     'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
     'param3': r'.*[pP]aram3.*', 'param4': r'.*[pP]aram4.*',
-'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*'}
+    'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*',
+    'background': r'.*[bB]ackground.*'}
 HEADERS = [k for k in PROPERTY_REGEXES]
 
 # Format for the flag that designates logbook header row
@@ -228,7 +229,8 @@ def parse_run(run_string):
 parser_dispatch = {'runs': parse_run, 'transmission': parse_float,
     'param1': parse_float, 'param2': parse_float, 'param3': parse_float,
     'param4': parse_float, 'filter_det': parse_string,
-     'labels': parse_string, 'focal_size': parse_focal_size, 'filter_func': parse_string}
+    'labels': parse_string, 'focal_size': parse_focal_size, 'filter_func': parse_string,
+    'background': parse_string}
 
 def get_label_mapping(url = config.url):
     # TODO: handle duplicates

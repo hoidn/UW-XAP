@@ -147,6 +147,7 @@ def get_all_runlist(label, fname = 'labels.txt'):
         # module once spreadsheet synchronization has been sufficiently tested.
         try:
             groups = mapping[label]
+            print "GROUPS", groups
             return [range(runRange[0], runRange[1] + 1) for runRange in groups]
         except KeyError:
             # TODO: make sure that the run number exists
@@ -229,7 +230,14 @@ def get_data_and_filter(label, detid, event_data_getter = None,
     """
     # TODO: update this
     """
-    #return get_label_data(label, detid)
+    def get_background():
+        """
+        Returns background frame.
+
+        Raises KeyError if background label is not found.
+        """
+        bg_label = get_label_property(label, 'background')
+        return get_label_data(bg_label, detid)
     def get_event_mask(filterfunc, detid = None):
         """
         TODO
@@ -272,7 +280,12 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         print "!!!!!!!!!!!!!!!!!!"
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter)
-    return imarray, event_data
+    try:
+        bg = get_background()
+        return imarray - bg, event_data
+    except KeyError:
+        print "No background label found"
+        return imarray, event_data
 
 def main(label, fname = 'labels.txt'):
     get_label_data(label, 1)

@@ -387,7 +387,8 @@ def get_background_full_frame(imarray, detid, compound_list, smoothing = 10, wid
 
     # mask based on powder peak locations
     powder_mask = make_powder_ring_mask(detid, bgfit, compound_list, width = width)
-    utils.save_image('detector_images/last_powder_mask.png', powder_mask)
+    # TODO: incompatible with tif export
+    #utils.save_image('detector_images/last_powder_mask.png', powder_mask)
 
     # union of the two masks
     combined_mask = powder_mask & pixel_mask

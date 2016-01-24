@@ -20,7 +20,6 @@ import ipdb
 import matplotlib.pyplot as plt
 from scipy import misc
 import numpy.ma as ma
-import Image
 #from libtiff import TIFF
 
 if 'pslogin' not in socket.gethostname():
@@ -98,6 +97,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     """
     Save a 2d array to file as an image.
     """
+    import Image
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
