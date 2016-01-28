@@ -194,13 +194,13 @@ def get_area_detector_subregion(quad, det, evt, detid):
         else:
             return det.raw(evt)
 
-# TODO: have this run only on the root rank
+@utils.ifroot
 def get_signal_bg_one_run_nonarea(runNum, detid,
         event_data_getter = None, event_mask = None, **kwargs):
     rank = comm.Get_rank()
     size = comm.Get_size()
     if config.smd:
-        ds = DataSource('exp=%s:run=%d:idx:dir=/reg/d/ffb/%s/xtc' % (config.expname, runNum, config.exppath))
+        ds = DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
         evtgen = idxgen(ds)
         #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     else:
@@ -211,26 +211,26 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
             return run_mask[nevent]
         else:
             return True
-    def mapfunc(event):
-        try:
-            result = event.get(Lusi.IpmFexV1, Source(config.nonarea[detid])).channel()[0]
-        # Event is None, or something like that
-        except AttributeError:
-            result = np.nan
-        return result
     det_values = []
+    def eval_lusi(evt):
+        """LUSI detector reading"""
+        k = evt.get(Lusi.IpmFexV1, Source(config.nonarea[detid].src))
+        if k:
+            det_values.append(k.channel()[0])
+    def eval_bld(evt):
+        """gas detector average reading"""
+        k = evt.get(Bld.BldDataFEEGasDetEnergyV1, Source(config.nonarea[detid].src))
+        if k:
+            det_values.append(np.mean([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()]))
     for nevent, evt in evtgen:
         if  event_valid(nevent):
-            k = evt.get(Lusi.IpmFexV1, Source(config.nonarea[detid]))
-            if k:
-                det_values.append(k.channel()[0])
-#    det_values =\
-#        [evt.get(Lusi.IpmFexV1, Source(config.nonarea[detid])).channel()[0]
-#        for nevent, evt in enumerate(ds.events())
-#        if event_valid(nevent) and (nevent % size == rank)]
+            if config.nonarea[detid].type == 'Lusi.IpmFexV1':
+                eval_lusi(evt)
+            elif config.nonarea[detid].type == 'Bld.BldDataFEEGasDetEnergyV1':
+                eval_bld(evt)
+            else:
+                raise ValueError("Not a valid non-area detector")
     det_values = reduce(lambda x, y: x + y, comm.allgather(det_values))
-#    det_values = utils.mpimap(mapfunc, ds.events())
-#    det_values = filter(lambda x: x != np.isnan, det_values)
     event_mean = np.sum(det_values) / len(det_values)
     if event_data_getter:
         event_data = map(event_data_getter, det_values)
