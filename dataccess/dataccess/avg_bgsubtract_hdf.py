@@ -32,9 +32,9 @@ def idxgen(ds):
         yield startevt+nevent,run.event(t)
 
 def smdgen(ds):
-    if rank==0: print 'smd mode'
     rank = comm.Get_rank()
     size = comm.Get_size()
+    if rank==0: print 'smd mode'
     for nevent,evt in enumerate(ds.events()):
         if nevent%size == rank: yield nevent,evt
 
@@ -194,17 +194,18 @@ def get_area_detector_subregion(quad, det, evt, detid):
         else:
             return det.raw(evt)
 
-@utils.ifroot
+@utils.eager_persist_to_file('avg_bgsubtract_hdf/get_signal_bg_one_run_nonarea')
 def get_signal_bg_one_run_nonarea(runNum, detid,
         event_data_getter = None, event_mask = None, **kwargs):
     rank = comm.Get_rank()
     size = comm.Get_size()
     if config.smd:
-        ds = DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
-        evtgen = idxgen(ds)
+        ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+        #evtgen = idxgen(ds)
         #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     else:
         ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
+    evtgen = smdgen(ds)
     def event_valid(nevent):
         if event_mask:
             run_mask = event_mask[runNum]
@@ -233,9 +234,13 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
     det_values = reduce(lambda x, y: x + y, comm.allgather(det_values))
     event_mean = np.sum(det_values) / len(det_values)
     if event_data_getter:
-        event_data = map(event_data_getter, det_values)
+        event_data_list = map(event_data_getter, det_values)
+        event_data =\
+            {i: dat
+            for i, dat in enumerate(event_data_list)
+            if event_valid(i)}
     else:
-        event_data = []
+        event_data = {}
     return event_mean, 0., event_data
 
 #def get_signal_bg_one_run_nonarea_mproc(runNum, detid,
@@ -286,8 +291,8 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
         else:
             return True
     #DIVERTED_CODE = 162
-    ds = DataSource('exp=%s:run=%d:idx:dir=/reg/d/ffb/%s/xtc' % (config.expname, runNum, config.exppath))
-    evtgen = idxgen(ds)
+    ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+    #evtgen = idxgen(ds)
     #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     det = Detector(config.detinfo_map[detid].device_name, ds.env())
     rank = comm.Get_rank()
@@ -304,7 +309,7 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
         return False
     last = time()
     last_nevent = 0
-    for nevent, evt in evtgen:
+    for nevent, evt in enumerate(ds.events()):
         # TODO: testing only, remove later.
 #        if nevent > 200:
 #            break
@@ -335,13 +340,13 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
                         #event_data.append(event_data_getter(increment))
                         event_data[nevent] = event_data_getter(increment)
                     events_processed += 1
-        if nevent % 100 == 0:
-            now = time()
-            deltat = now - last
-            deltan = nevent - last_nevent
-            print 'processed event: ', nevent, (deltan/deltat) * size, rank
-            last = now
-            last_nevent = nevent
+            if nevent % 100 == 0:
+                now = time()
+                deltat = now - last
+                deltan = nevent - last_nevent
+                print 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size
+                last = now
+                last_nevent = nevent
     try:
         signalsum /= events_processed
     except UnboundLocalError:

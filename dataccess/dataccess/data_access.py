@@ -101,7 +101,7 @@ def get_label_property(label, property):
         runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
         target_set = set(range(run_range[0], run_range[1] + 1))
         for runtuple in runtuples_to_labels:
-            if target_set == set(runtuple):
+            if target_set <= set(runtuple):
                 return runtuples_to_labels[runtuple]
         return None
 
@@ -286,6 +286,36 @@ def get_data_and_filter(label, detid, event_data_getter = None,
     except KeyError:
         print "No background label found"
         return imarray, event_data
+
+
+
+def flux_constructor(label):
+    size = get_label_property(label, 'focal_size')
+    return lambda beam_energy: beam_energy * get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
+
+def event_data_dict_to_list(event_data_dict):
+    """
+    Converts the dict-based representation of event data for a label to
+    a flat list of event data objects.
+    """
+    run_dicts = event_data_dict.values()
+    return reduce(lambda x, y: x + y, [d.values() for d in run_dicts])
+
+def query_event_data(label, detid, flux_min, flux_max, mode = 'all'):
+    def flux(beam_energy):
+        size = get_label_property(label, 'focal_size')
+        flux = 1e-3 * beam_energy * get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
+        return flux
+    def flux_filter(beam_energy):
+        return flux_min < flux(beam_energy) < flux_max
+    if mode == 'all':
+        imarray, event_data = get_data_and_filter(label, detid, event_filter = flux_filter, event_filter_detid = 'GMD', event_data_getter = lambda x: flux(x))
+        return event_data
+    elif mode == 'mean':
+        imarray, event_data = get_data_and_filter(label, detid, event_filter = flux_filter, event_filter_detid = 'GMD')
+        return imarray
+    else:
+        raise ValueError("Invalid mode")
 
 def main(label, fname = 'labels.txt'):
     get_label_data(label, 1)
