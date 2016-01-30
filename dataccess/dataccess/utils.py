@@ -112,6 +112,49 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     #im.save(save_path + '.bmp')
     #imarr.tofile(save_path + '.npy')
 
+def flatten_dict(d):
+    """
+    Given a nested dictionary whose values at the "bottom" are numeric, create
+    a 2d array where the rows are of the format:
+        k1, k2, k3, value
+    This particular row would correspond to the following subset of d:
+        {k1: {k2: {k3: v}}}
+    Stated another way, this function outputs a traversal of the dictionary's tree structure.
+
+    The dict must be "rectangular" (i.e. all leafs are at the same depth)
+    """
+    def walkdict(d, parents = []):
+        if not isinstance(d, dict):
+            for p in parents:
+                yield p
+            yield d
+        else:
+            for k in d:
+                for elt in walkdict(d[k], parents + [k]):
+                    yield elt
+    def dict_depth(d, depth=0):
+        if not isinstance(d, dict) or not d:
+            return depth
+        return max(dict_depth(v, depth+1) for k, v in d.iteritems())
+    depth = dict_depth(d) + 1
+    flat_arr = np.fromiter(walkdict(d), float)
+    try:
+        return np.reshape(flat_arr, (len(flat_arr) / depth, depth))
+    except ValueError, e:
+        raise ValueError("Dictionary of incorrect format given to flatten_dict: " + e)
+
+@ifroot
+def save_0d_event_data(save_path, event_data_dict, **kwargs):
+    """
+    Save an event data dictionary to file in the following column format:
+        run number, event number, value
+    """
+    dirname = os.path.dirname(save_path)
+    if dirname and (not os.path.exists(dirname)):
+        os.system('mkdir -p ' + os.path.dirname(save_path))
+    np.savetxt(save_path, flatten_dict(event_data_dict), **kwargs)
+
+
 @ifroot
 def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = None):
     """

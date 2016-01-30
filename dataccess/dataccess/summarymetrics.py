@@ -17,7 +17,7 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, 
         plt.hist(arr, bins = nbins, alpha = 0.5, **kwargs)
         plt.xlabel('output of ' + event_data_getter.__name__)
         plt.ylabel('number of events')
-        plt.savefig(path)
+        plt.savefig(path + '.png')
         plt.title('Detector: ' + detid + '; dataset: ' + label)
     @utils.ifroot
     def show():
@@ -26,7 +26,7 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, 
         event_data_getter = func
     else:
         event_data_getter = eval('config.' + funcstr)
-    path = 'intensity_histograms/' + label + '_' + detid + '.png'
+    path = 'histograms/' + label + '_' + detid
     dirname = os.path.dirname(path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(path))
@@ -45,8 +45,10 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, 
         else:
             plot(event_data_list)
         show()
-    result = np.array(event_data_list)#.flatten()
-    print "RESULT IS", event_data
+    result = np.array(event_data_list)
+    #print "RESULT IS", event_data
+    # header kwarg is passed to np.savetxt
+    utils.save_0d_event_data(path + '.dat', event_data, header = "Run\tevent\tvalue")
     return result
 
 def main(label, detid, funcstr = 'np.sum', func = None, nbins = 100, filtered = False, **kwargs):
