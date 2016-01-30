@@ -224,9 +224,8 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         return (signal) / float(len(groups)), None
         #return (signal - bg) / float(len(groups)), None
     else:
-        print "event data is: ", event_data
-        #print "rank is: ", kwargs['MPI'].COMM_WORLD.Get_rank()
         return (signal) / float(len(groups)), event_data
+        #print "event data is: ", event_data
         #return (signal - bg) / float(len(groups)), event_data
 
 def get_data_and_filter(label, detid, event_data_getter = None,

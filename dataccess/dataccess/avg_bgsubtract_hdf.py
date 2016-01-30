@@ -194,7 +194,7 @@ def get_area_detector_subregion(quad, det, evt, detid):
         else:
             return det.raw(evt)
 
-@utils.eager_persist_to_file('avg_bgsubtract_hdf/get_signal_bg_one_run_nonarea')
+@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_bg_one_run_nonarea')
 def get_signal_bg_one_run_nonarea(runNum, detid,
         event_data_getter = None, event_mask = None, **kwargs):
     rank = comm.Get_rank()
@@ -223,6 +223,7 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
         k = evt.get(Bld.BldDataFEEGasDetEnergyV1, Source(config.nonarea[detid].src))
         if k:
             det_values.append(np.mean([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()]))
+            #print "appending: ", str([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()])
     for nevent, evt in evtgen:
         if  event_valid(nevent):
             if config.nonarea[detid].type == 'Lusi.IpmFexV1':
@@ -422,7 +423,6 @@ def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
             bg = bg_increment / len(runList)
         event_data[runList[runindx]] = event_data_entry
         runindx += 1
-        #event_data.append(event_data_entry)
     return signal, bg, event_data
 
 def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None,
@@ -450,13 +450,4 @@ override_bg = None, event_data_getter = None, event_mask = None, **kwargs):
             event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
     return signal, bg, event_data
 
-#def process_and_save(runList, detid, **kwargs):
-#    print "processing runs", runList
-#    signal, bg = get_signal_bg_many(runList, detid, **kwargs)
-#    boundaries = map(str, [runList[0], runList[-1]])
-#    os.system('mkdir -p processed/')
-#    np.savetxt("./processed/" + "-".join(boundaries) + "_" + str(detid) + "_bg.dat", bg)   
-#    np.savetxt("./processed/" + "-".join(boundaries) + "_" + str(detid) + "_signal.dat", signal)
-#    np.savetxt("./processed/" + "-".join(boundaries) + "_" + str(detid) + "_bgsubbed.dat", signal - bg)   
-#    return signal, bg
 

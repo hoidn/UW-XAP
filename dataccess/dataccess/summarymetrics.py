@@ -12,16 +12,16 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, 
     Evaluate the function event_data_getter (defined in config.py) on all events
     in the dataset and generate a histogram of resulting values.
     """
-#    def dict_to_list(event_data_dict):
-#        return utils.merge_dicts(*event_data_dict.values()).values()
-        #return reduce(lambda x, y: x + y, event_data_dict.values())
     @utils.ifroot
     def plot(arr, **kwargs):
-        plt.hist(arr, bins = nbins, **kwargs)
+        plt.hist(arr, bins = nbins, alpha = 0.5, **kwargs)
         plt.xlabel('output of ' + event_data_getter.__name__)
         plt.ylabel('number of events')
         plt.savefig(path)
         plt.title('Detector: ' + detid + '; dataset: ' + label)
+    @utils.ifroot
+    def show():
+        plt.show()
     if func is not None:
         event_data_getter = func
     else:
@@ -44,7 +44,7 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, 
             plt.legend()
         else:
             plot(event_data_list)
-        plt.show()
+        show()
     result = np.array(event_data_list)#.flatten()
     print "RESULT IS", event_data
     return result
