@@ -253,15 +253,10 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         return event_data
 
     try:
-        #ipdb.set_trace()
         if event_filter:
             event_mask = get_event_mask(event_filter, detid = event_filter_detid)
         else:
             args = eventmask_params(label)
-#            try:
-#                filterfunc = config.filter_function
-#                filter_detid = config.filter_detid
-#            except AttributeError:
             try:
                 funcstr = get_label_property(label, 'filter_func')
                 filterfunc = eval('config.' + funcstr)(*args)
