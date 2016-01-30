@@ -203,7 +203,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
             override_bg_runlist, event_data_getter = event_data_getter,
             event_mask = event_mask, subregion_index = subregion_index,
             **kwargs)
-        newsignal, newbg, event_data = output
+        newsignal, newbg, new_event_data = output
         try:
             signal += newsignal
             bg += newbg
@@ -212,6 +212,10 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
                 signal, bg = newsignal.copy(), newbg.copy()
             except AttributeError:
                 signal, bg = newsignal, newbg
+        try:
+            event_data = utils.merge_dicts(event_data, new_event_data)
+        except NameError:
+            event_data = new_event_data
     if separate:
         return (signal) / float(len(groups)), bg / float(len(groups))
     # TODO: background levels are broken for the XRTS CSPADS. scrapping bg subtraction,

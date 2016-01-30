@@ -127,6 +127,7 @@ def addparser_histogram(subparsers):
     histogram.add_argument('label', help = 'Label of dataset to process.')
     histogram.add_argument('--function', '-u', default = 'np.sum', help = 'Name of function (defined in config.py) to evaluate over all events. Defaults to np.sum.')
     histogram.add_argument('--filter', '-f', action = 'store_true', help = 'If selected, logbook-specified event filtering will be applied.')
+    histogram.add_argument('--separate', '-s', action = 'store_true', help = 'If selected, different runs within the dataset are added separately (with different color).')
     histogram.add_argument('--nbins', '-n', type = int, default = 100, help = 'Number of bins in the histogram.')
 
 def call_histogram(args):
@@ -134,7 +135,7 @@ def call_histogram(args):
     label = args.label
     detid = args.detid
     nbins = args.nbins
-    summarymetrics.main(label, detid, funcstr = args.function, filtered = args.filter, nbins = nbins)
+    summarymetrics.main(label, detid, funcstr = args.function, filtered = args.filter, nbins = nbins, separate = args.separate)
 
 def addparser_datashow(subparsers):
     datashow = subparsers.add_parser('datashow', help = 'For a given dataset and area detector ID, show the summed detector image and save it to a file in the working directory. Any detector masks specified in config.py can optionally be applied.')

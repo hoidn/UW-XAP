@@ -1,4 +1,5 @@
 import os
+import ipdb
 import config
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,7 +7,7 @@ from dataccess import data_access as data
 from dataccess import utils
 
 
-def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, plot = True, nbins = 100, filtered = False):
+def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, plot = True, nbins = 100, filtered = False, separate = False):
     """
     Evaluate the function event_data_getter (defined in config.py) on all events
     in the dataset and generate a histogram of resulting values.
@@ -14,6 +15,13 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, 
 #    def dict_to_list(event_data_dict):
 #        return utils.merge_dicts(*event_data_dict.values()).values()
         #return reduce(lambda x, y: x + y, event_data_dict.values())
+    @utils.ifroot
+    def plot(arr, **kwargs):
+        plt.hist(arr, bins = nbins, **kwargs)
+        plt.xlabel('output of ' + event_data_getter.__name__)
+        plt.ylabel('number of events')
+        plt.savefig(path)
+        plt.title('Detector: ' + detid + '; dataset: ' + label)
     if func is not None:
         event_data_getter = func
     else:
@@ -29,20 +37,18 @@ def get_detector_data_all_events(label, detid, funcstr = 'np.sum', func = None, 
         imarray, event_data = data.get_data_and_filter(label, detid,
             event_data_getter = event_data_getter)
     event_data_list = data.event_data_dict_to_list(event_data)
+    if plot:
+        if separate:
+            for k, d in event_data.iteritems():
+                plot(d.values(), label = str(k))
+            plt.legend()
+        else:
+            plot(event_data_list)
+        plt.show()
     result = np.array(event_data_list)#.flatten()
     print "RESULT IS", event_data
-    @utils.ifroot
-    def plot():
-        plt.hist(result, bins = nbins)
-        plt.xlabel('output of ' + event_data_getter.__name__)
-        plt.ylabel('number of events')
-        plt.savefig(path)
-        plt.title(label)
-        plt.show()
-    if plot:
-        plot()
     return result
 
-def main(label, detid, funcstr = 'np.sum', func = None, nbins = 100, filtered = False):
+def main(label, detid, funcstr = 'np.sum', func = None, nbins = 100, filtered = False, **kwargs):
     
-    get_detector_data_all_events(label, detid, funcstr = funcstr, func = func, nbins = nbins, filtered = filtered)
+    get_detector_data_all_events(label, detid, funcstr = funcstr, func = func, nbins = nbins, filtered = filtered, **kwargs)
