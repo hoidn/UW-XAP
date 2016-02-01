@@ -205,6 +205,9 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
         #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     else:
         ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
+    print ''
+    print "PROCESSING RUN: ", runNum
+    print ''
     evtgen = smdgen(ds)
     def event_valid(nevent):
         if event_mask:

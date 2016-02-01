@@ -206,25 +206,32 @@ def parse_string(string):
 def parse_run(run_string):
     """
     Given a string from the "runs" column in the logbook, of the
-    format "abcd" or "abcd-efgh", returns a tuple of ints of the format
-    (abcd, efgh) denoting start and end numbers of a series of runs.
+    format "abcd" or "abcd-efgh", returns a tuple of ints
+    denoting all run numbers in the dataset
 
     Returns ValueError on an incorrectly-formatted string.
     """
-    if not run_string:
-        return (None, None)
-    else:
-        split = run_string.split('-')
+    def parse_consecutive(runrange_string):
+        split = runrange_string.split('-')
         try:
             split = map(int, split) # values convertible to ints?
             if len(split) == 1:
-                return 2 * tuple(split)
+                return tuple(range(split[0], split[0] + 1))
             elif len(split) == 2:
-                return tuple(split)
+                return tuple(range(split[0], split[1] + 1))
             else:
                 raise ValueError("Invalid run range format: ", run_string)
         except:
             raise ValueError("Invalid run range format: ", run_string)
+    if not run_string:
+        return (None, None)
+    else:
+        run_string = run_string.strip()
+        split_ranges = run_string.split(',')
+        runrange_tuples =\
+            [parse_consecutive(s)
+            for s in split_ranges]
+        return tuple(set(reduce(lambda x, y: x + y, runrange_tuples)))
 
 parser_dispatch = {'runs': parse_run, 'transmission': parse_float,
     'param1': parse_float, 'param2': parse_float, 'param3': parse_float,
@@ -249,9 +256,10 @@ def get_label_mapping(url = config.url):
                     property_key = get_property_key(property)
                     if property_key == 'runs':
                         try:
-                            local_dict.setdefault(property_key, []).append(parse_run(row[k]))
+                            val = local_dict.setdefault(property_key, ())
+                            local_dict[property_key] = val + parse_run(row[k])
                             # Delete possible duplicates
-                            local_dict[property_key] = list(set(local_dict[property_key]))
+                            local_dict[property_key] = tuple(set(local_dict[property_key]))
                         except ValueError:
                             print "Malformed run range: ", row[k]
                     # TODO: make this non-obvious behaviour clear to the user.

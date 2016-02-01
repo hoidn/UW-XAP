@@ -82,14 +82,15 @@ def get_label_property(label, property):
     """
     if property == 'runs':
         try:
-            label_range = logbook.parse_run(label)
-            return range(label_range[0], label_range[1] + 1)
+            label_runs = logbook.parse_run(label)
+            return list(label_runs)
+            #return range(label_range[0], label_range[1] + 1)
         except:
             pass
     if not config.use_logbook:
         raise AttributeError("Logbook not available (disabled in config.py)")
     complete_dict = get_pub_logbook_dict()
-    def runrange_to_label(run_range):
+    def runs_to_label(run_range):
         """
         Given a run range, look for a label whose run range matches
         and return it. If a matching label isn't found, return None.
@@ -99,7 +100,7 @@ def get_label_property(label, property):
         labels_to_runtuples = {lab: tuple(reduce(red, get_all_runlist(lab))) for lab in
             filtered_dict}
         runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
-        target_set = set(range(run_range[0], run_range[1] + 1))
+        target_set = set(run_range)
         for runtuple in runtuples_to_labels:
             if target_set <= set(runtuple):
                 return runtuples_to_labels[runtuple]
@@ -107,11 +108,11 @@ def get_label_property(label, property):
 
     if label not in complete_dict:
         try:
-            run_range = logbook.parse_run(label)
+            runs = logbook.parse_run(label)
         except ValueError:
             raise ValueError("label: " + label + " is neither a label nor a correctly-formated run range")
-        if runrange_to_label(run_range) is not None:
-            label = runrange_to_label(run_range)
+        if runs_to_label(runs) is not None:
+            label = runs_to_label(runs)
         else:
             raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
     label_dict = complete_dict[label]
@@ -139,8 +140,9 @@ def get_all_runlist(label, fname = 'labels.txt'):
     a run range of the format 'abcd' or 'abcd-efgh'.
     """
     try:
-        label_range = logbook.parse_run(label)
-        return [range(label_range[0], label_range[1] + 1)]
+        runs = logbook.parse_run(label)
+        return list(runs)
+        #return [range(label_range[0], label_range[1] + 1)]
     except: # except what?
         mapping = get_label_runranges()
         # list of tuples denoting run ranges
@@ -148,15 +150,15 @@ def get_all_runlist(label, fname = 'labels.txt'):
         # module once spreadsheet synchronization has been sufficiently tested.
         try:
             groups = mapping[label]
-            return [range(runRange[0], runRange[1] + 1) for runRange in groups]
+            return [list(groups)]
         except KeyError:
             # TODO: make sure that the run number exists
             print "label " + label + " not found"
             try:
-                label_range = logbook.parse_run(label)
+                runs = logbook.parse_run(label)
             except ValueError:
                 raise ValueError(label + ': dataset label not found')
-            return [range(label_range[0], label_range[1] + 1)]
+            return [list(runs)]
         
 
 def get_all_runs(exppath = config.exppath):
