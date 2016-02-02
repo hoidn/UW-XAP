@@ -71,12 +71,12 @@ from pathos.multiprocessing import ProcessingPool
 XTC_DIR = '/reg/d/psdm/' + config.exppath + '/xtc/'
 
 
-@utils.eager_persist_to_file("cache/get_signal_bg_one_run/")
-def get_signal_bg_one_run(runNum, detid = 1, sigma_max = 1000.0,
+@utils.eager_persist_to_file("cache/get_signal_one_run/")
+def get_signal_one_run(runNum, detid = 1, sigma_max = 1000.0,
 event_data_getter = None, event_mask = None, **kwargs):
     # TODO: remove sigma_max discrimination
     if detid in config.nonarea:
-        return get_signal_bg_one_run_nonarea(runNum, detid,
+        return get_signal_one_run_nonarea(runNum, detid,
             event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
 
     def filter_events(eventlist, blanks):
@@ -127,27 +127,21 @@ event_data_getter = None, event_mask = None, **kwargs):
         diffs = np.diff(arr)[1:]
         return int(np.sum(diffs))/len(diffs)
 
-    def get_bg(eventlist, vetted_blanks):
-        if vetted_blanks:
-            return reduce(lambda x, y: x + y, eventlist[vetted_blanks])/len(vetted_blanks)
-        return np.zeros(np.shape(eventlist[0]))
-
     nfiles, eventlist, blanks = psana_get.getImg(detid, runNum)
     if spacing_between(blanks) == 24:
         vetted_blanks = blanks
     else:
         vetted_blanks = []
     outlier, good = filter_events(eventlist, vetted_blanks)
-    bg = get_bg(eventlist, vetted_blanks)
     signal = reduce(lambda x, y: x + y, eventlist[good])/len(good)
     if event_data_getter is None:
-        return signal, bg, []
+        return signal, {}
     else:
         if event_mask is not None:
             event_data = map(event_data_getter, np.array(eventlist)[np.array(event_mask[runNum], dtype = bool)])
         else:
             event_data = map(event_data_getter, eventlist)
-        return signal, bg, event_data
+        return signal, event_data
 
 
 def get_area_detector_subregion(quad, det, evt, detid):
@@ -194,8 +188,8 @@ def get_area_detector_subregion(quad, det, evt, detid):
         else:
             return det.raw(evt)
 
-@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_bg_one_run_nonarea')
-def get_signal_bg_one_run_nonarea(runNum, detid,
+@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_one_run_nonarea')
+def get_signal_one_run_nonarea(runNum, detid,
         event_data_getter = None, event_mask = None, **kwargs):
     rank = comm.Get_rank()
     size = comm.Get_size()
@@ -248,45 +242,12 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
             if event_valid(i)}
     else:
         event_data = {}
-    return event_mean, 0., event_data
-
-#def get_signal_bg_one_run_nonarea_mproc(runNum, detid,
-#        event_data_getter = None, event_mask = None, **kwargs):
-#    rank = comm.Get_rank()
-#    size = comm.Get_size()
-#    if config.smd:
-#        ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
-#    else:
-#        ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
-#    def event_valid(nevent):
-#        if event_mask:
-#            run_mask = event_mask[runNum]
-#            return run_mask[nevent]
-#        else:
-#            return True
-#    def mapfunc(event):
-#        try:
-#            result = event.get(Lusi.IpmFexV1, Source(config.nonarea[detid])).channel()[0]
-#        # Event is None, or something like that
-#        except AttributeError:
-#            result = np.nan
-#        return result
-#    pool = ProcessingPool(nodes=14)
-#    det_values = pool.map(mapfunc, ds.events())
-#    det_values = filter(lambda x: x != np.isnan, det_values)
-#    event_mean = np.sum(det_values) / len(det_values)
-#    if event_data_getter:
-#        event_data = map(event_data_getter, det_values)
-#    else:
-#        event_data = []
-#    return event_mean, 0., event_data
-
-
+    return event_mean, event_data
 
 
 # TODO: more testing and refactor all of this!
-@utils.eager_persist_to_file("cache/get_signal_bg_one_run_smd/")
-def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
+@utils.eager_persist_to_file("cache/get_signal_one_run_smd/")
+def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
     def event_valid(nevent):
         if event_mask:
@@ -307,42 +268,27 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
     rank = comm.Get_rank()
     print "rank is", rank
     size = comm.Get_size()
-    darkevents, event_data = [], {}
+    event_data = {}
     events_processed = 0
-    def is_darkevent(evr):
-        # temporary patch, valid for LK20 because end station A isn't running
-#        for fifoEvent in evr.fifoEvents():
-#            # In general, this will incorrectly add i = 0 to darkevents
-#            if fifoEvent.eventCode() == DIVERTED_CODE:
-#                return True
-        return False
     last = time()
     last_nevent = 0
     for nevent, evt in evtgen:
         if event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
-            isdark = is_darkevent(evr)
             try:
                 increment = get_area_detector_subregion(subregion_index, det, evt, detid)
             except AttributeError:
                 continue
             if increment is not None:
-                if isdark:
-                    darkevents.append(nevent)
-                    try:
-                        darksum += increment
-                    except UnboundLocalError:
-                        darksum = increment
-                else:
-                    try:
-                        signalsum += increment
-                    except UnboundLocalError:
-                        signalsum = np.zeros_like(increment)
-                        signalsum += increment
-                    if event_data_getter:
-                        #event_data.append(event_data_getter(increment))
-                        event_data[nevent] = event_data_getter(increment, run = runNum, nevent = nevent)
-                    events_processed += 1
+                try:
+                    signalsum += increment
+                except UnboundLocalError:
+                    signalsum = np.zeros_like(increment)
+                    signalsum += increment
+                if event_data_getter:
+                    #event_data.append(event_data_getter(increment))
+                    event_data[nevent] = event_data_getter(increment, run = runNum, nevent = nevent)
+                events_processed += 1
             if nevent % 100 == 0:
                 now = time()
                 deltat = now - last
@@ -356,55 +302,44 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
         raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum) + ": " + str(events_processed))
     signalsum_final = np.empty_like(signalsum)
     comm.Allreduce(signalsum, signalsum_final)
-    # TODO: refactor
-    darksum_final = np.empty_like(signalsum)
-    try:
-        darksum /= events_processed
-        comm.Allreduce(darksum, darksum_final)
-    except UnboundLocalError:
-        darksum_final = np.empty_like(signalsum_final)
-    darkevents = comm.allgather(darkevents)
     events_processed = comm.allreduce(events_processed)
     if event_data_getter:
         event_data = comm.allgather(event_data)
     print "rank is: ", rank
     if rank == 0:
         print "processed ", events_processed, "events"
-        print "dark events: ", darkevents
-    if darkevents:
-        darkevents = reduce(lambda x, y: x + y, darkevents)
     if event_data:
         #print event_data
         #event_data = reduce(lambda x, y: x + y, event_data)
         print 'before merge'
         print event_data
         event_data = utils.merge_dicts(*event_data)
-    return signalsum_final, darksum_final, event_data
+    return signalsum_final, event_data
 
 
-@utils.eager_persist_to_file("cache/get_signal_bg_one_run_smd/")
-def get_signal_bg_one_run_smd(runNum, detid, subregion_index = -1,
+@utils.eager_persist_to_file("cache/get_signal_one_run_smd/")
+def get_signal_one_run_smd(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
     if detid in config.nonarea:
-        return get_signal_bg_one_run_nonarea(runNum, detid,
+        return get_signal_one_run_nonarea(runNum, detid,
             event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
     else: # Assume detid to be an area detector
-        return get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = subregion_index,
+        return get_signal_one_run_smd_area(runNum, detid, subregion_index = subregion_index,
             event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
 
 
 
-@utils.eager_persist_to_file("cache/get_signal_bg_many_parallel/")
-def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
+@utils.eager_persist_to_file("cache/get_signal_many_parallel/")
+def get_signal_many_parallel(runList, detid, event_data_getter = None,
     event_mask = None, **kwargs):
     """
-    Parallel version of get_signal_bg_many
+    Parallel version of get_signal_many
     """
     def mapfunc(run_number):
-        return get_signal_bg_one_run(run_number, detid, event_data_getter =
+        return get_signal_one_run(run_number, detid, event_data_getter =
             event_data_getter, event_mask = event_mask, **kwargs)
     def mapfunc_smd(run_number):
-        return get_signal_bg_one_run_smd(run_number, detid, event_data_getter =
+        return get_signal_one_run_smd(run_number, detid, event_data_getter =
             event_data_getter, event_mask = event_mask, **kwargs)
 
     if config.smd:
@@ -416,42 +351,13 @@ def get_signal_bg_many_parallel(runList, detid, event_data_getter = None,
         #run_data = map(mapfunc, runList)
     event_data = {}
     runindx = 0
-    for signal_increment, bg_increment, event_data_entry in run_data:
+    for signal_increment, event_data_entry in run_data:
         try:
             signal += (signal_increment / len(runList))
         except UnboundLocalError:
             signal = signal_increment / len(runList)
-        try:
-            bg += (bg_increment / len(runList))
-        except UnboundLocalError:
-            bg = bg_increment / len(runList)
         event_data[runList[runindx]] = event_data_entry
         runindx += 1
-    return signal, bg, event_data
-
-def get_signal_bg_many_apply_default_bg(runList, detid, default_bg = None,
-override_bg = None, event_data_getter = None, event_mask = None, **kwargs):
-    """
-    Wraps get_signal_bg_many, additionally allowing a default background 
-    subtraction for groups of runs that lack interposed blank frames
-
-    Inputs:
-        default_bg: A list of run numbers to use for bg subtraction of 60Hz runs
-        override_bg: A list of run numbers to use for bg subtraction of ALL
-        runs
-
-    If both default_bg and override_bg are provided, override_bg is used
-    """
-    signal, bg, event_data = get_signal_bg_many_parallel(runList, detid,
-        event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
-    if override_bg:
-        discard, bg, event_data = get_signal_bg_many_parallel(override_bg, detid,
-            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
-    # if a default background runs are supplied AND bg is all zeros (meaning
-    # dummy values were inserted by get_signal_bg_many)
-    elif default_bg and not np.any(bg):
-        discard, bg, event_data = get_signal_bg_many_parallel(default_bg, detid,
-            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
-    return signal, bg, event_data
+    return signal, event_data
 
 

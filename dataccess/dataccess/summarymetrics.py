@@ -6,8 +6,10 @@ import matplotlib.pyplot as plt
 from dataccess import data_access as data
 from dataccess import utils
 
+def npsum(arr, **kwargs):
+    return np.sum(arr)
 
-def get_detector_data_all_events(labels, detid, funcstr = 'np.sum', func = None, plot = True, nbins = 100, filtered = False, separate = False):
+def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plot = True, nbins = 100, filtered = False, separate = False):
     """
     Evaluate the function event_data_getter (defined in config.py) on all events
     in the dataset and generate a histogram of resulting values.
@@ -26,7 +28,10 @@ def get_detector_data_all_events(labels, detid, funcstr = 'np.sum', func = None,
     if func is not None:
         event_data_getter = func
     else:
-        event_data_getter = eval('config.' + funcstr)
+        if funcstr is None:
+            event_data_getter = npsum
+        else:
+            event_data_getter = eval('config.' + funcstr)
     path = 'histograms/' + '_'.join(labels) + '_' + detid
     dirname = os.path.dirname(path)
     if dirname and (not os.path.exists(dirname)):
@@ -56,6 +61,6 @@ def get_detector_data_all_events(labels, detid, funcstr = 'np.sum', func = None,
     utils.save_0d_event_data(path + '.dat', utils.merge_dicts(*event_data_dicts), header = "Run\tevent\tvalue")
     return result
 
-def main(label, detid, funcstr = 'np.sum', func = None, nbins = 100, filtered = False, **kwargs):
+def main(label, detid, funcstr = None, func = None, nbins = 100, filtered = False, **kwargs):
     
     get_detector_data_all_events(label, detid, funcstr = funcstr, func = func, nbins = nbins, filtered = filtered, **kwargs)

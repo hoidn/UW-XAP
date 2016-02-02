@@ -170,7 +170,7 @@ def get_all_runs(exppath = config.exppath):
     return result
 
 def get_label_data(label, detid, default_bg = None, override_bg = None,
-    separate = False, event_data_getter = None, event_mask = None, **kwargs):
+    event_data_getter = None, event_mask = None, **kwargs):
     """
     Given a label corresponding to a group of runs, returns:
         averaged data, event data, 
@@ -185,8 +185,6 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         else:
             return None # TODO: why?
         
-    default_bg_runlist = concatenated_runlists(default_bg)
-    override_bg_runlist = concatenated_runlists(override_bg)
     runList = get_all_runlist(label)
     if not runList:
         raise ValueError(label + ': no runs found for label')
@@ -194,23 +192,16 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         subregion_index = None
     else:
         subregion_index = config.detinfo_map[detid].subregion_index
-    output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
-        runList, detid, default_bg = default_bg_runlist, override_bg =
-        override_bg_runlist, event_data_getter = event_data_getter,
+    output = avg_bgsubtract_hdf.get_signal_many_parallel(
+        runList, detid, event_data_getter = event_data_getter,
         event_mask = event_mask, subregion_index = subregion_index,
         **kwargs)
-    signal, bg, event_data = output
-    if separate:
-        return (signal), bg
-    # TODO: background levels are broken for the XRTS CSPADS. scrapping bg subtraction,
-    # provisionally. 
+    signal, event_data = output
     if event_data_getter is None:
-        return (signal), None
-        #return (signal - bg) / float(len(groups)), None
+        return signal, None
     else:
-        return (signal), event_data
+        return signal, event_data
         #print "event data is: ", event_data
-        #return (signal - bg), event_data
 
 def get_data_and_filter(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
@@ -224,7 +215,8 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         Raises KeyError if background label is not found.
         """
         bg_label = get_label_property(label, 'background')
-        return get_label_data(bg_label, detid)
+        bg, _ =  get_label_data(bg_label, detid)
+        return bg
     def get_event_mask(filterfunc, detid = None):
         """
         TODO
