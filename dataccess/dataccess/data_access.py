@@ -41,7 +41,6 @@ def make_labels(fname = 'labels.txt', min_cluster_size = 2):
         raise ValueError("file " + fname + "exists")
     # pairs of start and end run numbers
     bounds = np.array(map(lambda cluster: np.array([cluster[0], cluster[-1]]), clusters))
-    #bounds = map(lambda cluster: "%s-%s"%(str(cluster[0]), str(cluster[-1])), clusters)
     np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, label1, label2', delimiter = ',')
     return bounds
 
@@ -53,7 +52,6 @@ def get_pub_logbook_dict():
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     
-    #ipdb.set_trace()
     print "Waiting for data on ZMQ pub socket, port ", port
     socket.connect ("tcp://pslogin03:%s" % port)
     topicfilter = config.expname
@@ -84,7 +82,6 @@ def get_label_property(label, property):
         try:
             label_runs = logbook.parse_run(label)
             return list(label_runs)
-            #return range(label_range[0], label_range[1] + 1)
         except:
             pass
     if not config.use_logbook:
@@ -96,8 +93,9 @@ def get_label_property(label, property):
         and return it. If a matching label isn't found, return None.
         """
         red = lambda x, y: x + y
-        filtered_dict = {k: v for k, v in complete_dict.iteritems() if v['runs'][0] != (None, None)}
-        labels_to_runtuples = {lab: tuple(reduce(red, get_all_runlist(lab))) for lab in
+        # TODO: poorly-abstracted...
+        filtered_dict = {k: v for k, v in complete_dict.iteritems() if v['runs'] != (None,)}
+        labels_to_runtuples = {lab: tuple(get_all_runlist(lab)) for lab in
             filtered_dict}
         runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
         target_set = set(run_range)
@@ -142,7 +140,6 @@ def get_all_runlist(label, fname = 'labels.txt'):
     try:
         runs = logbook.parse_run(label)
         return list(runs)
-        #return [range(label_range[0], label_range[1] + 1)]
     except: # except what?
         mapping = get_label_runranges()
         # list of tuples denoting run ranges
@@ -150,7 +147,7 @@ def get_all_runlist(label, fname = 'labels.txt'):
         # module once spreadsheet synchronization has been sufficiently tested.
         try:
             groups = mapping[label]
-            return [list(groups)]
+            return list(groups)
         except KeyError:
             # TODO: make sure that the run number exists
             print "label " + label + " not found"
@@ -158,7 +155,7 @@ def get_all_runlist(label, fname = 'labels.txt'):
                 runs = logbook.parse_run(label)
             except ValueError:
                 raise ValueError(label + ': dataset label not found')
-            return [list(runs)]
+            return list(runs)
         
 
 def get_all_runs(exppath = config.exppath):
@@ -184,51 +181,36 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
     def concatenated_runlists(lab):
         if lab:
             # convert from numpy type to int after concatenating
-            return tuple(map(int, np.concatenate(get_all_runlist(lab, fname = fname))))
+            return tuple(map(int, get_all_runlist(lab, fname = fname)))
         else:
             return None # TODO: why?
         
-    #signal, bg = None, None
     default_bg_runlist = concatenated_runlists(default_bg)
     override_bg_runlist = concatenated_runlists(override_bg)
-    groups = get_all_runlist(label)
-    if not groups:
+    runList = get_all_runlist(label)
+    if not runList:
         raise ValueError(label + ': no runs found for label')
-    for runList in groups:
-        if detid in config.nonarea:
-            subregion_index = None
-        else:
-            subregion_index = config.detinfo_map[detid].subregion_index
-        #ipdb.set_trace()
-        output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
-            runList, detid, default_bg = default_bg_runlist, override_bg =
-            override_bg_runlist, event_data_getter = event_data_getter,
-            event_mask = event_mask, subregion_index = subregion_index,
-            **kwargs)
-        newsignal, newbg, new_event_data = output
-        try:
-            signal += newsignal
-            bg += newbg
-        except NameError:
-            try:
-                signal, bg = newsignal.copy(), newbg.copy()
-            except AttributeError:
-                signal, bg = newsignal, newbg
-        try:
-            event_data = utils.merge_dicts(event_data, new_event_data)
-        except NameError:
-            event_data = new_event_data
+    if detid in config.nonarea:
+        subregion_index = None
+    else:
+        subregion_index = config.detinfo_map[detid].subregion_index
+    output = avg_bgsubtract_hdf.get_signal_bg_many_apply_default_bg(
+        runList, detid, default_bg = default_bg_runlist, override_bg =
+        override_bg_runlist, event_data_getter = event_data_getter,
+        event_mask = event_mask, subregion_index = subregion_index,
+        **kwargs)
+    signal, bg, event_data = output
     if separate:
-        return (signal) / float(len(groups)), bg / float(len(groups))
+        return (signal), bg
     # TODO: background levels are broken for the XRTS CSPADS. scrapping bg subtraction,
     # provisionally. 
     if event_data_getter is None:
-        return (signal) / float(len(groups)), None
+        return (signal), None
         #return (signal - bg) / float(len(groups)), None
     else:
-        return (signal) / float(len(groups)), event_data
+        return (signal), event_data
         #print "event data is: ", event_data
-        #return (signal - bg) / float(len(groups)), event_data
+        #return (signal - bg), event_data
 
 def get_data_and_filter(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
@@ -269,7 +251,6 @@ def get_data_and_filter(label, detid, event_data_getter = None,
             except AttributeError:
                 raise ValueError("Function " + funcstr + " not found, and no filter_function/filter_detid in config.py")
             event_mask = get_event_mask(filterfunc, detid = filter_detid)
-        #merged_mask = reduce(lambda x, y: x + y, event_mask.values())
         merged_mask = utils.merge_dicts(*event_mask.values())
         print "Event mask True entries: ", sum(merged_mask), "Event mask length: ", len(merged_mask)
         imarray, event_data =  get_label_data(label, detid,

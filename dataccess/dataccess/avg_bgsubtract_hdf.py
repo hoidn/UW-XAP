@@ -171,7 +171,7 @@ def get_area_detector_subregion(quad, det, evt, detid):
         nda = det.raw(evt)
         ped = det.pedestals(evt)
 
-        print 'Consumed time = %7.3f sec' % (time()-t0_sec)
+        #print 'Consumed time = %7.3f sec' % (time()-t0_sec)
         #print_ndarr(nda, 'raw')
 
         # get intensity array for quad, shape=(8, 185, 388)
