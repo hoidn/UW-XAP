@@ -239,7 +239,9 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
     det_values = reduce(lambda x, y: x + y, comm.allgather(det_values))
     event_mean = np.sum(det_values) / len(det_values)
     if event_data_getter:
-        event_data_list = map(event_data_getter, det_values)
+        event_data_list =\
+            [event_data_getter(dv, run = runNum)
+            for dv in det_values]
         event_data =\
             {i: dat
             for i, dat in enumerate(event_data_list)
@@ -339,7 +341,7 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
                         signalsum += increment
                     if event_data_getter:
                         #event_data.append(event_data_getter(increment))
-                        event_data[nevent] = event_data_getter(increment)
+                        event_data[nevent] = event_data_getter(increment, run = runNum, nevent = nevent)
                     events_processed += 1
             if nevent % 100 == 0:
                 now = time()

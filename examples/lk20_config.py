@@ -1,5 +1,7 @@
+from dataccess import xtcav
 from collections import namedtuple
 import numpy as np
+import ipdb
 
 # if True, use MPI with the new (psana V4?) smd interface to access data. Otherwise use
 # the old (V3?) API.
@@ -125,7 +127,7 @@ def si_spectrometer_pump(imarr):
     pump_counts = np.sum(spectrum[403:520])
     return pump_counts
 
-def make_si_filter(probe_min, probe_max, pump_min, pump_max):
+def make_si_filter(probe_min, probe_max, pump_min, pump_max, **kwargs):
     def filter_by_si_peaks(imarr):
         spectrum = np.sum(imarr, axis = 1)
         spectrum = spectrum - np.percentile(spectrum, 1) # subtract background
@@ -149,7 +151,28 @@ def flux(beam_energy, label = None, size = None, **kwargs):
     size = data.get_label_property(label, 'focal_size')
     flux = beam_energy * data.get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
     return flux
-    
+
+def get_pulse_duration(a, run = None, nevent = None, window_size = 60):
+    try:
+        t0 = xtcav.get_run_epoch_time(run)
+    except TypeError:
+        raise ValueError("No run value provided")
+    t_samples = np.linspace(t0 - window_size/2, t0 + window_size / 2)
+    return np.mean(xtcav.pulse_length_from_epoch_time(t_samples))
+
+def make_pulse_duration_filter(duration_min, duration_max, window_size = 60):
+    def filterfunc(a, run = None, nevent = None):
+        pulse_duration = get_pulse_duration(a, run = run, nevent = nevent, window_size = window_size)
+        accepted = (duration_min < pulse_duration < duration_max)
+        if nevent == 0:
+            if accepted:
+                print "Run %04d: accepted" % run
+            else:
+                print "Run %04d: rejected" % run
+        return accepted
+    return filterfunc
+
+   
 ## global filter detid
 #filter_detid = 'xrts1'
 ## global event filter function
@@ -168,4 +191,4 @@ best_focus_size = 2.
 def sum_window(smin, smax):
     return lambda arr: smin < np.sum(arr) < smax
 
-port = 5679
+port = 5681

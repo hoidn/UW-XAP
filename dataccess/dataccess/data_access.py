@@ -255,9 +255,10 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         print "Event mask True entries: ", sum(merged_mask), "Event mask length: ", len(merged_mask)
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)
-    except:
+    except Exception, e:
         print "!!!!!!!!!!!!!!!!!!"
         print "WARNING: Event filtering will not be performed."
+        print e
         print "!!!!!!!!!!!!!!!!!!"
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter)
