@@ -317,36 +317,37 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
     last = time()
     last_nevent = 0
     for nevent, evt in evtgen:
-        evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
-        isdark = is_darkevent(evr)
-        try:
-            increment = get_area_detector_subregion(subregion_index, det, evt, detid)
-        except AttributeError:
-            continue
-        if increment is not None:
-            if isdark:
-                darkevents.append(nevent)
-                try:
-                    darksum += increment
-                except UnboundLocalError:
-                    darksum = increment
-            else:
-                try:
-                    signalsum += increment
-                except UnboundLocalError:
-                    signalsum = np.zeros_like(increment)
-                    signalsum += increment
-                if event_data_getter:
-                    #event_data.append(event_data_getter(increment))
-                    event_data[nevent] = event_data_getter(increment)
-                events_processed += 1
-        if nevent % 100 == 0:
-            now = time()
-            deltat = now - last
-            deltan = nevent - last_nevent
-            print 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size
-            last = now
-            last_nevent = nevent
+        if event_valid(nevent):
+            evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
+            isdark = is_darkevent(evr)
+            try:
+                increment = get_area_detector_subregion(subregion_index, det, evt, detid)
+            except AttributeError:
+                continue
+            if increment is not None:
+                if isdark:
+                    darkevents.append(nevent)
+                    try:
+                        darksum += increment
+                    except UnboundLocalError:
+                        darksum = increment
+                else:
+                    try:
+                        signalsum += increment
+                    except UnboundLocalError:
+                        signalsum = np.zeros_like(increment)
+                        signalsum += increment
+                    if event_data_getter:
+                        #event_data.append(event_data_getter(increment))
+                        event_data[nevent] = event_data_getter(increment)
+                    events_processed += 1
+            if nevent % 100 == 0:
+                now = time()
+                deltat = now - last
+                deltan = nevent - last_nevent
+                print 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size
+                last = now
+                last_nevent = nevent
     try:
         signalsum /= events_processed
     except UnboundLocalError:
