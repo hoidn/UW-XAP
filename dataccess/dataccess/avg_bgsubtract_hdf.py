@@ -28,8 +28,8 @@ def idxgen(ds):
     mylength = len(times)//size
     startevt = rank*mylength
     mytimes= times[startevt:(rank+1)*mylength]
-    for nevent,t in enumerate(mytimes):
-        yield startevt+nevent,run.event(t)
+    for nevent,t in enumerate(mytimes, startevt):
+        yield nevent,run.event(t)
 
 def smdgen(ds):
     rank = comm.Get_rank()
@@ -200,15 +200,16 @@ def get_signal_bg_one_run_nonarea(runNum, detid,
     rank = comm.Get_rank()
     size = comm.Get_size()
     if config.smd:
-        ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
-        #evtgen = idxgen(ds)
+        ds = DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
+        #ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
         #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     else:
         ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
     print ''
     print "PROCESSING RUN: ", runNum
     print ''
-    evtgen = smdgen(ds)
+    evtgen = idxgen(ds)
+    #evtgen = smdgen(ds)
     def event_valid(nevent):
         if event_mask:
             run_mask = event_mask[runNum]
@@ -295,8 +296,10 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
         else:
             return True
     #DIVERTED_CODE = 162
-    ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
-    #evtgen = idxgen(ds)
+    ds = DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
+    #ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
+    #evtgen = smdgen(ds)
+    evtgen = idxgen(ds)
     #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     det = Detector(config.detinfo_map[detid].device_name, ds.env())
     rank = comm.Get_rank()
@@ -313,44 +316,37 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
         return False
     last = time()
     last_nevent = 0
-    for nevent, evt in enumerate(ds.events()):
-        # TODO: testing only, remove later.
-#        if nevent > 200:
-#            break
-        if (nevent % size == rank) and event_valid(nevent):
-#            if random.randint(0, 10) != 5:
-#                continue
-
-            evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
-            isdark = is_darkevent(evr)
-            try:
-                increment = get_area_detector_subregion(subregion_index, det, evt, detid)
-            except AttributeError:
-                continue
-            if increment is not None:
-                if isdark:
-                    darkevents.append(nevent)
-                    try:
-                        darksum += increment
-                    except UnboundLocalError:
-                        darksum = increment
-                else:
-                    try:
-                        signalsum += increment
-                    except UnboundLocalError:
-                        signalsum = np.zeros_like(increment)
-                        signalsum += increment
-                    if event_data_getter:
-                        #event_data.append(event_data_getter(increment))
-                        event_data[nevent] = event_data_getter(increment)
-                    events_processed += 1
-            if nevent % 100 == 0:
-                now = time()
-                deltat = now - last
-                deltan = nevent - last_nevent
-                print 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size
-                last = now
-                last_nevent = nevent
+    for nevent, evt in evtgen:
+        evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
+        isdark = is_darkevent(evr)
+        try:
+            increment = get_area_detector_subregion(subregion_index, det, evt, detid)
+        except AttributeError:
+            continue
+        if increment is not None:
+            if isdark:
+                darkevents.append(nevent)
+                try:
+                    darksum += increment
+                except UnboundLocalError:
+                    darksum = increment
+            else:
+                try:
+                    signalsum += increment
+                except UnboundLocalError:
+                    signalsum = np.zeros_like(increment)
+                    signalsum += increment
+                if event_data_getter:
+                    #event_data.append(event_data_getter(increment))
+                    event_data[nevent] = event_data_getter(increment)
+                events_processed += 1
+        if nevent % 100 == 0:
+            now = time()
+            deltat = now - last
+            deltan = nevent - last_nevent
+            print 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size
+            last = now
+            last_nevent = nevent
     try:
         signalsum /= events_processed
     except UnboundLocalError:
@@ -377,6 +373,8 @@ def get_signal_bg_one_run_smd_area(runNum, detid, subregion_index = -1,
     if event_data:
         #print event_data
         #event_data = reduce(lambda x, y: x + y, event_data)
+        print 'before merge'
+        print event_data
         event_data = utils.merge_dicts(*event_data)
     return signalsum_final, darksum_final, event_data
 
