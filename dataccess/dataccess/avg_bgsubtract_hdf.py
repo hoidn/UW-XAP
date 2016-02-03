@@ -188,9 +188,8 @@ def get_area_detector_subregion(quad, det, evt, detid):
         else:
             return det.raw(evt)
 
-@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_one_run_nonarea')
-def get_signal_one_run_nonarea(runNum, detid,
-        event_data_getter = None, event_mask = None, **kwargs):
+@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_event_data_nonarea')
+def get_event_data_nonarea(runNum, detid, **kwargs):
     rank = comm.Get_rank()
     size = comm.Get_size()
     if config.smd:
@@ -204,12 +203,6 @@ def get_signal_one_run_nonarea(runNum, detid,
     print ''
     evtgen = idxgen(ds)
     #evtgen = smdgen(ds)
-    def event_valid(nevent):
-        if event_mask:
-            run_mask = event_mask[runNum]
-            return run_mask[nevent]
-        else:
-            return True
     det_values = []
     def eval_lusi(evt):
         """LUSI detector reading"""
@@ -223,19 +216,36 @@ def get_signal_one_run_nonarea(runNum, detid,
             det_values.append(np.mean([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()]))
             #print "appending: ", str([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()])
     for nevent, evt in evtgen:
-        if  event_valid(nevent):
-            if config.nonarea[detid].type == 'Lusi.IpmFexV1':
-                eval_lusi(evt)
-            elif config.nonarea[detid].type == 'Bld.BldDataFEEGasDetEnergyV1':
-                eval_bld(evt)
-            else:
-                raise ValueError("Not a valid non-area detector")
-    det_values = reduce(lambda x, y: x + y, comm.allgather(det_values))
-    event_mean = np.sum(det_values) / len(det_values)
+        if config.nonarea[detid].type == 'Lusi.IpmFexV1':
+            eval_lusi(evt)
+        elif config.nonarea[detid].type == 'Bld.BldDataFEEGasDetEnergyV1':
+            eval_bld(evt)
+        else:
+            raise ValueError("Not a valid non-area detector")
+    return reduce(lambda x, y: x + y, comm.allgather(det_values))
+
+@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_one_run_nonarea')
+def get_signal_one_run_nonarea(runNum, detid,
+        event_data_getter = None, event_mask = None, **kwargs):
+    def event_valid(nevent):
+        if event_mask:
+            run_mask = event_mask[runNum]
+            return run_mask[nevent]
+        else:
+            return True
+
+    det_values = get_event_data_nonarea(runNum, detid, **kwargs)
+    det_values_filtered =\
+        [dat
+        for i, dat in enumerate(det_values)
+        if event_valid(i)]
+    event_mean = np.sum(det_values_filtered) / len(det_values_filtered)
+
     if event_data_getter:
         event_data_list =\
             [event_data_getter(dv, run = runNum)
             for dv in det_values]
+        # filtered event data
         event_data =\
             {i: dat
             for i, dat in enumerate(event_data_list)

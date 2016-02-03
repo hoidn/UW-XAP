@@ -244,7 +244,9 @@ def get_data_and_filter(label, detid, event_data_getter = None,
                 raise ValueError("Function " + funcstr + " not found, and no filter_function/filter_detid in config.py")
             event_mask = get_event_mask(filterfunc, detid = filter_detid)
         merged_mask = utils.merge_dicts(*event_mask.values())
-        print "Event mask True entries: ", sum(merged_mask), "Event mask length: ", len(merged_mask)
+        sum_true = sum(map(lambda d2: sum(d2.values()), event_mask.values()))
+        n_events = sum(map(lambda d: len(d.keys()), event_mask.values()))
+        print "Event mask True entries: ", sum_true, "Total number of events: ", n_events
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)
     except Exception, e:
