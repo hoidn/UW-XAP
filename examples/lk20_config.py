@@ -3,13 +3,11 @@ from collections import namedtuple
 import numpy as np
 import ipdb
 
-# if True, use MPI with the new (psana V4?) smd interface to access data. Otherwise use
-# the old (V3?) API.
+# if True, use MPI when extracting data psana-python. Otherwise use
+# the older (circa LD67 run) psana API with serial data access.
 smd = True
 
-# Experiment specification. Example (for LD67):
-# exppath = 'mec/mecd6714'
-# xtc_prefix = "e441"
+# Experiment specification. 
 # This must be provided to run any analysis. 
 exppath = "mec/meck2016"
 try:
@@ -89,12 +87,6 @@ detinfo_map =\
         -1)}
 
 ## Map from BLD non-area detector ids to their full psana source names
-#nonarea =\
-#    {'d1': {'type': 'Lusi.IpmFexV1', 'src': 'MEC-TCTR-DI-01'},
-#    'ipm2': {'type': 'Lusi.IpmFexV1', 'src': 'MEC-XT2-IPM-02'},
-#    'ipm3': {'type': 'Lusi.IpmFexV1', 'src': 'MEC-XT2-IPM-03'},
-#    'energy': {'type': 'Bld.BldDataFEEGasDetEnergyV1', 'src': 'FEEGasDetEnergy'}}
-
 NonareaInfo = namedtuple('NonareaInfo', ['type', 'src'])
 nonarea =\
     {'d1': NonareaInfo(
@@ -180,10 +172,6 @@ def make_pulse_duration_filter(duration_min, duration_max, window_size = 60):
 #    return filter_by_si_peaks(imarr)
 #    #return True
 
-# TODO (maybe): parameters for XES script
-
-# port for ZMQ sockets
-#port = "5558"
 
 # Size in microns of the beam spot at best focus
 best_focus_size = 2.
@@ -191,4 +179,5 @@ best_focus_size = 2.
 def sum_window(smin, smax):
     return lambda arr: smin < np.sum(arr) < smax
 
+# port for ZMQ sockets
 port = 5681
