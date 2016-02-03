@@ -3,7 +3,7 @@ from collections import namedtuple
 import numpy as np
 import ipdb
 
-# if True, use MPI when extracting data psana-python. Otherwise use
+# if True, use MPI when extracting data from psana-python. Otherwise use
 # the older (circa LD67 run) psana API with serial data access.
 smd = True
 
@@ -43,7 +43,6 @@ pulse_energy = 1e-4
 #   -Multiple masks are ANDed together.
 #   -Mask files must be boolean arrays saved in .npy format.
 #   -Masks must be positive (i.e., bad/dummy pixels are False).
-#DetInfo = namedtuple('DetInfo', ['device_name', 'dimensions', 'geometry', 'extra_masks', 'subregion_index'])
 DetInfo = namedtuple('DetInfo', ['device_name', 'geometry', 'extra_masks', 'subregion_index'])
 
 # Updated 1/23/2016. Calibrated with Fe3O4 data (runs 632 to 636)
