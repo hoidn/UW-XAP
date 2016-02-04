@@ -224,7 +224,7 @@ def get_event_data_nonarea(runNum, detid, **kwargs):
             raise ValueError("Not a valid non-area detector")
     return reduce(lambda x, y: x + y, comm.allgather(det_values))
 
-@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_one_run_nonarea')
+#@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_one_run_nonarea')
 def get_signal_one_run_nonarea(runNum, detid,
         event_data_getter = None, event_mask = None, **kwargs):
     def event_valid(nevent):
@@ -256,7 +256,7 @@ def get_signal_one_run_nonarea(runNum, detid,
 
 
 # TODO: more testing and refactor all of this!
-@utils.eager_persist_to_file("cache/get_signal_one_run_smd/")
+@utils.eager_persist_to_file("cache/get_signal_one_run_smd_area/")
 def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
     def event_valid(nevent):
@@ -327,7 +327,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
     return signalsum_final, event_data
 
 
-@utils.eager_persist_to_file("cache/get_signal_one_run_smd/")
+#@utils.eager_persist_to_file("cache/get_signal_one_run_smd/")
 def get_signal_one_run_smd(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
     if detid in config.nonarea:

@@ -451,6 +451,7 @@ def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
         print "Applying mask(s): ", mask_paths
         return base_mask & reduce(lambda x, y: x & y, masks)
 
+
 #def eager_persist_to_file(file_name):
 #    """
 #    Decorator for memoizing function calls to disk.
