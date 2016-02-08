@@ -91,6 +91,12 @@ def ifroot(func):
             return func(*args, **kwargs)
     return inner
 
+def is_plottable():
+    import config
+    if config.noplot:
+        return False
+    return isroot()
+
 def ifplot(func):
     """
     Decorator that causes a function to execute only if config.noplot is False

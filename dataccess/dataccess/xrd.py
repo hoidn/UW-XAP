@@ -714,6 +714,6 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         save_data(pattern[0], pattern[1], path)
         # TODO: imarray should not be background-subtracted but it appears that it is.
         utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray)
-    if utils.isroot():
+    if utils.is_plottable():
         doplot(normalization, peak_progression_compound, maxpeaks, labels)
     return patterns, imarrays

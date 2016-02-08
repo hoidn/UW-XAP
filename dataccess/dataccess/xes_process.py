@@ -305,7 +305,7 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
     return x, intensities / norm
 
 
-@utils.ifroot
+@utils.ifplot
 def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     if not os.path.exists('plots_xes/'):
         os.makedirs('plots_xes/')
