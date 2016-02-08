@@ -90,7 +90,21 @@ def ifroot(func):
         if isroot():
             return func(*args, **kwargs)
     return inner
-        
+
+def ifplot(func):
+    """
+    Decorator that causes a function to execute only if config.noplot is False
+    and the MPI core rank is 0.
+    """
+    @ifroot
+    def inner(*args, **kwargs):
+        import config
+        if config.noplot:
+            print "PLOTTING DISABLED, EXITING." 
+        else:
+            return func(*args, **kwargs)
+    return inner
+    
 
 @ifroot
 def save_image(save_path, imarr, fmt = 'tiff'):
@@ -106,6 +120,8 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 #    tiff.write_image(imarr)
 #    tiff.close()
     np.save(save_path + '.npy', imarr)
+    if imarr.dtype == 'uint16':
+        imarr = imarr.astype('float')
     im = Image.fromarray(imarr)
     im.save(save_path + '.tif')
     matplotlib.image.imsave(save_path + '.png', imarr)
@@ -119,7 +135,8 @@ def flatten_dict(d):
         k1, k2, k3, value
     This particular row would correspond to the following subset of d:
         {k1: {k2: {k3: v}}}
-    Stated another way, this function outputs a traversal of the dictionary's tree structure.
+    Stated another way, this function traverses the dictionary from node to leaf
+    once for every single leaf.
 
     The dict must be "rectangular" (i.e. all leafs are at the same depth)
     """
@@ -155,23 +172,24 @@ def save_0d_event_data(save_path, event_data_dict, **kwargs):
     np.savetxt(save_path, flatten_dict(event_data_dict), **kwargs)
 
 
-@ifroot
 def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = None):
     """
     Save a 2d array to file as an image and then display it.
     """
-    print "rmin", rmin
-    print "rmax", rmax
-    save_image(save_path, imarr)
-    import pyimgalgos.GlobalGraphics as gg
     ave, rms = imarr.mean(), imarr.std()
-    #gg.plotImageLarge(imarr, amp_range=(ave-rms, ave + 5*rms), title = title)
     if not rmin:
         rmin = ave - rms
     if not rmax:
         rmax = ave + 5 * rms
-    gg.plotImageLarge(imarr, amp_range=(rmin, rmax), title = title)
-    gg.show()
+    @ifplot
+    def show():
+        print "rmin", rmin
+        print "rmax", rmax
+        import pyimgalgos.GlobalGraphics as gg
+        gg.plotImageLarge(imarr, amp_range=(rmin, rmax), title = title)
+        gg.show()
+    save_image(save_path, imarr)
+    show()
 
 
 @ifroot
@@ -244,6 +262,35 @@ def hashable_dict(d):
             d[k] = make_hashable(v)
     return d
 
+def memoize_condition(cache_valid):
+    """
+    Memoization operator that invalidates cache whenever cache_valid()
+    evaluates to False.
+    """
+    cache = {}
+    def decorator(f):
+        def new_func(*args):
+            if (args in cache) and cache_valid():
+                return cache[args]
+            else:
+                cache[args] = f(*args)
+                return cache[args]
+        return new_func
+    return decorator
+
+def memoize_timeout(timeout = 10):
+    state = {}
+    def cache_valid():
+        if 'last' not in state:
+            state['last'] = time()
+        curtime = time()
+        if curtime - state['last'] > timeout:
+            state['last'] = curtime
+            return False
+        else:
+            return True
+    return memoize_condition(cache_valid)
+
 def memoize(timeout = None):
     """
     Memoization decorator with an optional timout parameter.
@@ -255,7 +302,6 @@ def memoize(timeout = None):
         return cache2[0]
     def set_timestamp():
         cache2[0] = time()
-
     def decorator(f):
         def new_func(*args):
             if args in cache:
@@ -410,8 +456,13 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
             full_name = file_name + key
             if key not in cache:
                 try:
-                    with open(full_name, 'r') as f:
-                        cache[key] = dill.load(f)
+                    try:
+                        with open(full_name, 'r') as f:
+                                cache[key] = dill.load(f)
+                    except EOFError:
+                        os.remove(full_name)
+                        print "corrupt cache file deleted"
+                        raise ValueError("Corrupt file")
                     #print "cache found"
                 except (IOError, ValueError):
                     #print "no cache found; computing"

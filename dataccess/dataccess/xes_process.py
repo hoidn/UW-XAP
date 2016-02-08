@@ -15,6 +15,7 @@ from dataccess import utils
 from dataccess import data_access
 
 import pdb
+import ipdb
 from scipy.ndimage.filters import gaussian_filter as filt
 
 # TODO: use the same data extractor as in xrd.py
@@ -70,6 +71,7 @@ def data_from_label(detid, transpose = False):
     """
     def data_getter(label):
         arr = data.get_data_and_filter(label, detid)[0]
+        arr = arr.astype('float')
         if transpose:
             return arr.T
         else:
@@ -90,7 +92,7 @@ def lineout(data, cencol, pxwidth = 3):
     Return a 1d lineout
     """
     spectrum_num_points = len(data)
-    spectrum_intensities = np.array([ sum( [data[i][j] for j in range(cencol-pxwidth,cencol+pxwidth+1)] ) for i in range(spectrum_num_points) ])
+    spectrum_intensities = np.sum(data[:,cencol - pxwidth:cencol + pxwidth + 1], axis = 1)
     return spectrum_intensities
 
 def get_normalization(x, intensities, sumwidth = 150):

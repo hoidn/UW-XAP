@@ -165,6 +165,8 @@ def call_datashow(args):
     datashow.main(label, detid, args.output, masked = args.masks, rmin = rmin, rmax = rmax, run = args.run)
 
 parser = argparse.ArgumentParser()
+
+parser.add_argument('--noplot', '-n', action = 'store_true', help = 'If selected, plotting is suppressed')
 subparsers = parser.add_subparsers(help='sub-command help')
 
 # Add sub-commands to parser
@@ -175,13 +177,18 @@ addparser_histogram(subparsers)
 addparser_datashow(subparsers)
 
 args = parser.parse_args()
-print "print args"
-print args
+print "args: ", args
+
 config_source = utils.resource_path('data/config.py')
 config_dst = 'config.py'
 if 'initcalled' in args: # Enter init sub-command
     call_init(config_source, config_dst)
-else:
+
+if args.noplot:
+    import config
+    config.noplot = True
+
+if 'initcalled' not in args:
     if not os.path.isfile(config_dst):
         parser.error("File config.py not found. Run 'python dataccess.py init' to initialize config.py, and then edit it appropriately before re-running")
     elif 'pxwidth' in args: # Enter xes sub-command
@@ -193,3 +200,4 @@ else:
     else: # Enter datashow sub-command
         call_datashow(args)
 
+MPI.Finalize()

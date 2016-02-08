@@ -303,8 +303,6 @@ def main(url = config.url, port = PORT):
     socket.bind("tcp://*:%s" % port)
 
     while True:
-        #topic = 0
-        # TODO: topic shouldn't be null
         mapping = get_label_mapping(url = url)
         messagedata = dill.dumps(mapping)
         print mapping

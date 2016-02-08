@@ -169,6 +169,7 @@ def get_all_runs(exppath = config.exppath):
     result.sort()
     return result
 
+@utils.eager_persist_to_file('cache/data_access/get_label_data/')
 def get_label_data(label, detid, default_bg = None, override_bg = None,
     event_data_getter = None, event_mask = None, **kwargs):
     """
@@ -203,6 +204,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         return signal, event_data
         #print "event data is: ", event_data
 
+@utils.eager_persist_to_file('cache/data_access/get_label_data_and_filter/')
 def get_data_and_filter(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
     """

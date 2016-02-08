@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 from dataccess import utils
 from dataccess import data_access
 

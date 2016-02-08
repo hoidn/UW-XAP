@@ -1,3 +1,4 @@
+import ipdb
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mpldates
@@ -21,6 +22,25 @@ xtcav_times = np.array(map(epoch_time, xtcav['Timestamp']))
 # Get x ray pulse durations (fs)
 xtcav_lengths = np.array(xtcav['X-rays'])
 pulse_length_from_epoch_time = interp1d(xtcav_times, xtcav_lengths)
+
+
+def autocorrelation(x):
+    x = x - np.mean(x)
+    return np.array([np.sum(x * np.roll(x, i)) for i in range(len(x))])/(np.std(x)**2 * len(x))
+
+def plot_autocorrelation():
+    xdata = xtcav_times[9800:12500][::2]
+    ydata = xtcav_lengths[9800:12500][::2]
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(xdata - np.min(xdata), autocorrelation(ydata))
+    ax.set_xlabel("time (s)")
+    ax.set_title("X ray pulse duration autocorrelation")
+
+#    ax.set_xticks(xdata)
+#    ax.set_xticklabels(xdata)
+
+    plt.show()
 
 def get_run_epoch_time(run_number):
     # This appears to be the first file associated with a run that's written to the xtc directory.
