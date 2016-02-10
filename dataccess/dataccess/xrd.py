@@ -19,7 +19,7 @@ import config
 from dataccess import data_access as data
 from dataccess import utils
 
-from mpi4py import MPI
+#from mpi4py import MPI
 
 # default powder peak width, in degrees
 DEFAULT_PEAK_WIDTH = 2.5

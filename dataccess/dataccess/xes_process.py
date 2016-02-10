@@ -385,6 +385,7 @@ def main(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
     else:
         name = 'plots_xes/' + '_'.join(labels)
     plot_spectra(spectrumList, labels, scale_ev, name = name, eltname = eltname)
+    return spectrumList
 
 
 def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
