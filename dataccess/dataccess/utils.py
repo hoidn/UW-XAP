@@ -178,7 +178,7 @@ def save_0d_event_data(save_path, event_data_dict, **kwargs):
     np.savetxt(save_path, flatten_dict(event_data_dict), **kwargs)
 
 
-def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = None):
+def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = None, show_plot = True):
     """
     Save a 2d array to file as an image and then display it.
     """
@@ -193,7 +193,8 @@ def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = N
         print "rmax", rmax
         import pyimgalgos.GlobalGraphics as gg
         gg.plotImageLarge(imarr, amp_range=(rmin, rmax), title = title)
-        gg.show()
+        if show_plot:
+            gg.show()
     save_image(save_path, imarr)
     show()
 

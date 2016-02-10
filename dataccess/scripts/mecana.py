@@ -140,7 +140,7 @@ def call_histogram(args):
 def addparser_datashow(subparsers):
     datashow = subparsers.add_parser('datashow', help = 'For a given dataset and area detector ID, show the summed detector image and save it to a file in the working directory. Any detector masks specified in config.py can optionally be applied.')
     datashow.add_argument('detid', type = str, help = 'Detector ID.')
-    datashow.add_argument('label', help = 'Label of dataset to process.')
+    datashow.add_argument('labels', nargs = '+', help = 'Labels of dataset to process.')
     datashow.add_argument('--output', '-o', help = 'Path of output file')
     datashow.add_argument('--masks', '-m', action = 'store_true',
         help = 'Apply detector masks from config.py')
@@ -158,11 +158,11 @@ def addparser_eventframes(subparsers):
 
 def call_datashow(args):
     from dataccess import datashow
-    label = args.label
+    labels = args.labels
     detid = args.detid
     rmax = args.max
     rmin = args.min
-    datashow.main(label, detid, args.output, masked = args.masks, rmin = rmin, rmax = rmax, run = args.run)
+    datashow.main(labels, detid, path = args.output, masked = args.masks, rmin = rmin, rmax = rmax, run = args.run)
 
 parser = argparse.ArgumentParser()
 
@@ -200,4 +200,7 @@ if 'initcalled' not in args:
     else: # Enter datashow sub-command
         call_datashow(args)
 
-MPI.Finalize()
+
+#comm = MPI.COMM_WORLD
+#comm.Barrier()
+#MPI.Finalize()
