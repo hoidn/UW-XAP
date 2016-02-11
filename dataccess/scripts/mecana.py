@@ -41,6 +41,8 @@ def addparser_xes(subparsers):
     xes.add_argument('--eltname', '-e', default = '', help = 'Element name. This parameter is required for XES-based calibration; i.e., for generating an energy scale using ENERGY_REF1_ENERGY_REF2_CALIBRATION.')
     xes.add_argument('--calibration_save_path', '-s', type = str, help = 'Path to which to save energy calibration data if calibration_load_path is unspecified and --energy_ref1_energy_ref2_calibration is selected.')
     xes.add_argument('--calibration_load_path', '-l', type = str, help = 'Path from which to load energy calibration data.')
+    xes.add_argument('--normalization', '-n', action = 'store_true', help = 'If selected, normalization is suppressed')
+    xes.add_argument('--nosubtraction', '-ns', action = 'store_true', help = 'If selected, background subtraction is suppressed')
     xes.add_argument('--variation', '-v', action="store_const", default = False, const=True, help ="Plot shot to shot variation")
     xes.add_argument('--variation_n', '-vn', type=int, default = 50, help="How many shots to use for variation")
     xes.add_argument('--variation_center', '-vc', type = int, default = 408, help="to the right is the pump, to the left is the probe")
@@ -62,6 +64,8 @@ def call_xes(args):
         calibration = labels[0]
     cold_calibration_label = calibration
     pxwidth = args.pxwidth
+    normalization = not args.normalization
+    bgsub = not args.nosubtraction
     calibration_save_path = args.calibration_save_path
     calibration_load_path = args.calibration_load_path
     dark_label = args.subtraction
@@ -74,7 +78,8 @@ def call_xes(args):
                 calibration_load_path, dark_label = dark_label,
                 energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
                 eltname = eltname, transpose = args.rotate, vn=args.variation_n, vc=args.variation_center,
-                vs=args.variation_skip_width, vw=args.variation_width)
+                vs=args.variation_skip_width, vw=args.variation_width,
+                normalization = normalization, bgsub = bgsub)
     else:
         # plot summed spectra
         xes_process.main(args.detid, labels, cold_calibration_label = cold_calibration_label,
@@ -82,7 +87,8 @@ def call_xes(args):
             calib_save_path = calibration_save_path, calib_load_path =
                 calibration_load_path, dark_label = dark_label,
                 energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
-                eltname = eltname, transpose = args.rotate)
+                eltname = eltname, transpose = args.rotate,
+                normalization = normalization, bgsub = bgsub)
 
 def addparser_xrd(subparsers):
     xrd = subparsers.add_parser('xrd', help = 'Process quad CSPAD data into powder patterns.')

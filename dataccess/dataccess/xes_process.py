@@ -243,7 +243,7 @@ def energies_from_data(data, cencol, save_path = None, eltname = '', calibration
 #  a config file) for background subtraction purposes
 def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibration_data = None,
         pxwidth = 3, bg_sub = True, calib_load_path = None, calib_save_path = None,
-        energy_ref1_energy_ref2_calibration = True, eltname = ''):
+        energy_ref1_energy_ref2_calibration = True, eltname = '', normalization = True):
     """
     Return the XES spectrum corresponding to the given data
     and element
@@ -301,11 +301,14 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
         smoothed = filt(intensities, 5)
         floor = np.percentile(smoothed, 5)
         intensities -= floor
-    norm = get_normalization(x, intensities, peak_width)
+    if normalization:
+        norm = get_normalization(x, intensities, peak_width)
+    else:
+        norm = 1.
     return x, intensities / norm
 
 
-@utils.ifplot
+@utils.ifroot
 def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     if not os.path.exists('plots_xes/'):
         os.makedirs('plots_xes/')
@@ -343,13 +346,17 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     if name:
         plt.savefig(name + '.png', bbox_inches='tight')
         plt.savefig(name + '.svg', bbox_inches='tight')
-    plt.show()
+    @utils.ifplot
+    def show():
+        plt.show()
+    show()
 
 
 def main(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
         calib_load_path = None, calib_save_path = None,
         dark_label = None, energy_ref1_energy_ref2_calibration = True,
-        eltname = '', transpose = False):
+        eltname = '', transpose = False,
+        normalization = True, bgsub = True):
     # Extract data from labels. 
     data_extractor = data_from_label(detid, transpose = transpose)
     spectrumList = []
@@ -372,7 +379,9 @@ def main(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
             dark = dark, cold_calibration_data = cold_calibration_data,
             pxwidth = pxwidth, calib_load_path = calib_load_path,
             calib_save_path = calib_save_path,
-            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration, eltname = eltname)
+            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
+            eltname = eltname, normalization = normalization,
+            bg_sub = bgsub)
         spectrumList.append([energies, intensities])
         if eltname:
             np.savetxt('xes_spectra/' + label + '_' + eltname,
@@ -391,7 +400,8 @@ def main(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
 def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
         calib_load_path = None, calib_save_path = None,
         dark_label = None, energy_ref1_energy_ref2_calibration = True,
-        eltname = '', transpose = False, vn=0, vc=0, vs=0, vw=0):
+        eltname = '', transpose = False, vn=0, vc=0, vs=0, vw=0,
+        normalization = True, bgsub = True):
     print("starting xes_process.main_variation")
     # Extract data from labels. 
     data_extractor = data_from_label(detid, transpose = transpose)
@@ -410,12 +420,12 @@ def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwid
     data_arrays = map(data_extractor, data_identifiers)
     labels = map(os.path.basename, data_identifiers)
 
-    def evg(x): return x
+    def evg(x, **kwargs): return x
 
     al, ah, bl, bh = vc-vw, vc-vs, vc+vs, vc+vw
 
-    ax = 0
-    if transpose: ax=1
+    ax = 1
+    if transpose: ax=0
     for data,label in zip(data_arrays, labels):
         #get_label_data(label, detid, default_bg = None, override_bg = None,
         # separate = False, event_data_getter = None, event_mask = None, **kwargs):
@@ -480,7 +490,9 @@ def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwid
             dark = dark, cold_calibration_data = cold_calibration_data,
             pxwidth = pxwidth, calib_load_path = calib_load_path,
             calib_save_path = calib_save_path,
-            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration, eltname = eltname)
+            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
+            eltname = eltname, normalization = normalization,
+            bg_sub = bgsub)
         spectrumList.append([energies, intensities])
         if eltname:
             np.savetxt('xes_spectra/' + label + '_' + eltname,

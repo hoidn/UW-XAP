@@ -20,6 +20,7 @@ import ipdb
 import matplotlib.pyplot as plt
 from scipy import misc
 import numpy.ma as ma
+import config
 #from libtiff import TIFF
 
 if 'pslogin' not in socket.gethostname():

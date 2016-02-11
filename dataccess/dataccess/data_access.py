@@ -204,7 +204,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         return signal, event_data
         #print "event data is: ", event_data
 
-@utils.eager_persist_to_file('cache/data_access/get_label_data_and_filter/')
+#@utils.eager_persist_to_file('cache/data_access/get_label_data_and_filter/')
 def get_data_and_filter(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
     """
@@ -217,6 +217,7 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         Raises KeyError if background label is not found.
         """
         bg_label = get_label_property(label, 'background')
+        print "using dark subtraction: ", bg_label
         bg, _ =  get_label_data(bg_label, detid)
         return bg
     def get_event_mask(filterfunc, detid = None):
@@ -260,10 +261,11 @@ def get_data_and_filter(label, detid, event_data_getter = None,
             event_data_getter = event_data_getter)
     try:
         bg = get_background()
-        return imarray - bg, event_data
+        # type conversion necessary to avoid underflows
+        return imarray.astype('float') - bg.astype('float'), event_data
     except KeyError:
         print "No background label found"
-        return imarray, event_data
+        return imarray.astype('float'), event_data
 
 
 
