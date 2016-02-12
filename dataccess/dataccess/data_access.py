@@ -52,7 +52,8 @@ def get_pub_logbook_dict():
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     
-    print "Waiting for data on ZMQ pub socket, port ", port
+    if utils.isroot():
+        print "Waiting for data on ZMQ pub socket, port ", port
     socket.connect ("tcp://pslogin03:%s" % port)
     topicfilter = config.expname
     socket.setsockopt(zmq.SUBSCRIBE, topicfilter)
@@ -254,19 +255,20 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)
     except Exception, e:
-        print "!!!!!!!!!!!!!!!!!!"
-        print "WARNING: Event filtering will not be performed."
-        print e
-        print "!!!!!!!!!!!!!!!!!!"
+        if utils.isroot():
+            print "!!!!!!!!!!!!!!!!!!"
+            print "WARNING: Event filtering will not be performed."
+            print e
+            print "!!!!!!!!!!!!!!!!!!"
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter)
     try:
         bg = get_background()
-        # type conversion necessary to avoid underflows
-        return imarray.astype('float') - bg.astype('float'), event_data
+        return imarray - bg, event_data
     except KeyError:
-        print "No background label found"
-        return imarray.astype('float'), event_data
+        if utils.isroot():
+            print "No background label found"
+        return imarray, event_data
 
 
 

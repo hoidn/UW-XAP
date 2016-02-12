@@ -183,7 +183,8 @@ addparser_histogram(subparsers)
 addparser_datashow(subparsers)
 
 args = parser.parse_args()
-print "args: ", args
+if utils.isroot():
+    print "args: ", args
 
 config_source = utils.resource_path('data/config.py')
 config_dst = 'config.py'

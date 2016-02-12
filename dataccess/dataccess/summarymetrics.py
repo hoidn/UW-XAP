@@ -23,6 +23,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         label = (label + "; filter params: %s" % ','.join(map(str, args))) 
 #        label = (label + ": mean: %.3f; std: %.3f\n" % (np.mean(arr), np.std(arr)) +
 #            "filter params: %s" % ','.join(map(str, args))) 
+        arr = filter(lambda x: not np.isnan(x), arr)
         plt.hist(arr, bins = nbins, alpha = 0.5, label = label, **kwargs)
     @utils.ifplot
     def finalize_plot():

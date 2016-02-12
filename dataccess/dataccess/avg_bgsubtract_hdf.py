@@ -293,7 +293,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
                 try:
                     signalsum += increment
                 except UnboundLocalError:
-                    signalsum = np.zeros_like(increment)
+                    signalsum = np.zeros_like(increment).astype('float')
                     signalsum += increment
                 if event_data_getter:
                     #event_data.append(event_data_getter(increment))
