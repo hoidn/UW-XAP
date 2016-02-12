@@ -112,6 +112,7 @@ def get_label_property(label, property):
         if runs_to_label(runs) is not None:
             label = runs_to_label(runs)
         else:
+            # TODO: stale error message here
             raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
     label_dict = complete_dict[label]
     try:

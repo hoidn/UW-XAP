@@ -307,24 +307,24 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
                 last = now
                 last_nevent = nevent
     try:
-        signalsum /= events_processed
+        signalsum_final = np.empty_like(signalsum)
+        comm.Allreduce(signalsum, signalsum_final)
+        events_processed = comm.allreduce(events_processed)
+        signalsum_final /= events_processed
+        if event_data_getter:
+            event_data = comm.allgather(event_data)
+        print "rank is: ", rank
+        if rank == 0:
+            print "processed ", events_processed, "events"
+        if event_data:
+            #print event_data
+            #event_data = reduce(lambda x, y: x + y, event_data)
+            print 'before merge'
+            print event_data
+            event_data = utils.merge_dicts(*event_data)
+        return signalsum_final, event_data
     except UnboundLocalError:
         raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum) + ": " + str(events_processed))
-    signalsum_final = np.empty_like(signalsum)
-    comm.Allreduce(signalsum, signalsum_final)
-    events_processed = comm.allreduce(events_processed)
-    if event_data_getter:
-        event_data = comm.allgather(event_data)
-    print "rank is: ", rank
-    if rank == 0:
-        print "processed ", events_processed, "events"
-    if event_data:
-        #print event_data
-        #event_data = reduce(lambda x, y: x + y, event_data)
-        print 'before merge'
-        print event_data
-        event_data = utils.merge_dicts(*event_data)
-    return signalsum_final, event_data
 
 
 #@utils.eager_persist_to_file("cache/get_signal_one_run_smd/")
