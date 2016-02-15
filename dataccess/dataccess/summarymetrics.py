@@ -3,8 +3,9 @@ import ipdb
 import config
 import numpy as np
 import matplotlib.pyplot as plt
-from dataccess import data_access as data
 from dataccess import utils
+
+from dataccess import database
 
 def npsum(arr, **kwargs):
     return np.sum(arr)
@@ -14,6 +15,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
     Evaluate the function event_data_getter (defined in config.py) on all events
     in the dataset and generate a histogram of resulting values.
     """
+    @database.db_insert
     @utils.ifplot
     def plot(arr, label = '', **kwargs):
         try:
@@ -21,10 +23,9 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         except:
             args = ['()']
         label = (label + "; filter params: %s" % ','.join(map(str, args))) 
-#        label = (label + ": mean: %.3f; std: %.3f\n" % (np.mean(arr), np.std(arr)) +
-#            "filter params: %s" % ','.join(map(str, args))) 
         arr = filter(lambda x: not np.isnan(x), arr)
         plt.hist(arr, bins = nbins, alpha = 0.5, label = label, **kwargs)
+    @database.db_insert
     @utils.ifplot
     def finalize_plot():
         plt.xlabel('output of ' + event_data_getter.__name__)
@@ -32,6 +33,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         plt.title('Detector: ' + detid)
         plt.legend()
         plt.savefig(merged_path + '.png')
+    @database.db_insert
     @utils.ifplot
     def show():
         plt.show()
@@ -48,43 +50,40 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(basepath))
     event_data_dicts = []
-    if not filtered:
-        for label in labels:
-            try:
-                event_data_dicts.append(data.get_label_data(label, detid, event_data_getter = event_data_getter)[1])
-            except ValueError:# no events found in one or more runs in label
-                pass
-#        event_data_dicts =\
-#            [data.get_label_data(label, detid, event_data_getter = event_data_getter)[1]
-#            for label in labels]
-    else:
-        for label in labels:
-            try:
-                event_data_dicts.append(data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1])
-            except ValueError:# no events found in one or more runs in label
-                print label, ": no events found"
-                pass
-#        event_data_dicts =\
-#            [data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1]
-#            for label in labels]
-    if plot:
-        if separate:
-            for d, label in zip(event_data_dicts, labels):
-                event_data_list = data.event_data_dict_to_list(d)
-                plot(event_data_list, label =  label)
+    def depends_on_data_access():
+        from dataccess import data_access as data
+        if not filtered:
+            for label in labels:
+                try:
+                    event_data_dicts.append(data.get_label_data(label, detid, event_data_getter = event_data_getter)[1])
+                except ValueError:# no events found in one or more runs in label
+                    pass
         else:
-            merged = utils.merge_dicts(*event_data_dicts)
-            event_data_list = data.event_data_dict_to_list(merged)
-            plot(event_data_list, label = label)
-        finalize_plot()
-        show()
-    result = np.array(event_data_list)
-    #print "RESULT IS", event_data
-    # header kwarg is passed to np.savetxt
-    for d, label in zip(event_data_dicts, labels):
-        utils.save_0d_event_data(basepath + '_' + label + '.dat', d, header = "Run\tevent\tvalue")
-    utils.save_0d_event_data(merged_path + '.dat', d, header = "Run\tevent\tvalue")
-    return result
+            for label in labels:
+                try:
+                    event_data_dicts.append(data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1])
+                except ValueError:# no events found in one or more runs in label
+                    print label, ": no events found"
+                    pass
+        merged = utils.merge_dicts(*event_data_dicts)
+        if plot:
+            if separate:
+                for d, label in zip(event_data_dicts, labels):
+                    event_data_list = data.event_data_dict_to_list(d)
+                    plot(event_data_list, label =  label)
+            else:
+                event_data_list = data.event_data_dict_to_list(merged)
+                plot(event_data_list, label = label)
+            finalize_plot()
+            show()
+        result = np.array(data.event_data_dict_to_list(merged))
+        #print "RESULT IS", event_data
+        # header kwarg is passed to np.savetxt
+        for d, label in zip(event_data_dicts, labels):
+            utils.save_0d_event_data(basepath + '_' + label + '.dat', d, header = "Run\tevent\tvalue")
+        utils.save_0d_event_data(merged_path + '.dat', d, header = "Run\tevent\tvalue")
+        return result
+    return depends_on_data_access()
 
 def main(label, detid, funcstr = None, func = None, nbins = 100, filtered = False, **kwargs):
     

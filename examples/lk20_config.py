@@ -139,8 +139,8 @@ def identity(imarr):
 
 def flux(beam_energy, label = None, size = None, **kwargs):
     from dataccess import data_access as data
-    size = data.get_label_property(label, 'focal_size')
-    flux = beam_energy * data.get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
+    size = logbook.get_label_property(label, 'focal_size')
+    flux = beam_energy * logbook.get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
     return flux
 
 def get_pulse_duration(a, run = None, nevent = None, window_size = 60):

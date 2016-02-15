@@ -37,6 +37,19 @@ lineidforplot = {'ka1': "$K\\alpha_1$", 'ka2': "$K\\alpha_2$", 'kb': "$K\\beta_{
 with open(utils.resource_path('data/fluorescence.txt'), 'rb') as f:
     tabdata = pd.read_csv(f, sep = '\t')
 
+def bgsubtract_linear_interpolation(arr1d, average_length = 100):
+    """
+    Interpolate a line using the mean of the first and last average_length
+    points. Subtract this from arr1d and return the result.
+    """
+    x = np.array(range(len(arr1d)))
+    fl = (arr1d[0] + arr1d[-1])/2
+    xlow, ylow = x[:average_length], np.repeat(np.mean(arr1d[:average_length]), average_length)
+    xhigh, yhigh = x[-average_length:], np.repeat(np.mean(arr1d[-average_length:]), average_length)
+    xi, yi = np.concatenate((xlow, xhigh)), np.concatenate((ylow, yhigh))
+    interpolation = interpolate.interp1d(xi, yi, bounds_error = False, fill_value = fl)
+    return arr1d - interpolation(x)
+
 @utils.memoize(timeout = None)
 def emission_dict():
     """
@@ -309,6 +322,7 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
 
 
 @utils.ifroot
+@database.db_insert
 def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     if not os.path.exists('plots_xes/'):
         os.makedirs('plots_xes/')

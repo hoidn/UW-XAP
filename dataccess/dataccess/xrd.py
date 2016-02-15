@@ -16,8 +16,10 @@ import copy
 import ipdb
 
 import config
-from dataccess import data_access as data
 from dataccess import utils
+from dataccess import logbook
+from dataccess import database
+
 
 #from mpi4py import MPI
 
@@ -90,6 +92,7 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
     apply_mask : boolean
         if detid is provided, mask the ret
     """
+    from dataccess import data_access as data
     if event_filter is not None and dataset.ref_type != 'label':
         raise ValueError("dataset type does not allow data filtering")
     # TODO: improve the handling of different data type references
@@ -196,7 +199,7 @@ def binData(mi, ma, stepsize, valenza = True):
     return binangles
 
 
-@utils.eager_persist_to_file("cache/xrd.process_imarray/")
+#@utils.eager_persist_to_file("cache/xrd.process_imarray/")
 def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True, compound_list = []):
     """
     Given a detector ID and assembeled CSPAD image data array, compute the
@@ -243,7 +246,7 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellip
 #        adjInten[adjInten < 0.] = 0.
     return binangles, adjInten, imarray
 
-@utils.eager_persist_to_file("cache/xrd.process_dataset/")
+#@utils.eager_persist_to_file("cache/xrd.process_dataset/")
 def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True):
     imarray, event_data = data_extractor(dataset)
     binangles, adjInten, imarray = process_imarray(dataset.detid, imarray,
@@ -251,7 +254,7 @@ def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = N
     return binangles, adjInten, imarray
 
 # Todo: memoize mpimap instead of this function?
-@utils.eager_persist_to_file("cache/xrd.proc_all_datasets/", rootonly = False)
+#@utils.eager_persist_to_file("cache/xrd.proc_all_datasets/", rootonly = False)
 def proc_all_datasets(datasets, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True):
     outputs = utils.mpimap(partial(process_dataset, nbins = nbins,
         verbose = verbose, bgsub = bgsub), datasets)
@@ -262,12 +265,6 @@ def proc_all_datasets(datasets, nbins = 1000, verbose = True, fiducial_ellipses 
     return patterns, imarrays
 
 
-@utils.ifroot
-def save_data(angles, intensities, save_path):
-    dirname = os.path.dirname(save_path)
-    if dirname and (not os.path.exists(dirname)):
-        os.system('mkdir -p ' + os.path.dirname(save_path))
-    np.savetxt(save_path, [angles, intensities])
 
 
 # From: http://stackoverflow.com/questions/7997152/python-3d-polynomial-surface-fit-order-dependent
@@ -467,7 +464,26 @@ def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WI
         mask = np.where(np.logical_and(betas > ang - width/2., betas < ang + width/2.), False, mask)
     return mask
     
-# TODO: normalize
+
+@database.db_insert
+@utils.ifplot
+def plot_patterns_core(ax, norm_array, patterns, labels, label_angles = None, show = False):
+    patterns = [map(np.array, p) for p in patterns]
+    if ax is None:
+        f, ax = plt.subplots(1)
+    combined = map(lambda x, y, z: x + [y, z], patterns, labels, norm_array)
+    for angles, intensities, label, norm in combined:
+        ax.plot(angles, intensities/norm, label = label)
+    if label_angles:
+        for ang in filter(lambda a: np.min(angles) < a < np.max(angles), label_angles):
+            ax.plot([ang, ang], [np.min(intensities/norm), np.max(intensities/norm)], color = 'k')
+    ax.legend()
+    ax.set_xlabel('Scattering angle (deg)')
+    ax.set_ylabel('Integrated intensity')
+    if show:
+        plt.show()
+
+
 def plot_patterns(datasets, patterns, labels, ax = None, show = False, normalization = None,
     label_angles = None):
     def get_max(pattern):
@@ -480,23 +496,11 @@ def plot_patterns(datasets, patterns, labels, ax = None, show = False, normaliza
     else:
         norm_array = [1.] * len(datasets)
     print "NORM", norm_array
-    #print patterns
-    if ax is None:
-        f, ax = plt.subplots(1)
-    combined = map(lambda x, y, z: x + [y, z], patterns, labels, norm_array)
-    for angles, intensities, label, norm in combined:
-        ax.plot(angles, intensities/norm, label = label)
-    #ipdb.set_trace()
-    if label_angles:
-        for ang in filter(lambda a: np.min(angles) < a < np.max(angles), label_angles):
-            ax.plot([ang, ang], [np.min(intensities/norm), np.max(intensities/norm)], color = 'k')
-    ax.legend()
-    ax.set_xlabel('Scattering angle (deg)')
-    ax.set_ylabel('Integrated intensity')
-    if show:
-        plt.show()
-    else:
-        return ax
+    # This step is necessary because pickling chokes, it seems, if a function's
+    # arguments contain any numpy arrays.
+    # Finding out more about this probable bug in dill is a TODO
+    patterns = [map(list, p) for p in patterns]
+    plot_patterns_core(ax, norm_array, patterns, labels, label_angles = label_angles, show = show)
 
 def plot_peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     normalization = 'transmission', log = True, ax = None, show = False, maxpeaks = 'all'):
@@ -509,19 +513,19 @@ def plot_peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WID
         goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
     else:
         goodpeaks = range(len(powder_angles))
-    if ax is None:
-        f, ax = plt.subplots(1)
-    for label, curve in zip(powder_angles[goodpeaks], normalized_progression[goodpeaks]):
-        ax.plot(label_fluxes, curve, label = label)
-    if log:
-        ax.set_xscale('log')
-    ax.legend()
-    ax.set_xlabel('Flux density (J/cm^2)')
-    ax.set_ylabel('Relative Bragg peak intensity')
-    if show:
-        plt.show()
-    else:
-        return ax
+    def plotting():
+        if ax is None:
+            f, ax = plt.subplots(1)
+        for label, curve in zip(powder_angles[goodpeaks], normalized_progression[goodpeaks]):
+            ax.plot(label_fluxes, curve, label = label)
+        if log:
+            ax.set_xscale('log')
+        ax.legend()
+        ax.set_xlabel('Flux density (J/cm^2)')
+        ax.set_ylabel('Relative Bragg peak intensity')
+        if show:
+            plt.show()
+    plotting()
 
 def mask_peaks_and_iterpolate(x, y, peak_ranges):
     for peakmin, peakmax in peak_ranges:
@@ -581,7 +585,7 @@ def get_normalization(datasets, peak_width = DEFAULT_PEAK_WIDTH, type = 'transmi
     if type == 'transmission':
         labels = np.array(map(lambda x: x.dataref, datasets))
         label_transmissions = np.array(map(lambda label:
-            data.get_label_property(label, 'transmission'), labels))
+            logbook.get_label_property(label, 'transmission'), labels))
         return label_transmissions
     elif type == 'background':
         peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, width = peak_width) for ds in datasets))
@@ -595,17 +599,14 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     Note: this function may only be called if the elements of labels are
     google spreadsheet dataset labels, rather than paths to data files.
     """
-    # TODO: invalid input handling
-#    if dataset.ref_type != 'labels':
-#        raise ValueError('data reference must be a logbook label')
     def get_flux_density(dset):
         label = dset.dataref
         try:
-            transmission = data.get_label_property(label, 'transmission')
+            transmission = logbook.get_label_property(label, 'transmission')
         except KeyError:
             transmission = 1.
         try:
-            size = data.get_label_property(label, 'focal_size')
+            size = logbook.get_label_property(label, 'focal_size')
             if not size:
                 size = 1.
         except:
@@ -631,7 +632,7 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     # get transmission values 
     try:
         label_transmissions = np.array(map(lambda label:
-            data.get_label_property(label, 'transmission'), labels))
+            logbook.get_label_property(label, 'transmission'), labels))
     except:
         raise ValueError("Can't plot peak intensity progression with missing transmission data")
     label_flux_densities = map(get_flux_density, datasets)
@@ -711,9 +712,8 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         bgsub = bgsub)
     for label, pattern, imarray in zip(labels, patterns, imarrays):
         path = 'xrd_patterns/' + label + '_' + str(detid)
-        save_data(pattern[0], pattern[1], path)
+        utils.save_data(pattern[0], list(pattern[1]), path)
         # TODO: imarray should not be background-subtracted but it appears that it is.
-        utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray)
-    if utils.is_plottable():
-        doplot(normalization, peak_progression_compound, maxpeaks, labels)
+        utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray.tolist())
+    doplot(normalization, peak_progression_compound, maxpeaks, labels)
     return patterns, imarrays

@@ -1,5 +1,5 @@
 # Author: O. Hoidn
-
+print "import avg_bgsubtract_hdf"
 import pandas as pd
 import re
 import pdb
@@ -16,10 +16,10 @@ import dill
 import sys
 from time import time
 
-from mpi4py import MPI
-comm = MPI.COMM_WORLD
 
 def idxgen(ds):
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     if rank==0: print 'idx mode'
     size = comm.Get_size()
@@ -32,6 +32,8 @@ def idxgen(ds):
         yield nevent,run.event(t)
 
 def smdgen(ds):
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
     if rank==0: print 'smd mode'
@@ -190,8 +192,8 @@ def get_area_detector_subregion(quad, det, evt, detid):
 
 @utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_event_data_nonarea')
 def get_event_data_nonarea(runNum, detid, **kwargs):
-    rank = comm.Get_rank()
-    size = comm.Get_size()
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
     if config.smd:
         ds = DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
         #ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
@@ -259,6 +261,8 @@ def get_signal_one_run_nonarea(runNum, detid,
 @utils.eager_persist_to_file("cache/get_signal_one_run_smd_area/")
 def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
     def event_valid(nevent):
         if event_mask:
             run_mask = event_mask[runNum]

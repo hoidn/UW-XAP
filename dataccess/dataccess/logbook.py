@@ -266,10 +266,136 @@ def get_label_mapping(url = config.url):
                     elif property and (property not in local_dict) and row[k]:
                         local_dict[property_key] = parser_dispatch[property_key](row[k])
     return label_dict
-    #return {k: v for k, v in label_dict.iteritems() if v['runs'] != (None, None)}
 
-#def url_list_porthash(url_list):
-#    return int(5000 + int(hashlib.sha1(''.join(url_list)).hexdigest(), 16) % 1000)
+def make_labels(fname = 'labels.txt', min_cluster_size = 2):
+    """
+    Generate list of time-clustered run ranges in a text file. Pairs with 
+    get_labels()
+
+    This needs to be run once before invoking the other functions in this module
+    """
+    clusters = filter(lambda x: len(x) >= min_cluster_size, avg_bgsubtract_hdf.get_run_clusters())
+    if os.path.exists(fname):
+        raise ValueError("file " + fname + "exists")
+    # pairs of start and end run numbers
+    bounds = np.array(map(lambda cluster: np.array([cluster[0], cluster[-1]]), clusters))
+    np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, label1, label2', delimiter = ',')
+    return bounds
+
+
+@utils.memoize(timeout = 5)
+def get_pub_logbook_dict():
+    # Socket to talk to server
+    port = config.port
+    context = zmq.Context()
+    socket = context.socket(zmq.SUB)
+    
+    if utils.isroot():
+        print "Waiting for data on ZMQ pub socket, port ", port
+    socket.connect ("tcp://pslogin03:%s" % port)
+    topicfilter = config.expname
+    socket.setsockopt(zmq.SUBSCRIBE, topicfilter)
+    messagedata = socket.recv()[len(config.expname):]
+    socket.close()
+    return dill.loads(messagedata)
+
+def get_label_runranges():
+    # TODO: continue here
+    """
+    Return a dictionary mapping each user-supplied label string from
+    the google spreadsheet logbook to its corresponding groups of run numbers.
+
+    Output type: Dict mapping strings to lists of tuples.
+    """
+    complete_dict = get_pub_logbook_dict()
+    labels_to_runs = {}
+    for label, d in complete_dict.iteritems():
+        labels_to_runs[label] = d['runs']
+    return labels_to_runs
+
+def get_label_property(label, property):
+    """
+    Return the value of a label's property.
+    """
+    if property == 'runs':
+        try:
+            label_runs = logbook.parse_run(label)
+            return list(label_runs)
+        except:
+            pass
+    if not config.use_logbook:
+        raise AttributeError("Logbook not available (disabled in config.py)")
+    complete_dict = get_pub_logbook_dict()
+    def runs_to_label(run_range):
+        """
+        Given a run range, look for a label whose run range matches
+        and return it. If a matching label isn't found, return None.
+        """
+        red = lambda x, y: x + y
+        # TODO: poorly-abstracted...
+        filtered_dict = {k: v for k, v in complete_dict.iteritems() if v['runs'] != (None,)}
+        labels_to_runtuples = {lab: tuple(get_all_runlist(lab)) for lab in
+            filtered_dict}
+        runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
+        target_set = set(run_range)
+        for runtuple in runtuples_to_labels:
+            if target_set <= set(runtuple):
+                return runtuples_to_labels[runtuple]
+        return None
+
+    if label not in complete_dict:
+        try:
+            runs = logbook.parse_run(label)
+        except ValueError:
+            raise ValueError("label: " + label + " is neither a label nor a correctly-formated run range")
+        if runs_to_label(runs) is not None:
+            label = runs_to_label(runs)
+        else:
+            # TODO: stale error message here
+            raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
+    label_dict = complete_dict[label]
+    try:
+        return label_dict[property]
+    except KeyError:
+        raise KeyError("attribute: " + property + " of label: " + label + " not found")
+
+
+def eventmask_params(label):
+    handles = ['param1', 'param2', 'param3', 'param4']
+    result = []
+    for p in handles:
+        try:
+            result.append(get_label_property(label, p))
+        except KeyError:
+            pass
+    return result
+
+def get_all_runlist(label, fname = 'labels.txt'):
+    """
+    Get list of run numbers associated with a label.
+
+    A label may be either a string specified in the google drive logbook or
+    a run range of the format 'abcd' or 'abcd-efgh'.
+    """
+    try:
+        runs = logbook.parse_run(label)
+        return list(runs)
+    except: # except what?
+        mapping = get_label_runranges()
+        # list of tuples denoting run ranges
+        # TODO: reorder this and remove fname as a parameter throughout this
+        # module once spreadsheet synchronization has been sufficiently tested.
+        try:
+            groups = mapping[label]
+            return list(groups)
+        except KeyError:
+            # TODO: make sure that the run number exists
+            print "label " + label + " not found"
+            try:
+                runs = logbook.parse_run(label)
+            except ValueError:
+                raise ValueError(label + ': dataset label not found')
+            return list(runs)
 
 #def main(url_list = config.url, port = None):
 #    #ipdb.set_trace()

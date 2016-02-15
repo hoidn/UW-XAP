@@ -6,7 +6,6 @@ import pip
 from setuptools import setup, find_packages
 
 pip.main(['install', '--user',  'pyzmq', '--install-option=--zmq=bundled'])
-#pip.main(['install', '--user',  'requests', '--install-option=--upgrade'])
 
 setup(name='dataccess',
     version='1.0',

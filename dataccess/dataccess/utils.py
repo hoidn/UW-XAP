@@ -1,30 +1,18 @@
 # Author: O. Hoidn
 
-import matplotlib
 import numpy as np
 import os
 import dill
-import collections
-import pdb
-import atexit
-from atomicfile import AtomicFile
 import pkg_resources
-from StringIO import StringIO
 from time import time
-import hashlib
-import inspect
-import scipy
-import itertools
-import socket
 import ipdb
-import matplotlib.pyplot as plt
-from scipy import misc
-import numpy.ma as ma
 import config
+import hashlib
+import itertools
+import database
+#import collections
+#from atomicfile import AtomicFile
 #from libtiff import TIFF
-
-if 'pslogin' not in socket.gethostname():
-    from mpi4py import MPI
 
 PKG_NAME = __name__.split('.')[0]
 
@@ -59,6 +47,7 @@ def mpimap(func, lst):
 
     The full result is returned in each rank.
     """
+    from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
@@ -75,11 +64,10 @@ def isroot():
     """
     Return true if the MPI core rank is 0 and false otherwise.
     """
-    if 'pslogin' in socket.gethostname():
+    if 'OMPI' not in ' '.join(os.environ.keys()):
         return True
     else:
-        comm = MPI.COMM_WORLD
-        rank = comm.Get_rank()
+        rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
         return (rank == 0)
     
 def ifroot(func):
@@ -112,28 +100,35 @@ def ifplot(func):
             return func(*args, **kwargs)
     return inner
     
-
+        
+@database.db_insert
 @ifroot
 def save_image(save_path, imarr, fmt = 'tiff'):
     """
     Save a 2d array to file as an image.
     """
+    if not isinstance(imarr, np.ndarray):
+        imarr = np.array(imarr)
     import Image
+    from scipy import misc
+    import matplotlib
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
-    #misc.imsave(save_path + '.' + fmt, imarr)
-#    tiff = TIFF.open(save_path + '.tiff', mode = 'w')
-#    tiff.write_image(imarr)
-#    tiff.close()
     np.save(save_path + '.npy', imarr)
     if imarr.dtype == 'uint16':
         imarr = imarr.astype('float')
     im = Image.fromarray(imarr)
     im.save(save_path + '.tif')
     matplotlib.image.imsave(save_path + '.png', imarr)
-    #im.save(save_path + '.bmp')
-    #imarr.tofile(save_path + '.npy')
+
+@database.db_insert
+@ifroot
+def save_data(x, y, save_path):
+    dirname = os.path.dirname(save_path)
+    if dirname and (not os.path.exists(dirname)):
+        os.system('mkdir -p ' + os.path.dirname(save_path))
+    np.savetxt(save_path, [x, y])
 
 def flatten_dict(d):
     """
@@ -200,11 +195,13 @@ def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = N
     show()
 
 
-@ifroot
+@database.db_insert
+@ifplot
 def global_save_and_show(save_path):
     """
     Save current matplotlib plot to file and then show it.
     """
+    import matplotlib.pyplot as plt
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
@@ -215,6 +212,7 @@ def get_default_args(func):
     """
     returns a dictionary of arg_name:default_values for the input function
     """
+    import inspect
     args, varargs, keywords, defaults = inspect.getargspec(func)
     if defaults:
         return dict(zip(args[-len(defaults):], defaults))
@@ -222,6 +220,7 @@ def get_default_args(func):
         return {}
 
 def resource_f(fpath):
+    from StringIO import StringIO
     return StringIO(pkg_resources.resource_string(PKG_NAME, fpath))
 
 def resource_path(fpath):
@@ -252,9 +251,19 @@ def extrap1d(interpolator):
 
 def make_hashable(obj):
     """
-    return hash of an object that supports python's buffer protocol
+    return a hash of any python object
     """
-    return hashlib.sha1(dill.dumps(obj)).hexdigest()
+    if isinstance(obj, str) or isinstance(obj, np.ndarray):
+        return hashlib.sha1(dill.dumps(obj)).hexdigest()
+    try:
+        # This is a workaround for a cryptic error that occrs in pickle when
+        # obj is an iterable type (specifically: 'I/O operation on closed file')
+        slist =\
+            [make_hashable(x)
+            for x in obj]
+        return hashlib.sha1(''.join(slist)).hexdigest()
+    except TypeError:
+        return hashlib.sha1(dill.dumps(obj)).hexdigest()
 
 def hashable_dict(d):
     """
@@ -368,6 +377,7 @@ def persist_to_file(file_name):
                 if not check_cache_changed():
                     # write cache to file at interpreter exit if it has been
                     # altered
+                    import atexit
                     atexit.register(dump)
                     flag_cache_changed()
 
@@ -495,6 +505,7 @@ def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
     consisting of those masks ANDed together.
     """
     # Initialize the mask based on zero values in imarray.
+    import numpy.ma as ma
     base_mask = ma.make_mask(np.ones(np.shape(imarray)))
     base_mask[imarray == 0.] = False
     if not mask_paths:
