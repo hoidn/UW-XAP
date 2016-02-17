@@ -1,6 +1,7 @@
 #!/reg/g/psdm/sw/releases/ana-current/arch/x86_64-rhel7-gcc48-opt/bin/python2.7
 
 # Author: O. Hoidn
+import ipdb
 import sys
 sys.path.append('.') # so that config.py can be imported
 from dataccess import database
@@ -13,7 +14,7 @@ import time
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--noplot', '-n', action = 'store_true', help = 'If selected, plotting is suppressed')
-subparsers = parser.add_subparsers(help='sub-command help')
+subparsers = parser.add_subparsers(help='sub-command help', dest = 'command')
 
 # Add sub-commands to parser
 argument_parsers.addparser_init(subparsers)
@@ -21,13 +22,17 @@ argument_parsers.addparser_xes(subparsers)
 argument_parsers.addparser_xrd(subparsers)
 argument_parsers.addparser_histogram(subparsers)
 argument_parsers.addparser_datashow(subparsers)
+argument_parsers.addparser_eventframes(subparsers)
 
 args = parser.parse_args()
+
 #if basicutils.isroot():
 #    print "args: ", args
 config_source = utils.resource_path('data/config.py')
 config_dst = 'config.py'
-if 'initcalled' in args: # Enter init sub-command
+cmd = vars(args)['command']
+
+if cmd == 'init': # Enter init sub-command
     call_init(config_source, config_dst)
 
 if args.noplot:
@@ -83,6 +88,7 @@ def call_xes(args):
     energy_ref1_energy_ref2_calibration = args.energy_ref1_energy_ref2_calibration
     if args.variation:
         # plot shot to shot variation
+        # TODO: bring this up to date with addition of the --events option
         xes_process.main_variation(args.detid, labels, cold_calibration_label = cold_calibration_label,
             pxwidth = pxwidth,
             calib_save_path = calibration_save_path, calib_load_path =
@@ -93,8 +99,8 @@ def call_xes(args):
                 normalization = normalization, bgsub = bgsub)
     else:
         # plot summed spectra
-        xes_process.main(args.detid, labels, cold_calibration_label = cold_calibration_label,
-            pxwidth = pxwidth,
+        xes_process.main(args.detid, labels, nevents = args.events,
+            cold_calibration_label = cold_calibration_label, pxwidth = pxwidth,
             calib_save_path = calibration_save_path, calib_load_path =
                 calibration_load_path, dark_label = dark_label,
                 energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
@@ -133,8 +139,6 @@ def call_histogram(args):
     nbins = args.nbins
     summarymetrics.main(labels, detid, funcstr = args.function, filtered = args.filter, nbins = nbins, separate = args.separate)
 
-
-
 def call_datashow(args):
     from dataccess import datashow
     labels = args.labels
@@ -143,18 +147,24 @@ def call_datashow(args):
     rmin = args.min
     datashow.main(labels, detid, path = args.output, masked = args.masks, rmin = rmin, rmax = rmax, run = args.run)
 
+def call_eventframes(args):
+    from dataccess import eventframes
+    eventframes.main(args.label, args.detid, filtered = args.filter)
 
-if 'initcalled' not in args:
+
+if cmd != 'init':
     if not os.path.isfile(config_dst):
         parser.error("File config.py not found. Run 'python dataccess.py init' to initialize config.py, and then edit it appropriately before re-running")
-    elif 'pxwidth' in args: # Enter xes sub-command
+    elif cmd == 'spectrum':
         call_xes(args)
-    elif 'compounds' in args: # Enter xrd sub-command
+    elif cmd == 'xrd':
         call_xrd(args)
-    elif 'nbins' in args: # Enter histogram sub-command
+    elif cmd == 'histogram':
         call_histogram(args)
-    else: # Enter datashow sub-command
+    elif cmd == 'datashow':
         call_datashow(args)
+    elif cmd == 'eventframes':
+        call_eventframes(args)
 
 if utils.isroot():
     database.save_db(key)

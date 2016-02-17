@@ -11,6 +11,7 @@ def addparser_xes(subparsers):
     xes = subparsers.add_parser('spectrum', help = 'Process area detector data into spectra.')
     xes.add_argument('detid', type = str, help = 'Detector ID.')
     xes.add_argument('labels', nargs = '+', help = 'Labels of datasets to process into spectra.')
+    xes.add_argument('--events', '-ne', type = int, nargs = '+', help = 'Events numbers for which to plot spectra. This option requires LABELS to correspond to a single run')
     xes.add_argument('--pxwidth', '-p', type = int, default = 3, help = 'Pixel width of CSPAD subregion to sum.')
     xes.add_argument('--rotate', '-r', action = 'store_true', help = "Toggles the area detector's axis of integration for generating spectra")
     xes.add_argument('--calibration', '-c', type = str, help = 'Label of dataset to use for calibration of the energy scale (if --energy_ref1_energy_ref2_calibration is selected but a calibration file is not provided). If not provided this parameter defaults to the first dataset in labels.')
@@ -65,9 +66,7 @@ def addparser_datashow(subparsers):
 
 
 def addparser_eventframes(subparsers):
-    datashow = subparsers.add_parser('eventframes', help = 'For a given dataset and area detector ID, show the summed detector image and save it to a file in the working directory. Any detector masks specified in config.py can optionally be applied.')
-    datashow.add_argument('detid', type = str, help = 'Detector ID.')
-    datashow.add_argument('label', help = 'Label of dataset to process.')
-    datashow.add_argument('--output', '-o', help = 'Path of output file')
-    datashow.add_argument('--masks', '-m', action = 'store_true',
-        help = 'Apply detector masks from config.py')
+    eventframes = subparsers.add_parser('eventframes', help = 'For a given dataset and area detector ID, save an image from each event in the directory eventdata/<dataset label>/.')
+    eventframes.add_argument('detid', type = str, help = 'Detector ID.')
+    eventframes.add_argument('label', help = 'Label of dataset to process.')
+    eventframes.add_argument('--filter', '-f', action = 'store_true', help = 'If selected, logbook-specified event filtering will be applied.')

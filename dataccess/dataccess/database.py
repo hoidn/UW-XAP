@@ -37,11 +37,8 @@ def save_db(key):
     print "saved db"
 
 def execute():
-    for func in db:
-        func()
-
-def register(func):
-    db.append(func)
+    while db:
+        db.pop(0)()
 
 def db_insert(func):
     def inner(*args, **kwargs):

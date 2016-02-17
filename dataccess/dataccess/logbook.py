@@ -319,7 +319,7 @@ def get_label_property(label, property):
     """
     if property == 'runs':
         try:
-            label_runs = logbook.parse_run(label)
+            label_runs = parse_run(label)
             return list(label_runs)
         except:
             pass
@@ -345,7 +345,7 @@ def get_label_property(label, property):
 
     if label not in complete_dict:
         try:
-            runs = logbook.parse_run(label)
+            runs = parse_run(label)
         except ValueError:
             raise ValueError("label: " + label + " is neither a label nor a correctly-formated run range")
         if runs_to_label(runs) is not None:
@@ -378,7 +378,7 @@ def get_all_runlist(label, fname = 'labels.txt'):
     a run range of the format 'abcd' or 'abcd-efgh'.
     """
     try:
-        runs = logbook.parse_run(label)
+        runs = parse_run(label)
         return list(runs)
     except: # except what?
         mapping = get_label_runranges()
@@ -392,7 +392,7 @@ def get_all_runlist(label, fname = 'labels.txt'):
             # TODO: make sure that the run number exists
             print "label " + label + " not found"
             try:
-                runs = logbook.parse_run(label)
+                runs = parse_run(label)
             except ValueError:
                 raise ValueError(label + ': dataset label not found')
             return list(runs)
