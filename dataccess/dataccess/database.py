@@ -12,7 +12,7 @@ and for storing outputs from mecana in a MongoDB db.
 """
 
 MONGO_HOST = 'pslogin03'
-MONGO_PORT = 5837
+MONGO_PORT = 4040
 
 db_dir = 'db/'
 db = []
