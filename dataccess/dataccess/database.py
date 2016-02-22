@@ -94,7 +94,7 @@ def mongo_insert_logbook_dict(d):
     d['name'] = logbook_name
     inserted = collection.insert(d, check_keys = False)
     if list(collection.find({'_id': {"$ne": inserted}})):
-        collection.remove({'_id': {"$ne": inserted}})
+        collection.remove({'_id': {"$ne": inserted}, 'name': {"$eq": logbook_name}})
         print 'removed'
 
 def mongo_get_logbook_dict():
@@ -117,4 +117,4 @@ def mongo_commit(label_dependencies = None):
         raise KeyError("Attempting to insert non-initialized dict into mongo database")
     if not list(collection.find({'key': key, 'state_hash': state_hash})):
         to_insert['state_hash'] = state_hash
-        collection.insert_one(to_insert) 
+        collection.insert(to_insert, check_keys = False) 
