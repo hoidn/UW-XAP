@@ -129,6 +129,7 @@ def save_data(x, y, save_path):
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
     np.savetxt(save_path, [x, y])
+    database.mongo_add(save_path, [list(x), list(y)])
 
 def flatten_dict(d):
     """

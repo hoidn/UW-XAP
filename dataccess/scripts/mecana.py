@@ -11,6 +11,7 @@ import argparse
 import time
 
 
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--noplot', '-n', action = 'store_true', help = 'If selected, plotting is suppressed')
@@ -26,11 +27,23 @@ argument_parsers.addparser_eventframes(subparsers)
 
 args = parser.parse_args()
 
+def mongo_commit():
+    if utils.isroot():
+        if cmd in ['spectrum', 'xrd', 'histogram', 'datashow']:
+            database.mongo_commit(args.labels)
+        elif cmd == 'eventframes':
+            database.mongo_commit([args.label])
+
 #if basicutils.isroot():
 #    print "args: ", args
 config_source = utils.resource_path('data/config.py')
 config_dst = 'config.py'
 cmd = vars(args)['command']
+
+# try to execute from database
+key = '_'.join(sys.argv[1:])
+
+database.mongo_init(key)
 
 if cmd == 'init': # Enter init sub-command
     call_init(config_source, config_dst)
@@ -39,11 +52,10 @@ if args.noplot:
     import config
     config.noplot = True
 
-# try to execute from database
-key = '_'.join(sys.argv[1:])
 try:
     database.load_db(key)
     database.execute()
+    mongo_commit()
     sys.exit(0)
 except KeyError:
     pass
@@ -170,6 +182,7 @@ if utils.isroot():
     database.save_db(key)
     print database.db
     database.execute()
+    mongo_commit()
 #comm = MPI.COMM_WORLD
 #comm.Barrier()
 #MPI.Finalize()

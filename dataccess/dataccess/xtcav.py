@@ -10,9 +10,45 @@ from scipy.interpolate import interp1d
 from scipy.ndimage.filters import gaussian_filter as filt
 
 from dataccess import utils
+from dataccess import logbook
 
 xtcav_path = utils.resource_path('data/xtcav.dat')
 xtcav = pd.read_table(xtcav_path)
+
+
+class runDeltas():
+    delay_path = utils.resource_path('data/ACR-TREXdata.csv')
+    delays = pd.read_csv(delay_path)
+    def __init__(self):
+        self.map = {}
+        for i in range(len(runDeltas.delays)):
+            try: 
+                runs = logbook.parse_run(str(runDeltas.delays['Run'][i]))
+                for run in runs:
+                    self.map[run] = np.abs(runDeltas.delays['dt'][i])
+            except ValueError:
+                pass
+
+    def __contains__(self, run):
+        return (run in self.map)
+
+    def __getitem__(self, run):
+        return self.map[run]
+
+rundeltas = runDeltas()
+
+def get_delay(run_number):
+    if run_number in rundeltas:
+        return rundeltas[run_number]
+    else:
+        raise KeyError("No time delay value for run: %d." % run_number)
+
+def get_delay_runs(selector_func):
+    result =\
+        [k
+        for k, v in rundeltas.map.iteritems()
+        if selector_func(v)]
+    return set(result)
 
 def epoch_time(raw):
     return float(datetime.datetime.strptime(raw,"%m/%d/%Y %H:%M:%S").strftime('%s'))

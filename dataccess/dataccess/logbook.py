@@ -7,7 +7,6 @@ import json
 import webbrowser
 import logging
 import argparse
-import zmq
 import hashlib
 import ipdb
 
@@ -26,6 +25,7 @@ from atomicfile import AtomicFile
 
 import dill
 from dataccess import utils
+from dataccess import database
 import config
 
 PORT = config.port
@@ -53,7 +53,7 @@ PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*
     'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
     'param3': r'.*[pP]aram3.*', 'param4': r'.*[pP]aram4.*',
     'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*',
-    'background': r'.*[bB]ackground.*'}
+    'background': r'.*[bB]ackground.*', 'material': r'.*[mM]aterial.*'}
 HEADERS = [k for k in PROPERTY_REGEXES]
 
 # Format for the flag that designates logbook header row
@@ -237,7 +237,7 @@ parser_dispatch = {'runs': parse_run, 'transmission': parse_float,
     'param1': parse_float, 'param2': parse_float, 'param3': parse_float,
     'param4': parse_float, 'filter_det': parse_string,
     'labels': parse_string, 'focal_size': parse_focal_size, 'filter_func': parse_string,
-    'background': parse_string}
+    'background': parse_string, 'material': parse_string}
 
 def get_label_mapping(url = config.url):
     # TODO: handle duplicates
@@ -285,19 +285,26 @@ def make_labels(fname = 'labels.txt', min_cluster_size = 2):
 
 @utils.memoize(timeout = 5)
 def get_pub_logbook_dict():
-    # Socket to talk to server
-    port = config.port
-    context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    
     if utils.isroot():
-        print "Waiting for data on ZMQ pub socket, port ", port
-    socket.connect ("tcp://pslogin03:%s" % port)
-    topicfilter = config.expname
-    socket.setsockopt(zmq.SUBSCRIBE, topicfilter)
-    messagedata = socket.recv()[len(config.expname):]
-    socket.close()
-    return dill.loads(messagedata)
+        print "Querying MongoDB"
+    return database.mongo_get_logbook_dict()
+
+def query_runs(attribute, value_test_func, target_attribute = 'runs'):
+    relational = []
+    d = get_pub_logbook_dict()
+    def new_value_test_func(val):
+        try:
+            return value_test_func(val)
+        except:
+            return False
+    for k, v in d.iteritems():
+        v['label'] = k
+        relational.append(v)
+    result =\
+        [row[target_attribute]
+        for row in relational
+        if new_value_test_func(row[attribute])]
+    return set(reduce(lambda x, y: x + y, filter(lambda t: t != (None,), result)))
 
 def get_label_runranges():
     # TODO: continue here
@@ -424,14 +431,9 @@ def get_all_runlist(label, fname = 'labels.txt'):
 #    context.term()
 
 def main(url = config.url, port = PORT):
-    context = zmq.Context()
-    socket = context.socket(zmq.PUB)
-    socket.bind("tcp://*:%s" % port)
-
     while True:
         mapping = get_label_mapping(url = url)
-        messagedata = dill.dumps(mapping)
         print mapping
         topic = config.expname
-        socket.send("%s%s" % (topic, messagedata))
+        database.mongo_insert_logbook_dict(mapping)
         time.sleep(1)
