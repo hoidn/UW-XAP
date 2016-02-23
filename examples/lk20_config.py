@@ -1,11 +1,17 @@
-from dataccess import xtcav
 from collections import namedtuple
 import numpy as np
 import ipdb
 
+
 # if True, use MPI when extracting data from psana-python. Otherwise use
 # the older (circa LD67 run) psana API with serial data access.
 smd = True
+
+# If true, disable plotting (batch job compatibility). The default specified
+# here is overwritten by the -n option in mecana.py.
+noplot = False
+
+cached_only = False
 
 # Experiment specification. 
 # This must be provided to run any analysis. 
@@ -106,29 +112,72 @@ powder_angles = {'Fe3O4': [27.2, 32.1, 33.47, 38.9, 48.1, 51.3, 56.2], 'MgO': [0
     'Graphite': [24.0, 30.2, 38.4, 41.6]}
 #powder_angles = {'Fe3O4': [42.2, 50.5, 61.7, 74.4, 78.2]}
 
-def si_spectrometer_probe(imarr):
-    spectrum = np.sum(imarr, axis = 1)
+def si_is_saturated(label, start = 400, end = 800):
+    from dataccess import data_access as data
+    imarr = data.get_label_data(label, 'si')[0]
+    spectrum = np.sum(imarr, axis = 0)[start:end]
     spectrum = spectrum - np.percentile(spectrum, 1) # subtract background
-    probe_counts = np.sum(spectrum[330:403])
-    return probe_counts
+    saturation_metric = np.sum(np.abs(np.diff(np.diff(spectrum))))/np.sum(spectrum)
+    return saturation_metric > 0.1
+    #return spectrum, np.sum(np.abs(np.diff(np.diff(spectrum))))/np.sum(spectrum)
 
-def si_spectrometer_pump(imarr):
-    spectrum = np.sum(imarr, axis = 1)
-    spectrum = spectrum - np.percentile(spectrum, 1) # subtract background
-    pump_counts = np.sum(spectrum[403:520])
-    return pump_counts
+def getgood():
+    good = []
+    for i in range(450, 850):
+        try:
+            if si_is_saturated(str(i)):
+                good.append(i)
+        except:
+            pass
+        print i
+    return good
+
+def get_si_peak_boundary(run):
+    if run <= 480:
+        return 520
+    else:
+        return 600
+
+def si_spectrometer_dark(run = None, **kwargs):
+    from dataccess import data_access
+    bg_label = data_access.get_label_property(str(run), 'background')
+    dark, _ =  data_access.get_label_data(bg_label, 'si')
+    return dark
+
+
+def si_background_subtracted_spectrum(imarr):
+    from dataccess import xes_process as spec
+    imarr = imarr.T
+    cencol = spec.center_col(imarr)
+    return spec.bgsubtract_linear_interpolation(spec.lineout(imarr, cencol, pxwidth = 30))
+    
+def si_spectrometer_probe(imarr, boundary):
+    spectrum = si_background_subtracted_spectrum(imarr)
+    return np.sum(spectrum[200:boundary])
+
+def si_spectrometer_pump(imarr, boundary):
+    spectrum = si_background_subtracted_spectrum(imarr)
+    return np.sum(spectrum[boundary:900])
+
+def si_peak_ratio5(imarr, run = None, **kwargs):
+    # TODO: Make sure there weren't any other changes in beam energy
+    boundary = get_si_peak_boundary(run)
+    pump_counts = si_spectrometer_pump(imarr, boundary)
+    probe_counts = si_spectrometer_probe(imarr, boundary)
+    return pump_counts / probe_counts
 
 def make_si_filter(probe_min, probe_max, pump_min, pump_max, **kwargs):
     def filter_by_si_peaks(imarr):
         spectrum = np.sum(imarr, axis = 1)
         spectrum = spectrum - np.percentile(spectrum, 1) # subtract background
-        probe_counts = np.sum(spectrum[330:403])
-        pump_counts = np.sum(spectrum[403:520])
+        probe_counts = np.sum(spectrum[200:520])
+        pump_counts = np.sum(spectrum[520:900])
         if (probe_min < probe_counts < probe_max) and (pump_min < pump_counts < pump_max):
             return True
         return False
     return filter_by_si_peaks
     #return pump_counts, probe_counts
+
 
 def sum_si(imarr):
     baseline = np.percentile(imarr, 1)
@@ -139,11 +188,12 @@ def identity(imarr):
 
 def flux(beam_energy, label = None, size = None, **kwargs):
     from dataccess import data_access as data
-    size = logbook.get_label_property(label, 'focal_size')
-    flux = beam_energy * logbook.get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
+    size = data.get_label_property(label, 'focal_size')
+    flux = beam_energy * data.get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
     return flux
 
 def get_pulse_duration(a, run = None, nevent = None, window_size = 60):
+    from dataccess import xtcav
     try:
         t0 = xtcav.get_run_epoch_time(run)
     except TypeError:
@@ -151,7 +201,7 @@ def get_pulse_duration(a, run = None, nevent = None, window_size = 60):
     t_samples = np.linspace(t0 - window_size/2, t0 + window_size / 2)
     return np.mean(xtcav.pulse_length_from_epoch_time(t_samples))
 
-def make_pulse_duration_filter(duration_min, duration_max, window_size = 60):
+def make_pulse_duration_filter(duration_min, duration_max, window_size = 10):
     def filterfunc(a, run = None, nevent = None):
         pulse_duration = get_pulse_duration(a, run = run, nevent = nevent, window_size = window_size)
         accepted = (duration_min < pulse_duration < duration_max)
@@ -162,6 +212,15 @@ def make_pulse_duration_filter(duration_min, duration_max, window_size = 60):
                 print "Run %04d: rejected" % run
         return accepted
     return filterfunc
+
+def make_pulse_duration_and_run_filter(duration_min, duration_max, run_min, run_max):
+    def runfilter(a, run = None, nevent = None):
+        return run_min <= run < run_max
+    pulse_duration_filter = make_pulse_duration_filter(duration_min, duration_max)
+    def conjunction(a, run = None, nevent = None):
+        return runfilter(a, run = run, nevent = nevent)\
+            and pulse_duration_filter(a, run = run, nevent = nevent)
+    return conjunction
 
    
 ## global filter detid
