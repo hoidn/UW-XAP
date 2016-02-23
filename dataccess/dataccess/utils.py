@@ -2,6 +2,7 @@
 
 import numpy as np
 import os
+import cPickle
 import dill
 import pkg_resources
 from time import time
@@ -10,6 +11,7 @@ import config
 import hashlib
 import itertools
 import database
+#from atomicwrites import atomic_write
 #import collections
 #from atomicfile import AtomicFile
 #from libtiff import TIFF
@@ -65,6 +67,7 @@ def isroot():
     Return true if the MPI core rank is 0 and false otherwise.
     """
     if 'OMPI' not in ' '.join(os.environ.keys()):
+        print 'root'
         return True
     else:
         rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
@@ -452,8 +455,9 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
 
         @ifroot# TODO: fix this
         def dump_to_file(d, file_name):
+            os.system('mkdir -p ' + os.path.dirname(file_name))
             with open(file_name, 'w') as f:
-                dill.dump(d, f)
+                cPickle.dump(d, f)
             #print "Dumped cache to file"
     
         def compute(*args, **kwargs):
@@ -461,7 +465,6 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
             key = gen_key(*args, **kwargs)
             value = func(*args, **kwargs)
             cache[key] = value
-            os.system('mkdir -p ' + os.path.dirname(file_name))
             # Write to disk if the cache file doesn't already exist
             if not os.path.isfile(file_name):
                 dump_to_file(value, file_name)
@@ -477,7 +480,7 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
                 try:
                     try:
                         with open(full_name, 'r') as f:
-                                cache[key] = dill.load(f)
+                            cache[key] = cPickle.load(f)
                     except EOFError:
                         os.remove(full_name)
                         print "corrupt cache file deleted"
