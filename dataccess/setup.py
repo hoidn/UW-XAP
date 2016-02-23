@@ -20,5 +20,6 @@ setup(name='dataccess',
     )
 
 pip.main(['install', '--user', 'git+https://github.com/uqfoundation/pathos.git'])
+pip.main(['install', '--user', 'pymongo'])
 
 print  "Packages are: ", find_packages('.')
