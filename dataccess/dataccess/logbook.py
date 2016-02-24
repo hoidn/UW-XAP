@@ -104,6 +104,10 @@ def get_cell_coords(sheet_list2d, regex):
                 return i, j
     raise ValueError(regex + ": matching cell not found")
 
+def regex_indexes(regex, col_titles):
+    # indices of columns matching the regex
+    return [i for i, title in enumerate(col_titles) if re.search(regex, title)]
+
 @utils.memoize(timeout = 10)
 def get_logbook_data(url, sheet_number = 0):
     """
@@ -112,16 +116,11 @@ def get_logbook_data(url, sheet_number = 0):
             the keys of PROPERTY_REGEXES.
         -The spreasheet data as a list, in the corresponding order.
     """
-    # TODO: handling (or at least raising an appropriate exception) in the
-    # case that the number of label columns is not the same in all sheets.
     storage =  Storage(utils.resource_path('data/credentials'))
     credentials = storage.get()
     gc = gspread.authorize(credentials)
     document = gc.open_by_url(url)
     worksheets = document.worksheets()
-    def regex_indexes(regex, col_titles):
-        # indices of columns matching the regex
-        return [i for i, title in enumerate(col_titles) if re.search(regex, title)]
     def process_one_sheet(sheet):
         """
         given a worksheet, return the data as list with order and contents
@@ -130,62 +129,9 @@ def get_logbook_data(url, sheet_number = 0):
         Returns None if the sheet doesn't contain at least two rows of values.
         """
         raw_data = sheet.get_all_values()
-        try:
-            header_i, header_j = get_cell_coords(raw_data, HEADER_REGEX)
-        except ValueError:
-            header_i = 0
-        #ipdb.set_trace()
-        if len(np.shape(raw_data)) != 2: # sheet has 0 or 1 filled rows
-            print "sheet ", str(sheet), ": no data found"
-            return
-        col_titles = raw_data[header_i]
-        values = raw_data[header_i + 1:]
-        num_rows = len(values)
-        def get_column_data(regex):
-            """
-            Given a regex for a column title, return the data.
-
-            Note that the label regex is a special case, since there may be
-            more than one matching column. 
-            """
-            indexes = regex_indexes(regex, col_titles)
-            matching_titles = [col_titles[i] for i in indexes]
-            if len(indexes) > 1:
-                if regex != PROPERTY_REGEXES['labels']:
-                    raise ValueError("More than one column matching " + regex + " found.")
-                else:
-                    return matching_titles, [zip(*values)[i] for i in indexes]
-            else:
-                if len(indexes) == 0:
-                    print regex, ": heading not found"
-                    if regex == PROPERTY_REGEXES['labels']:
-                        return [None], [[None] * num_rows]
-                    else:
-                        return [None], [None] * num_rows
-                else:
-                    return matching_titles, zip(*values)[indexes[0]]
-        output = []
-        output_col_titles = []
-        for k in PROPERTY_REGEXES:
-            matching_titles, data = get_column_data(PROPERTY_REGEXES[k])
-            output_col_titles += matching_titles
-            # 'labels' property can have one or more columns
-            if k == 'labels' and len(np.shape(data)) > 1:
-                output += data
-            else:
-                output.append(data)
-        #ipdb.set_trace()
-        return output_col_titles, zip(*output)
-    worksheets_data = []
-    for sheet in worksheets:
-        sheet_data = process_one_sheet(sheet)
-        if sheet_data:
-            worksheets_data.append(sheet_data)
-    sheets_col_titles, sheets_data = zip(*worksheets_data)
-    col_titles = sheets_col_titles[0]
-    # TODO: write an appropriate assertion here
-    #assert reduce(lambda x, y: x if x == y else 0, col_titles)
-    return col_titles, prefix_add(*sheets_data)
+        col_titles, values = spreadsheet_header_body(raw_data)
+        return col_titles, values
+    return [process_one_sheet(sheet) for sheet in worksheets]
 
 
 def parse_float(flt_str):
@@ -239,12 +185,35 @@ parser_dispatch = {'runs': parse_run, 'transmission': parse_float,
     'labels': parse_string, 'focal_size': parse_focal_size, 'filter_func': parse_string,
     'background': parse_string, 'material': parse_string}
 
-def get_label_mapping(url = config.url):
-    # TODO: handle duplicates
-    if not url:
-        raise ValueError("No logbook URL provided")
+def spreadsheet_header_body(sheet_list2d):
+    """
+    Returns: header, body
+    header : 1d list
+        The attribute keys corresponding to the contents of the sheet's
+        header row, with superfluous columns removed.
+    body: 2d list
+        Everything in the spreadsheet below the header row, with superfluous
+        columns removed.
+    """
+    try:
+        header_i, header_j = get_cell_coords(sheet_list2d, HEADER_REGEX)
+    except ValueError:
+        header_i = 0
+    header = sheet_list2d[header_i]
+    # column indices matching one of the header regexes
+    valid_columns =\
+        reduce(lambda x, y: x + y,
+            map(lambda regex: regex_indexes(regex, header),
+                PROPERTY_REGEXES.values()))
+    row_extract = lambda row: [elt for i, elt in enumerate(row) if i in valid_columns]
+    remove_columns = lambda arr2d: [tuple(row_extract(row)) for row in arr2d]
+    if len(sheet_list2d) < header_i + 2:
+        return row_extract(header), [[]]
+    else:
+        return row_extract(header), remove_columns(sheet_list2d[header_i + 1:])
+
+def get_label_mapping_one_sheet(col_titles, data):
     label_dict = {}
-    col_titles, data = get_logbook_data(url)
     enumerated_titles = list(enumerate(col_titles))
     enumerated_labels = filter(lambda pair: pair[1] and re.search(PROPERTY_REGEXES['labels'], pair[1]), enumerated_titles)
     enumerated_properties = filter(lambda pair: pair[1] and not re.search(PROPERTY_REGEXES['labels'], pair[1]), enumerated_titles)
@@ -264,7 +233,10 @@ def get_label_mapping(url = config.url):
                             print "Malformed run range: ", row[k]
                     # TODO: make this non-obvious behaviour clear to the user.
                     elif property and (property not in local_dict) and row[k]:
-                        local_dict[property_key] = parser_dispatch[property_key](row[k])
+                        try:
+                            local_dict[property_key] = parser_dispatch[property_key](row[k])
+                        except ValueError, e:
+                            print "Malformed attribute: %s" % e
     return label_dict
 
 def make_labels(fname = 'labels.txt', min_cluster_size = 2):
@@ -404,36 +376,18 @@ def get_all_runlist(label, fname = 'labels.txt'):
                 raise ValueError(label + ': dataset label not found')
             return list(runs)
 
-#def main(url_list = config.url, port = None):
-#    #ipdb.set_trace()
-#    start = time.time()
-#    timeout = 40.
-#    if port is None:
-#        port = config.port
-#        #port = url_list_porthash(url_list)
-#    context = zmq.Context()
-#    socket = context.socket(zmq.PUB)
-#    socket.bind("tcp://*:%s" % port)
-#    while time.time() - start < 20:
-#        #ipdb.set_trace()
-#        logbook_dicts =\
-#            [get_label_mapping(url = url)
-#            for url in url_list]
-#        for map in mapping:
-#            print map
-#        mapping = utils.merge_dicts(*logbook_dicts)
-#        messagedata = dill.dumps(mapping)
-#        print mapping
-#        topic = config.expname
-#        socket.send("%s%s" % (topic, messagedata))
-#        time.sleep(1)
-#    socket.close()
-#    context.term()
+def spreadsheet_mapping(url):
+    sheet_headers_bodies = get_logbook_data(url)
+    mapping_list =\
+        [get_label_mapping_one_sheet(col_titles, data)
+        for col_titles, data in sheet_headers_bodies
+        if col_titles]
+    return utils.merge_dicts(*mapping_list)
 
 def main(url = config.url, port = PORT):
     while True:
-        mapping = get_label_mapping(url = url)
-        print mapping
         topic = config.expname
+        mapping = spreadsheet_mapping(url)
+        print mapping
         database.mongo_insert_logbook_dict(mapping)
         time.sleep(1)

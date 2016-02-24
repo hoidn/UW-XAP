@@ -52,13 +52,13 @@ if args.noplot:
     import config
     config.noplot = True
 
-#try:
-#    database.load_db(key)
-#    database.execute()
-#    mongo_commit()
-#    sys.exit(0)
-#except KeyError:
-#    pass
+try:
+    database.load_db(key)
+    database.execute()
+    mongo_commit()
+    sys.exit(0)
+except KeyError:
+    pass
 
 import os
 from mpi4py import MPI
@@ -179,9 +179,9 @@ if cmd != 'init':
         call_eventframes(args)
 
 if utils.isroot():
-#    database.save_db(key)
-#    print database.db
-#    database.execute()
+    database.save_db(key)
+    print database.db
+    database.execute()
     mongo_commit()
 #comm = MPI.COMM_WORLD
 #comm.Barrier()

@@ -66,7 +66,7 @@ collection = client.database[config.expname]
 
 # Value of name field for google spreadsheet logbook document
 # pseudo-random string of reasonable length that shouldn't collide with other keys
-logbook_name = hash('name') 
+logbook_name = config.logbook_ID
 
 def mongo_init(key):
     to_insert['key'] = key
@@ -88,12 +88,10 @@ def mongo_add(key, obj):
     """
     to_insert[key] = obj
 
-#def mongo_load(
-
 def mongo_insert_logbook_dict(d):
     d['name'] = logbook_name
     inserted = collection.insert(d, check_keys = False)
-    if list(collection.find({'_id': {"$ne": inserted}})):
+    if list(collection.find({'_id': {"$ne": inserted}, 'name': {"$eq": logbook_name}})):
         collection.remove({'_id': {"$ne": inserted}, 'name': {"$eq": logbook_name}})
         print 'removed'
 

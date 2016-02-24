@@ -67,7 +67,6 @@ def isroot():
     Return true if the MPI core rank is 0 and false otherwise.
     """
     if 'OMPI' not in ' '.join(os.environ.keys()):
-        print 'root'
         return True
     else:
         rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
