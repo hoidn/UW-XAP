@@ -28,8 +28,6 @@ from dataccess import utils
 from dataccess import database
 import config
 
-PORT = config.port
-
 # Format specification for column headers in logbook. Column descriptions:
 # runs: range of run numbers in the format 'integer' or 'integer-integer'.
 #   Used by: all.
@@ -48,7 +46,7 @@ PORT = config.port
 #   Used by: all.
 # filter_det: detector id of detector whose data is fed to filter_func for
 #   event-based filtering. Used by: all
-PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*',
+PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*|.*[aA]ttenuation.*',
      'focal_size': r'.*[Ss]ize.*', 'labels': r'.*[lL]abel.*|.*[hH]eader.*',
     'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
     'param3': r'.*[pP]aram3.*', 'param4': r'.*[pP]aram4.*',
@@ -384,7 +382,7 @@ def spreadsheet_mapping(url):
         if col_titles]
     return utils.merge_dicts(*mapping_list)
 
-def main(url = config.url, port = PORT):
+def main(url = config.url):
     while True:
         topic = config.expname
         mapping = spreadsheet_mapping(url)
