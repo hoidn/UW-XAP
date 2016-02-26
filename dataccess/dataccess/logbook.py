@@ -51,7 +51,7 @@ PROPERTY_REGEXES = {'runs': r'.*[rR]un.*', 'transmission': r'.*[tT]ransmission.*
     'param1': r'.*[pP]aram1.*', 'param2': r'.*[pP]aram2.*',
     'param3': r'.*[pP]aram3.*', 'param4': r'.*[pP]aram4.*',
     'filter_det': r'.*[fF]ilter.*[dD]et.*', 'filter_func': r'.*[fF]ilter.*[fF]unc.*',
-    'background': r'.*[bB]ackground.*', 'material': r'.*[mM]aterial.*'}
+    'background': r'.*[bB]ackground.*', 'material': r'.*[mM]aterial.*|.*[sS]ample.*'}
 HEADERS = [k for k in PROPERTY_REGEXES]
 
 # Format for the flag that designates logbook header row
@@ -212,13 +212,18 @@ def spreadsheet_header_body(sheet_list2d):
 
 def get_label_mapping_one_sheet(col_titles, data):
     label_dict = {}
+    invalid_count = 0
     enumerated_titles = list(enumerate(col_titles))
     enumerated_labels = filter(lambda pair: pair[1] and re.search(PROPERTY_REGEXES['labels'], pair[1]), enumerated_titles)
     enumerated_properties = filter(lambda pair: pair[1] and not re.search(PROPERTY_REGEXES['labels'], pair[1]), enumerated_titles)
     for i, row in enumerate(data):
         for j, label in enumerated_labels:
-            if label and row[j]:
-                local_dict = label_dict.setdefault(row[j], {})
+            if label:
+                label_value = row[j]
+                if not label_value:
+                    label_value = database.hash(str(row))
+                    invalid_count += 1
+                local_dict = label_dict.setdefault(label_value, {})
                 for k, property in enumerated_properties:
                     property_key = get_property_key(property)
                     if property_key == 'runs':
@@ -259,22 +264,6 @@ def get_pub_logbook_dict():
         print "Querying MongoDB"
     return database.mongo_get_logbook_dict()
 
-def query_runs(attribute, value_test_func, target_attribute = 'runs'):
-    relational = []
-    d = get_pub_logbook_dict()
-    def new_value_test_func(val):
-        try:
-            return value_test_func(val)
-        except:
-            return False
-    for k, v in d.iteritems():
-        v['label'] = k
-        relational.append(v)
-    result =\
-        [row[target_attribute]
-        for row in relational
-        if new_value_test_func(row[attribute])]
-    return set(reduce(lambda x, y: x + y, filter(lambda t: t != (None,), result)))
 
 def get_label_runranges():
     # TODO: continue here
@@ -381,6 +370,16 @@ def spreadsheet_mapping(url):
         for col_titles, data in sheet_headers_bodies
         if col_titles]
     return utils.merge_dicts(*mapping_list)
+
+#def all_runs(logbook_dict):
+#    """
+#    Returns a set of all run numbers in a logbook dict.
+#    """
+#    runs =\
+#        [entry['runs']
+#        for k, entry in logbook_dict.iteritems()
+#        if 'runs' in entry]
+#    return set(reduce(lambda x, y: x + y, runs))
 
 def main(url = config.url):
     while True:

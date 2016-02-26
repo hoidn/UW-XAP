@@ -11,12 +11,18 @@ import config
 import hashlib
 import itertools
 import database
+import random
+#from datetime import import datetime
 #from atomicwrites import atomic_write
 #import collections
 #from atomicfile import AtomicFile
 #from libtiff import TIFF
 
 PKG_NAME = __name__.split('.')[0]
+
+def random_float():
+    random.seed(0)
+    return random.uniform(0., 1.)
 
 def merge_dicts(*args):
     final = {}

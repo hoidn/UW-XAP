@@ -46,22 +46,29 @@ def get_all_runs(exppath = config.exppath):
 def get_label_data(label, detid, default_bg = None, override_bg = None,
     event_data_getter = None, event_mask = None, **kwargs):
     """
-    Given a label corresponding to a group of runs, returns:
-        averaged data, event data, 
-    where event data is a list of objects returned by evaluating 
-    event_data_getter on each event frame in the dataset.
+    Takes a label corresponding to either:
+        -A group of runs, or
+        -A derived dataset resulting from a previous query.
+    Returns:
+    signal : np.ndarray
+        The detector readout averaged over all events processed.
+    event_data : dict
+        A list of objects returned by evaluating 
+        event_data_getter on each event frame in the dataset.
     #TODO: finish docstring
     """
-    def concatenated_runlists(lab):
-        if lab:
-            # convert from numpy type to int after concatenating
-            return tuple(map(int, logbook.get_all_runlist(lab, fname = fname)))
-        else:
-            return None # TODO: why?
-        
-    runList = logbook.get_all_runlist(label)
-    if not runList:
-        raise ValueError(label + ': no runs found for label')
+    try:
+        runList = logbook.get_all_runlist(label)
+    # look for matching derived dataset and return it if possible
+    except ValueError, e:
+        from dataccess import database
+        data_dict = database.mongo_query_derived_dataset(label, detid)
+        if data_dict is None:
+            raise ValueError(e + '\nNo matching derived dataset found.')
+        return data_dict['data']
+        #print "Logbook label not found. Searching derived datasets."
+
+    # Compute logbook-based dataset
     if detid in config.nonarea:
         subregion_index = None
     else:
