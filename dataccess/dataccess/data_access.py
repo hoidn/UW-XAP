@@ -15,6 +15,7 @@ import hashlib
 
 import utils
 import logbook
+import database
 import config
 
 # TODO: make logbook data not required for labels that can be parsed as run
@@ -27,9 +28,19 @@ Module for accessing data associated with logbook-specified run group labels,
 using a mapping published by a running instance of logbook.main.
 """
 
-# TODO: description of the defined properties and the modules that use them
-
-        
+def get_dataset_attribute_value(label, attribute):
+    """
+    Get the value of an attribute belonging to a dataset label. The dataset
+    may be one defined in the logging spreadsheet, or it may be a derived
+    dataset.
+    """
+    try:
+        return logbook.get_label_attribute(label, attribute)
+    except (KeyError, ValueError, AttributeError), e:
+        try:
+            return database.get_derived_dataset_attribute(label, attribute)
+        except KeyError, e2:
+            raise KeyError("logbook.get_label_attribute(): %s\ndatabase.get_dataset_attribute_value(): %s" % (e, e2))
 
 def get_all_runs(exppath = config.exppath):
     """
@@ -62,10 +73,11 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
     # look for matching derived dataset and return it if possible
     except ValueError, e:
         from dataccess import database
-        data_dict = database.mongo_query_derived_dataset(label, detid)
-        if data_dict is None:
-            raise ValueError(e + '\nNo matching derived dataset found.')
-        return data_dict['data']
+        dataset = database.mongo_query_derived_dataset(label, detid)
+        if dataset is None:
+            raise ValueError(str(e) + '\nNo matching derived dataset found.')
+        signal, event_data = dataset
+        return signal, event_data
         #print "Logbook label not found. Searching derived datasets."
 
     # Compute logbook-based dataset
@@ -96,7 +108,7 @@ def get_data_and_filter(label, detid, event_data_getter = None,
 
         Raises KeyError if background label is not found.
         """
-        bg_label = logbook.get_label_property(label, 'background')
+        bg_label = get_dataset_attribute_value(label, 'background')
         print "using dark subtraction: ", bg_label
         bg, _ =  get_label_data(bg_label, detid)
         return bg
@@ -106,7 +118,7 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         """
         # filterfunc is a function that takes a np array and returns a boolean
         if detid is None:
-            detid = logbook.get_label_property(label, 'filter_det')
+            detid = get_dataset_attribute_value(label, 'filter_det')
         imarray, event_data = get_label_data(label, detid,
             event_data_getter = filterfunc)
         return event_data
@@ -117,9 +129,9 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         else:
             args = logbook.eventmask_params(label)
             try:
-                funcstr = logbook.get_label_property(label, 'filter_func')
+                funcstr = get_dataset_attribute_value(label, 'filter_func')
                 filterfunc = eval('config.' + funcstr)(*args)
-                filter_detid = logbook.get_label_property(label, 'filter_det')
+                filter_detid = get_dataset_attribute_value(label, 'filter_det')
                 print "DETID IS ", filter_detid
                 print "ARGS ARE ", args
                 print "FUNCSTR IS", funcstr
@@ -151,8 +163,8 @@ def get_data_and_filter(label, detid, event_data_getter = None,
 
 
 def flux_constructor(label):
-    size = logbook.get_label_property(label, 'focal_size')
-    return lambda beam_energy: beam_energy * logbook.get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
+    size = get_dataset_attribute_value(label, 'focal_size')
+    return lambda beam_energy: beam_energy * get_dataset_attribute_value(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
 
 def event_data_dict_to_list(event_data_dict):
     """
@@ -164,8 +176,8 @@ def event_data_dict_to_list(event_data_dict):
 
 def query_event_data(label, detid, flux_min, flux_max, mode = 'all'):
     def flux(beam_energy):
-        size = logbook.get_label_property(label, 'focal_size')
-        flux = 1e-3 * beam_energy * logbook.get_label_property(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
+        size = get_dataset_attribute_value(label, 'focal_size')
+        flux = 1e-3 * beam_energy * get_dataset_attribute_value(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
         return flux
     def flux_filter(beam_energy):
         return flux_min < flux(beam_energy) < flux_max

@@ -10,11 +10,11 @@ import os
 import pandas as pd
 from scipy import interpolate
 
-from dataccess import data_access as data
-from dataccess import utils
-from dataccess import data_access
-from dataccess import database
-from dataccess import logbook
+import data_access as data
+import utils
+import data_access
+import logbook
+import playback
 
 import pdb
 import ipdb
@@ -346,7 +346,7 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
 
 
 @utils.ifroot
-@database.db_insert
+@playback.db_insert
 def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     if not os.path.exists('plots_xes/'):
         os.makedirs('plots_xes/')

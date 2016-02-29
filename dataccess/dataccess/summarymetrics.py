@@ -3,9 +3,9 @@ import ipdb
 import config
 import numpy as np
 import matplotlib.pyplot as plt
-from dataccess import utils
 
-from dataccess import database
+import utils
+import playback
 
 def npsum(arr, **kwargs):
     return np.sum(arr)
@@ -34,7 +34,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
     Evaluate the function event_data_getter (defined in config.py) on all events
     in the dataset and generate a histogram of resulting values.
     """
-    @database.db_insert
+    @playback.db_insert
     @utils.ifplot
     def plot(arr, label = '', **kwargs):
         try:
@@ -44,7 +44,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         label = (label + "; filter params: %s" % ','.join(map(str, args))) 
         arr = filter(lambda x: not np.isnan(x), arr)
         plt.hist(arr, bins = nbins, alpha = 0.5, label = label, **kwargs)
-    @database.db_insert
+    @playback.db_insert
     @utils.ifplot
     def finalize_plot():
         plt.xlabel('output of ' + event_data_getter.__name__)
@@ -52,7 +52,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         plt.title('Detector: ' + detid)
         plt.legend()
         plt.savefig(merged_path + '.png')
-    @database.db_insert
+    @playback.db_insert
     @utils.ifplot
     def show():
         plt.show()
