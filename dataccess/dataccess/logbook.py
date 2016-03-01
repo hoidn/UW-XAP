@@ -362,7 +362,7 @@ def get_all_runlist(label, fname = 'labels.txt'):
             return list(groups)
         except KeyError:
             # TODO: make sure that the run number exists
-            print "label " + label + " not found"
+            print "logbook label " + label + ": not found"
             try:
                 runs = parse_run(label)
             except ValueError:

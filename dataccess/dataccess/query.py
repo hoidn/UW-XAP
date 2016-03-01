@@ -111,6 +111,8 @@ class DataSet(object):
         query : list
             A list of Query records.
         """
+        if event_filter and not event_filter_detid:
+            raise ValueError("event_filter_detid must be provided if event_filter is not None")
         assert (event_filter is None) or hasattr(event_filter, '__call__')
         if not query or len(query) == 0:
             query = [construct_query('label', '.*')]
@@ -130,7 +132,12 @@ class DataSet(object):
 #                for q in query
 #                if q.attribute_value is not None]
             if event_filter is not None:
-                filter_label = '-filter-' + event_filter.__name__ + '-' + event_filter_detid
+                try:
+                    filter_identifier = '-'.join(event_filter.params)
+                except:
+                    filter_identifier = database.hash(utils.random_float())
+                filter_label = '-filter-' + event_filter.__name__ + '-' + filter_identifier + '-' + str(event_filter_detid)
+                #filter_label = '-filter-' + event_filter.__name__ + '-' + database.hash(event_filter) + '-' + event_filter_detid
             else:
                 filter_label = ''
             self.label = '-'.join(query_strings) + filter_label
@@ -210,6 +217,7 @@ class DataSet(object):
         if detid is not None:
             data_dict['detid'] = detid
             data_dict['data'] = (mean_frame, event_data_dict)
+            data_dict['event_data_getter'] = database.dumps_b2a(event_data_getter)
         data_dict['label'] = label
         database.mongo_insert_derived_dataset(data_dict)
 
@@ -236,7 +244,7 @@ materials_ref_match_dict = {
 }
 
 # TODO: move dependence on detid to DataSet.evaluate()
-def main(query_list_list = None, detid = 'si'):
+def main(query_list_list = None, detid = 'si', event_filter = None, event_filter_detid = None, ):
     """
     For example, invoke with:
     >>> main([['material', r"Fe3O4"], ['runs', 400, 405]])
@@ -253,6 +261,7 @@ def main(query_list_list = None, detid = 'si'):
         q = query_list([('material', r".*Fe3O4.*"), ('transmission', 0.05, 0.8)])
     dataset = DataSet(q)
     dataset.evaluate(detid)
+
 #    probe = dataset.evaluate(event_data_getter = eval('config.si_spectrometer_probe'))
 #    pump = dataset.evaluate(event_data_getter = eval('config.si_spectrometer_pump'))
 #    extract_eventdata = lambda a: map(lambda x: x[2], utils.flatten_dict(a[1]))

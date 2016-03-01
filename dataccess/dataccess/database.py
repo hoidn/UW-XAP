@@ -18,6 +18,7 @@ outputs, and for inserting and accessing derived datasets.
 
 MONGO_HOST = 'pslogin03'
 MONGO_PORT = 4040
+token = ''
 
 db_dir = 'db/'
 db = []
@@ -33,7 +34,7 @@ def hash(obj):
 # appending to the interpreter-wide Mongodb cache.
 to_insert = {}
 client = MongoClient(MONGO_HOST, MONGO_PORT)
-collection = client.database[config.expname]
+collection = client.database[config.expname + token]
 # Use GridFS to fit store objects > 16 MB
 FS = gridfs.GridFS(client.database)
 
@@ -90,7 +91,8 @@ def mongo_insert_logbook_dict(d):
     """ 
     Insert logging spreadsheet data into MongoDB.
     """
-    collection = client.database[config.expname]
+    d['name'] = config.logbook_ID
+    collection = client.database[config.expname + token]
     query_dict = {'name': {"$eq": config.logbook_ID}}
     mongo_replace(collection, d, query_dict)
 
@@ -163,7 +165,7 @@ def mongo_insert_derived_dataset(data_dict):
         event data dictionary.
         -All logbook attributes that were used to evaluate the query.
     """
-    collection = client.database[config.expname + '_derived']
+    collection = client.database[config.expname + token + '_derived']
     # initialize to_insert with the remaining key/value pairs. These include
     # all applicable logbook attributes.
     to_insert =\
@@ -177,6 +179,7 @@ def mongo_insert_derived_dataset(data_dict):
         to_insert['gridFS_ID'] = FS.put(blob)
 
         to_insert['detid'] = data_dict['detid']
+        to_insert['event_data_getter'] = data_dict['event_data_getter']
     except KeyError:
         pass
     to_insert['label'] = data_dict['label']
@@ -188,7 +191,7 @@ def mongo_get_all_derived_datasets():
     """
     Return a dictionary in the same format as that returned by logbook.get_pub_logbook_dict().
     """
-    collection = client.database[config.expname + '_derived']
+    collection = client.database[config.expname + token + '_derived']
     documents =\
         list(collection.find({'source_logbook': config.logbook_ID}))
     def insert_one(d):
@@ -200,19 +203,19 @@ def mongo_get_all_derived_datasets():
     return attribute_dict
     
 
-def mongo_query_derived_dataset(label, detid):
+def mongo_query_derived_dataset(label, detid, event_data_getter = None):
     """
     Return a query output dataset previously inserted by mongo_insert_derived_dataset.
-
+    
     The return value is a tuple containing an averaged frame and an event data dictionary.
     """
-    collection = client.database[config.expname + '_derived']
+    collection = client.database[config.expname + token + '_derived']
     result_list =\
         list(collection.find({'source_logbook': config.logbook_ID,
-            'label': {'$regex': label}, 'detid': detid}))
+            'label': {'$regex': label}, 'detid': detid, 'event_data_getter': dumps_b2a(event_data_getter)}))
     if not result_list:
         dataset = mongo_query_object_by_label(label)
-        return dataset.evaluate(detid)
+        return dataset.evaluate(detid, event_data_getter = event_data_getter)
     result = result_list[0]
     if len(result_list) > 1:
         print "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (label, result['label'])
@@ -242,6 +245,7 @@ def get_derived_dataset_attribute(pat, attribute):
 
 def delete_all_derived_datasets():
     # TODO: flush cache in data_access as well
-    collection = client.database[config.expname + '_derived']
-    collection.delete_many({})
+    collections = [client.database[config.expname + token + '_derived'], client.database[config.logbook_ID + '_objects_by_label']]
+    for collection in collections:
+        collection.delete_many({})
     os.system('rm -rf cache/query/DataSet.evaluate*')

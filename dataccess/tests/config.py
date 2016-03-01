@@ -179,6 +179,13 @@ def make_si_filter(probe_min, probe_max, pump_min, pump_max, **kwargs):
     return filter_by_si_peaks
     #return pump_counts, probe_counts
 
+def goodratio_lower(imarr, **kwargs):
+    filt = make_si_filter(0, 1e8, 0, 0.8e7, **kwargs)
+    return filt(imarr)
+
+def goodratio_upper(imarr, **kwargs):
+    filt = make_si_filter(0, 1e8, 0.8e7, 1e9, **kwargs)
+    return filt(imarr)
 
 def sum_si(imarr):
     baseline = np.percentile(imarr, 1)

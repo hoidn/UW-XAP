@@ -24,7 +24,12 @@ PKG_NAME = __name__.split('.')[0]
 def identity(x, **kwargs):
     return x
 
+def square(x, **kwargs):
+    return np.sum(x)**2
+
+
 def random_float():
+    from datetime import datetime
     random.seed(datetime.now())
     return random.uniform(0., 1.)
 

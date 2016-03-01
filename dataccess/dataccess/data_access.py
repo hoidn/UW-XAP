@@ -53,6 +53,7 @@ def get_all_runs(exppath = config.exppath):
     result.sort()
     return result
 
+
 @utils.eager_persist_to_file('cache/data_access/get_label_data/')
 def get_label_data(label, detid, default_bg = None, override_bg = None,
     event_data_getter = None, event_mask = None, **kwargs):
@@ -97,10 +98,10 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         #print "event data is: ", event_data
 
 #@utils.eager_persist_to_file('cache/data_access/get_label_data_and_filter/')
-def get_data_and_filter(label, detid, event_data_getter = None,
+def get_data_and_filter_logbook(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
     """
-    # TODO: update this
+    # TODO: update this. Make it clear that this function is the public interface.
     """
     def get_background():
         """
@@ -125,6 +126,7 @@ def get_data_and_filter(label, detid, event_data_getter = None,
 
     try:
         if event_filter:
+            ipdb.set_trace()
             event_mask = get_event_mask(event_filter, detid = event_filter_detid)
         else:
             args = logbook.eventmask_params(label)
@@ -160,7 +162,17 @@ def get_data_and_filter(label, detid, event_data_getter = None,
             print "No background label found"
         return imarray, event_data
 
-
+def get_data_and_filter(label, detid, event_data_getter = None,
+    event_filter = None, event_filter_detid = None):
+    try:
+        return get_data_and_filter_logbook(label, detid, event_data_getter = event_data_getter,
+            event_filter = event_filter, event_filter_detid = event_filter_detid)
+    except:# TODO: catch specific exceptions TODO
+        try:
+            return database.mongo_query_derived_dataset(label, detid,
+                event_data_getter = event_data_getter)
+        except KeyError:
+            raise ValueError("%s: no matching derived dataset found." % label)
 
 def flux_constructor(label):
     size = get_dataset_attribute_value(label, 'focal_size')
