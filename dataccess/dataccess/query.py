@@ -262,8 +262,8 @@ def main(query_list_list = None, detid = 'si', event_filter = None, event_filter
     dataset = DataSet(q)
     dataset.evaluate(detid)
 
-#    probe = dataset.evaluate(event_data_getter = eval('config.si_spectrometer_probe'))
-#    pump = dataset.evaluate(event_data_getter = eval('config.si_spectrometer_pump'))
+#    probe = dataset.evaluate('si',event_data_getter = eval('config.si_spectrometer_probe'))
+#    pump = dataset.evaluate('si',event_data_getter = eval('config.si_spectrometer_pump'))
 #    extract_eventdata = lambda a: map(lambda x: x[2], utils.flatten_dict(a[1]))
 #    plt.scatter(extract_eventdata(pump), extract_eventdata(probe))
 #    plt.xlabel('pump intensity')
