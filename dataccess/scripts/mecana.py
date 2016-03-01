@@ -5,13 +5,13 @@ import ipdb
 import sys
 sys.path.append('.') # so that config.py can be imported
 from dataccess import database
-#from dataccess import playback
+from dataccess import playback
 from dataccess import argument_parsers
 from dataccess import utils
 import argparse
 import time
 
-
+PLAYBACK = False
 
 parser = argparse.ArgumentParser()
 
@@ -53,13 +53,14 @@ if args.noplot:
     import config
     config.noplot = True
 
-#try:
-##    playback.load_db(key)
-##    playback.execute()
-#    mongo_commit()
-#    sys.exit(0)
-#except KeyError:
-#    pass
+if PLAYBACK:
+    try:
+        playback.load_db(key)
+        playback.execute()
+        mongo_commit()
+        sys.exit(0)
+    except KeyError:
+        pass
 
 import os
 from mpi4py import MPI
@@ -180,9 +181,10 @@ if cmd != 'init':
         call_eventframes(args)
 
 if utils.isroot():
-#    playback.save_db(key)
-#    print playback.db
-#    playback.execute()
+    if PLAYBACK:
+        playback.save_db(key)
+        print playback.db
+        playback.execute()
     mongo_commit()
 #comm = MPI.COMM_WORLD
 #comm.Barrier()

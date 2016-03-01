@@ -138,10 +138,11 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     im.save(save_path + '.tif')
     matplotlib.image.imsave(save_path + '.png', imarr)
 
-@playback.db_insert
+#@playback.db_insert
 @ifroot
-def save_data(x, y, save_path, mongo_key = 'data'):
+def save_data(x, y, save_path):
     import database
+    mongo_key = 'data'
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))

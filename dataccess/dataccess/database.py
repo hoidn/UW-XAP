@@ -239,9 +239,12 @@ def get_derived_dataset_attribute(pat, attribute):
         print "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (pat, result_label)
     return attribute_map[result_label][attribute]
 
-def delete_all_derived_datasets():
+def delete_collections():
     # TODO: flush cache in data_access as well
-    collections = [client.database[config.expname + token + '_derived'], client.database[config.logbook_ID + '_objects_by_label']]
+    collections =\
+        [client.database[config.expname + token],
+        client.database[config.expname + token + '_derived'],
+        client.database[config.logbook_ID + '_objects_by_label']]
     for collection in collections:
         collection.delete_many({})
     os.system('rm -rf cache/query/DataSet.evaluate*')
