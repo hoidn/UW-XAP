@@ -123,6 +123,9 @@ def mongo_commit(label_dependencies = None):
         to_insert['state_hash'] = state_hash
         collection.insert(to_insert, check_keys = False) 
 
+def mongo_find(key):
+    return list(collection.find({'key': key}))
+
 def mongo_store_object_by_label(obj, label):
     """
     Store a python object to MongoDB.

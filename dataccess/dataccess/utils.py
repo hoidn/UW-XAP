@@ -140,13 +140,13 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 
 @playback.db_insert
 @ifroot
-def save_data(x, y, save_path):
+def save_data(x, y, save_path, mongo_key = 'data'):
     import database
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
     np.savetxt(save_path, [x, y])
-    database.mongo_add(save_path, [list(x), list(y)])
+    database.mongo_add(mongo_key, [list(x), list(y)])
 
 def flatten_dict(d):
     """
