@@ -248,21 +248,6 @@ def get_label_mapping_one_sheet(col_titles, data):
                             print "Malformed attribute: %s" % e
     return label_dict
 
-def make_labels(fname = 'labels.txt', min_cluster_size = 2):
-    """
-    Generate list of time-clustered run ranges in a text file. Pairs with 
-    get_labels()
-
-    This needs to be run once before invoking the other functions in this module
-    """
-    clusters = filter(lambda x: len(x) >= min_cluster_size, avg_bgsubtract_hdf.get_run_clusters())
-    if os.path.exists(fname):
-        raise ValueError("file " + fname + "exists")
-    # pairs of start and end run numbers
-    bounds = np.array(map(lambda cluster: np.array([cluster[0], cluster[-1]]), clusters))
-    np.savetxt(fname, np.ndarray.astype(bounds, int), '%04d', header = 'start run, end run, label1, label2', delimiter = ',')
-    return bounds
-
 
 @utils.memoize(timeout = 5)
 def get_pub_logbook_dict():
@@ -285,16 +270,12 @@ def get_label_runranges():
         labels_to_runs[label] = d['runs']
     return labels_to_runs
 
-def get_label_attribute(label, property):
+
+
+def get_label_dict(label):
     """
-    Return the value of a label's property.
+    Return the attribute dict associated with a logbook label.
     """
-    if property == 'runs':
-        try:
-            label_runs = parse_run(label)
-            return list(label_runs)
-        except:
-            pass
     if not config.use_logbook:
         raise AttributeError("Logbook not available (disabled in config.py)")
     complete_dict = get_pub_logbook_dict()
@@ -325,12 +306,23 @@ def get_label_attribute(label, property):
         else:
             # TODO: stale error message here
             raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
-    label_dict = complete_dict[label]
+    return complete_dict[label]
+
+def get_label_attribute(label, property):
+    """
+    Return the value of a label's property.
+    """
+    if property == 'runs':
+        try:
+            label_runs = parse_run(label)
+            return list(label_runs)
+        except:
+            pass
+    label_dict = get_label_dict(label)
     try:
         return label_dict[property]
     except KeyError:
         raise KeyError("attribute: " + property + " of label: " + label + " not found")
-
 
 def eventmask_params(label):
     handles = ['param1', 'param2', 'param3', 'param4']
@@ -342,7 +334,7 @@ def eventmask_params(label):
             pass
     return result
 
-def get_all_runlist(label, fname = 'labels.txt'):
+def get_all_runlist(label):
     """
     Get list of run numbers associated with a label.
 

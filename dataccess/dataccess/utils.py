@@ -10,7 +10,6 @@ import ipdb
 import config
 import hashlib
 import itertools
-import database
 import playback
 import random
 #from datetime import import datetime
@@ -142,6 +141,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 @playback.db_insert
 @ifroot
 def save_data(x, y, save_path):
+    import database
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))

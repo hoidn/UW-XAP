@@ -35,7 +35,10 @@ def get_dataset_attribute_value(label, attribute):
     dataset.
     """
     try:
-        return logbook.get_label_attribute(label, attribute)
+        value = logbook.get_label_attribute(label, attribute)
+        if isinstance(value, list):
+            value = tuple(value)
+        return value
     except (KeyError, ValueError, AttributeError), e:
         try:
             return database.get_derived_dataset_attribute(label, attribute)
@@ -109,9 +112,14 @@ def get_data_and_filter_logbook(label, detid, event_data_getter = None,
 
         Raises KeyError if background label is not found.
         """
-        bg_label = get_dataset_attribute_value(label, 'background')
-        print "using dark subtraction: ", bg_label
-        bg, _ =  get_label_data(bg_label, detid)
+        try:
+            bg_label = get_dataset_attribute_value(label, 'background')
+            print "using dark subtraction: ", bg_label
+            bg, _ =  get_label_data(bg_label, detid)
+        except KeyError:
+            pass# TODO
+#            darks = query.DataSet(query.query_list([('material', r".*[dD]ark.*")])).runs
+#            preceding
         return bg
     def get_event_mask(filterfunc, detid = None):
         """

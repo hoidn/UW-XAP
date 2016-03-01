@@ -139,9 +139,6 @@ def get_normalization(x, intensities, sumwidth = 150):
     #print "peak index: ", n_ref1
     return np.sum(filtered)
 
-#def save_calib(fname, energies):
-#    with open(fname, 'wb') as f:
-#        np.savetxt(f, np.array([range(len(energies)), energies]).T, header = 'row index\tenergy(eV)')
 
 def save_calib(spectrum_num_points, save_path, energy_ref1, energy_ref2, n_ref1, n_ref2):
     """
@@ -155,10 +152,6 @@ def save_calib(spectrum_num_points, save_path, energy_ref1, energy_ref2, n_ref1,
     with open(save_path, 'wb') as f:
         np.savetxt(f, np.array([[spectrum_num_points], [energy_ref1], [energy_ref2], [n_ref1], [n_ref2]]).T, '%d\t %f\t %f\t %d\t %d', header = 'Number of points in spectrum\tEnergy 1 (eV)\tEnergy 2 (eV)\tpixel index 1\tpixel index 2')
 
-#def load_calib(fname):
-#    with open(fname, 'rb') as f:
-#        energies =(np.genfromtxt(f).T)[1]
-#    return energies
 
 def load_calib(fname):
     def parse_config_objs(spectrum_num_points, energy_ref1, energy_ref2, n_ref1, n_ref2):
@@ -272,7 +265,6 @@ def energies_from_data(data, cencol, save_path = None, eltname = '', calibration
         dirname = os.path.dirname(save_path)
         if dirname and (not os.path.exists(dirname)):
             os.system('mkdir -p ' + os.path.dirname(save_path))
-        #save_calib(save_path, energies)
         save_calib(spectrum_num_points, save_path, energy_ref1, energy_ref2, n_ref1, n_ref2)
     return np.array(energies)
 
@@ -432,6 +424,7 @@ def main(detid, data_identifiers, nevents = None, cold_calibration_label = None,
             bg_sub = bgsub)
         spectrumList.append([energies, intensities])
         if eltname:
+            utls.save_data(
             np.savetxt('spectra/' + label + '_' + eltname,
                 [energies, intensities], header = 'energy (eV)\tintensity (arb)')
         else:
@@ -543,10 +536,11 @@ def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwid
             bg_sub = bgsub)
         spectrumList.append([energies, intensities])
         if eltname:
-            np.savetxt('spectra/' + label + '_' + eltname,
-                [energies, intensities], header = 'energy (eV)\tintensity (arb)')
+            path = 'spectra/' + label + '_' + eltname
         else:
-            np.savetxt('spectra/' + label,
+            path = 'spectra/' + label
+        utils.save_data(energies, intensities, path)
+        #np.savetxt('spectra/' + label + '_' + eltname,
                 [energies, intensities], header = 'energy (eV)\tintensity (arb)')
     if eltname:
         name = 'plots_xes/' + '_'.join(labels) + '_' + eltname

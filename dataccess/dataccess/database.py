@@ -7,6 +7,7 @@ import cPickle
 import gridfs
 import os
 import binascii
+import utils
 
 """
 Interface module for mecana's MongoDB collection.
@@ -64,6 +65,7 @@ def mongo_add(key, obj):
     """
     to_insert[key] = obj
 
+@utils.ifroot
 def mongo_replace(collection, d, mongo_query_dict):
     """
     mongo_query_dict: a query that will match stale documents
@@ -76,16 +78,6 @@ def mongo_replace(collection, d, mongo_query_dict):
         collection.remove(remove_query_dict)
         print "removed"
 
-#def mongo_insert_logbook_dict(d):
-#    """
-#    Insert logging spreadsheet data into MongoDB.
-#    """
-#    # Set the value of the name field to something unique for each google spreadsheet
-#    d['name'] = config.logbook_ID
-#    inserted = collection.insert(d, check_keys = False)
-#    if list(collection.find({'_id': {"$ne": inserted}, 'name': {"$eq": config.logbook_ID}})):
-#        collection.remove({'_id': {"$ne": inserted}, 'name': {"$eq": config.logbook_ID}})
-#        print 'removed'
 
 def mongo_insert_logbook_dict(d):
     """ 
@@ -106,6 +98,7 @@ def mongo_get_logbook_dict():
             v['runs'] = tuple(v['runs'])
     return {k: v for k, v in raw_dict.iteritems() if isinstance(v, dict)}
 
+@utils.ifroot
 def mongo_commit(label_dependencies = None):
     """
     Insert the interpreter session's cache (created by calls to mongo_add)
@@ -118,9 +111,8 @@ def mongo_commit(label_dependencies = None):
         return '_'.join(map(hash, dependency_dicts))
     from dataccess import logbook
 
-    spreadsheet = logbook.get_pub_logbook_dict()
     dependency_dicts =\
-        [spreadsheet[label]
+        [logbook.get_label_dict(label)
         for label in label_dependencies]
     try:
         key = to_insert['key']
@@ -153,6 +145,7 @@ def mongo_query_object_by_label(label):
     
     
 # TODO: move all these functions into a module or class
+@utils.ifroot
 def mongo_insert_derived_dataset(data_dict):
     """
     Insert query output data into MongoDB.
