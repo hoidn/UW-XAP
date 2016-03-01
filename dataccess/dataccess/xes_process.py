@@ -424,12 +424,10 @@ def main(detid, data_identifiers, nevents = None, cold_calibration_label = None,
             bg_sub = bgsub)
         spectrumList.append([energies, intensities])
         if eltname:
-            utls.save_data(
-            np.savetxt('spectra/' + label + '_' + eltname,
-                [energies, intensities], header = 'energy (eV)\tintensity (arb)')
+            path = 'spectra/' + label + '_' + eltname
         else:
-            np.savetxt('spectra/' + label,
-                [energies, intensities], header = 'energy (eV)\tintensity (arb)')
+            path = 'spectra/' + label
+        utils.save_data(energies, intensities, path)
     if eltname:
         name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
     else:
