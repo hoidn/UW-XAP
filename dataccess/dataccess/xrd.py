@@ -16,9 +16,10 @@ import copy
 import ipdb
 
 import config
-from dataccess import utils
-from dataccess import logbook
-from dataccess import database
+
+import utils
+import logbook
+import playback
 
 
 #from mpi4py import MPI
@@ -465,7 +466,7 @@ def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WI
     return mask
     
 
-@database.db_insert
+@playback.db_insert
 @utils.ifplot
 def plot_patterns_core(ax, norm_array, patterns, labels, label_angles = None, show = False):
     patterns = [map(np.array, p) for p in patterns]

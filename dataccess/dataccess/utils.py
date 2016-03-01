@@ -11,6 +11,7 @@ import config
 import hashlib
 import itertools
 import database
+import playback
 import random
 #from datetime import import datetime
 #from atomicwrites import atomic_write
@@ -20,8 +21,16 @@ import random
 
 PKG_NAME = __name__.split('.')[0]
 
+def identity(x, **kwargs):
+    return x
+
+def square(x, **kwargs):
+    return np.sum(x)**2
+
+
 def random_float():
-    random.seed(0)
+    from datetime import datetime
+    random.seed(datetime.now())
     return random.uniform(0., 1.)
 
 def merge_dicts(*args):
@@ -109,7 +118,7 @@ def ifplot(func):
     return inner
     
         
-@database.db_insert
+@playback.db_insert
 @ifroot
 def save_image(save_path, imarr, fmt = 'tiff'):
     """
@@ -130,7 +139,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     im.save(save_path + '.tif')
     matplotlib.image.imsave(save_path + '.png', imarr)
 
-@database.db_insert
+@playback.db_insert
 @ifroot
 def save_data(x, y, save_path):
     dirname = os.path.dirname(save_path)
@@ -204,7 +213,7 @@ def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = N
     show()
 
 
-@database.db_insert
+@playback.db_insert
 @ifplot
 def global_save_and_show(save_path):
     """

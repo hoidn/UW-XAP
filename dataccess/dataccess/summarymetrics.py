@@ -1,3 +1,4 @@
+
 import os
 import ipdb
 import config
@@ -5,36 +6,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataccess import utils
 
-from dataccess import database
+import playback
 
 def npsum(arr, **kwargs):
     return np.sum(arr)
-
-
-def get_event_data_dicts(label, detid, event_data_getter, filtered = False):
-    from dataccess import data_access as data
-    event_data_dicts = []
-    if not filtered:
-        for label in labels:
-            try:
-                event_data_dicts.append(data.get_label_data(label, detid, event_data_getter = event_data_getter)[1])
-            except ValueError:# no events found in one or more runs in label
-                pass
-    else:
-        for label in labels:
-            try:
-                event_data_dicts.append(data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1])
-            except ValueError:# no events found in one or more runs in label
-                print label, ": no events found"
-                pass
-    return event_data_dicts
 
 def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plot = True, nbins = 100, filtered = False, separate = False):
     """
     Evaluate the function event_data_getter (defined in config.py) on all events
     in the dataset and generate a histogram of resulting values.
     """
-    @database.db_insert
+    @playback.db_insert
     @utils.ifplot
     def plot(arr, label = '', **kwargs):
         try:
@@ -44,7 +26,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         label = (label + "; filter params: %s" % ','.join(map(str, args))) 
         arr = filter(lambda x: not np.isnan(x), arr)
         plt.hist(arr, bins = nbins, alpha = 0.5, label = label, **kwargs)
-    @database.db_insert
+    @playback.db_insert
     @utils.ifplot
     def finalize_plot():
         plt.xlabel('output of ' + event_data_getter.__name__)
@@ -52,7 +34,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         plt.title('Detector: ' + detid)
         plt.legend()
         plt.savefig(merged_path + '.png')
-    @database.db_insert
+    @playback.db_insert
     @utils.ifplot
     def show():
         plt.show()
@@ -68,7 +50,22 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
     dirname = os.path.dirname(basepath)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(basepath))
-        event_data_dicts = get_event_data_dicts(label, detid, event_data_getter, filtered = filtered)
+    event_data_dicts = []
+    def depends_on_data_access():
+        from dataccess import data_access as data
+        if not filtered:
+            for label in labels:
+                try:
+                    event_data_dicts.append(data.get_label_data(label, detid, event_data_getter = event_data_getter)[1])
+                except ValueError:# no events found in one or more runs in label
+                    pass
+        else:
+            for label in labels:
+                try:
+                    event_data_dicts.append(data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1])
+                except ValueError:# no events found in one or more runs in label
+                    print label, ": no events found"
+                    pass
         merged = utils.merge_dicts(*event_data_dicts)
         if plot:
             if separate:
@@ -86,7 +83,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         for d, label in zip(event_data_dicts, labels):
             utils.save_0d_event_data(basepath + '_' + label + '.dat', d, header = "Run\tevent\tvalue")
         utils.save_0d_event_data(merged_path + '.dat', d, header = "Run\tevent\tvalue")
-        return utils.flatten_dict(merged)
+        return result
     return depends_on_data_access()
 
 def main(label, detid, funcstr = None, func = None, nbins = 100, filtered = False, **kwargs):

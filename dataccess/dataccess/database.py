@@ -1,12 +1,12 @@
 import hashlib
 import ipdb
 import dill
-import os
-import hashlib
 import config
 from pymongo import MongoClient
 import cPickle
 import gridfs
+import os
+import binascii
 
 """
 Interface module for mecana's MongoDB collection.
@@ -18,6 +18,7 @@ outputs, and for inserting and accessing derived datasets.
 
 MONGO_HOST = 'pslogin03'
 MONGO_PORT = 4040
+token = ''
 
 db_dir = 'db/'
 db = []
@@ -29,58 +30,32 @@ def hash(obj):
     """
     return hashlib.sha1(dill.dumps(obj)).hexdigest()
 
-def get_fname(key):
-    return key.strip('/')
-
-# TODO: Move this data from the filesystem to MongoDB, if it's straighforward to do so
-def load_db(key):
-    fname = get_fname(key)
-    try:
-        with open(db_dir + fname, 'r') as f:
-            local = dill.load(f)
-            for func in local:
-                db.append(func)
-    except IOError:
-        raise KeyError("key not found")
-
-def save_db(key):
-    #fname = hash(dill.dumps(key))
-    fname = get_fname(key)
-    if not os.path.exists(db_dir):
-        os.system('mkdir -p %s' % db_dir)
-    with open(db_dir + fname, 'w') as f:
-        dill.dump(db, f)
-    print "saved db"
-
-def execute():
-    while db:
-        db.pop(0)()
-
-def db_insert(func):
-    def inner(*args, **kwargs):
-        def execute():
-            return func(*args, **kwargs)
-        db.append(execute)
-    return inner
-
-
 # Functions for interacting with Mongo and inserting into/loading from
 # appending to the interpreter-wide Mongodb cache.
 to_insert = {}
 client = MongoClient(MONGO_HOST, MONGO_PORT)
-collection = client.database[config.expname]
+collection = client.database[config.expname + token]
 # Use GridFS to fit store objects > 16 MB
 FS = gridfs.GridFS(client.database)
 
+def dumps_b2a(obj):
+    """
+    Convert an object into an ASCII string that can be inserted into
+    MongoDB.
+    """
+    return binascii.b2a_base64(dill.dumps(obj))
 
+def loads_a2b(ascii_str):
+    """
+    Decode an object that was encoded by dumps_b2a.
+    """
+    return dill.loads(binascii.a2b_base64(ascii_str))
 
 def mongo_init(key):
     to_insert['key'] = key
 
 def hash(obj):
     return hashlib.sha1(dill.dumps(obj)).hexdigest()
-
-
 
 def mongo_add(key, obj):
     """
@@ -89,16 +64,37 @@ def mongo_add(key, obj):
     """
     to_insert[key] = obj
 
-def mongo_insert_logbook_dict(d):
+def mongo_replace(collection, d, mongo_query_dict):
     """
+    mongo_query_dict: a query that will match stale documents
+    that must be removed.
+    """
+    remove_query_dict = {k: v for k, v in mongo_query_dict.iteritems()}
+    inserted = collection.insert(d, check_keys = False)
+    remove_query_dict['_id'] = {"$ne": inserted}
+    if list(collection.find(remove_query_dict)):
+        collection.remove(remove_query_dict)
+        print "removed"
+
+#def mongo_insert_logbook_dict(d):
+#    """
+#    Insert logging spreadsheet data into MongoDB.
+#    """
+#    # Set the value of the name field to something unique for each google spreadsheet
+#    d['name'] = config.logbook_ID
+#    inserted = collection.insert(d, check_keys = False)
+#    if list(collection.find({'_id': {"$ne": inserted}, 'name': {"$eq": config.logbook_ID}})):
+#        collection.remove({'_id': {"$ne": inserted}, 'name': {"$eq": config.logbook_ID}})
+#        print 'removed'
+
+def mongo_insert_logbook_dict(d):
+    """ 
     Insert logging spreadsheet data into MongoDB.
     """
-    # Set the value of the name field to something unique for each google spreadsheet
     d['name'] = config.logbook_ID
-    inserted = collection.insert(d, check_keys = False)
-    if list(collection.find({'_id': {"$ne": inserted}, 'name': {"$eq": config.logbook_ID}})):
-        collection.remove({'_id': {"$ne": inserted}, 'name': {"$eq": config.logbook_ID}})
-        print 'removed'
+    collection = client.database[config.expname + token]
+    query_dict = {'name': {"$eq": config.logbook_ID}}
+    mongo_replace(collection, d, query_dict)
 
 def mongo_get_logbook_dict():
     """
@@ -121,6 +117,7 @@ def mongo_commit(label_dependencies = None):
         """
         return '_'.join(map(hash, dependency_dicts))
     from dataccess import logbook
+
     spreadsheet = logbook.get_pub_logbook_dict()
     dependency_dicts =\
         [spreadsheet[label]
@@ -134,7 +131,28 @@ def mongo_commit(label_dependencies = None):
         to_insert['state_hash'] = state_hash
         collection.insert(to_insert, check_keys = False) 
 
+def mongo_store_object_by_label(obj, label):
+    """
+    Store a python object to MongoDB.
+    """
+    collection = client.database[config.logbook_ID + '_objects_by_label']
+    d = {'label': label, 'object': dumps_b2a(obj)}
+    query_dict = {'label': label}
+    mongo_replace(collection, d, query_dict)
 
+def mongo_query_object_by_label(label):
+    """
+    Query a python object stored to MongoDB.
+    """
+    collection = client.database[config.logbook_ID + '_objects_by_label']
+    result_list = list(collection.find({'label': label}))
+    if not result_list:
+        raise KeyError("%s: object not found" % label)
+    # TODO: treat case of multiple results
+    return loads_a2b(result_list[0]['object'])
+    
+    
+# TODO: move all these functions into a module or class
 def mongo_insert_derived_dataset(data_dict):
     """
     Insert query output data into MongoDB.
@@ -147,25 +165,87 @@ def mongo_insert_derived_dataset(data_dict):
         event data dictionary.
         -All logbook attributes that were used to evaluate the query.
     """
-    # serialize the dict
-    blob = cPickle.dumps(data_dict)
-    to_insert = {'gridFS_ID': FS.put(blob)}
+    collection = client.database[config.expname + token + '_derived']
+    # initialize to_insert with the remaining key/value pairs. These include
+    # all applicable logbook attributes.
+    to_insert =\
+        {k: v
+        for k, v in data_dict.iteritems()
+        if k != 'data'}
+    try:
+        # extract the (frame, event data dict) tuple
+        blob = cPickle.dumps(data_dict.pop('data'))
+        # Serialize the data tuple and store it
+        to_insert['gridFS_ID'] = FS.put(blob)
+
+        to_insert['detid'] = data_dict['detid']
+        to_insert['event_data_getter'] = data_dict['event_data_getter']
+    except KeyError:
+        pass
     to_insert['label'] = data_dict['label']
-    to_insert['detid'] = data_dict['detid']
     to_insert['source_logbook'] = config.logbook_ID
     collection.insert(to_insert)
 
-def mongo_query_derived_dataset(label, detid):
+
+def mongo_get_all_derived_datasets():
+    """
+    Return a dictionary in the same format as that returned by logbook.get_pub_logbook_dict().
+    """
+    collection = client.database[config.expname + token + '_derived']
+    documents =\
+        list(collection.find({'source_logbook': config.logbook_ID}))
+    def insert_one(d):
+        label = d.pop('label')
+        return label, d
+    attribute_dict =\
+        {k: v
+        for k, v in map(insert_one, documents)}
+    return attribute_dict
+    
+
+def mongo_query_derived_dataset(label, detid, event_data_getter = None):
     """
     Return a query output dataset previously inserted by mongo_insert_derived_dataset.
+    
+    The return value is a tuple containing an averaged frame and an event data dictionary.
     """
+    collection = client.database[config.expname + token + '_derived']
     result_list =\
         list(collection.find({'source_logbook': config.logbook_ID,
-            'label': {'$regex': label}, 'detid': detid}))
+            'label': {'$regex': label}, 'detid': detid, 'event_data_getter': dumps_b2a(event_data_getter)}))
     if not result_list:
-        return None
+        dataset = mongo_query_object_by_label(label)
+        return dataset.evaluate(detid, event_data_getter = event_data_getter)
     result = result_list[0]
     if len(result_list) > 1:
         print "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (label, result['label'])
     blob = FS.get(result['gridFS_ID']).read()
+    print "loading dataset from MongoDB"
     return cPickle.loads(blob)
+
+
+def get_derived_dataset_attribute(pat, attribute):
+    """
+    Return the value of an attribute belonging to a derived dataset.
+
+    Raises a KeyError if the label isn't found
+    """
+    import re
+    pat = '^' + pat + '$'
+    attribute_map = mongo_get_all_derived_datasets()
+    matching_labels =\
+        filter(lambda lab: bool(re.search(pat, lab, flags = re.IGNORECASE)),
+            attribute_map.keys())
+    if not matching_labels:
+        raise KeyError("%s: no matching derived dataset label found" % pat) 
+    result_label = matching_labels[0]
+    if len(matching_labels) > 1:
+        print "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (pat, result_label)
+    return attribute_map[result_label][attribute]
+
+def delete_all_derived_datasets():
+    # TODO: flush cache in data_access as well
+    collections = [client.database[config.expname + token + '_derived'], client.database[config.logbook_ID + '_objects_by_label']]
+    for collection in collections:
+        collection.delete_many({})
+    os.system('rm -rf cache/query/DataSet.evaluate*')

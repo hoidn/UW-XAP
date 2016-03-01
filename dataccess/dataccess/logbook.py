@@ -20,12 +20,13 @@ from oauth2client.file import Storage
 
 import gspread
 import pandas as pd
+import dill
 import numpy as np
 from atomicfile import AtomicFile
 
-import dill
-from dataccess import utils
-from dataccess import database
+import utils
+import database
+
 import config
 
 # Format specification for column headers in logbook. Column descriptions:
@@ -128,8 +129,11 @@ def get_logbook_data(url, sheet_number = 0):
         """
         raw_data = sheet.get_all_values()
         col_titles, values = spreadsheet_header_body(raw_data)
-        return col_titles, values
-    return [process_one_sheet(sheet) for sheet in worksheets]
+        if (not col_titles) or (not values):
+            return None
+        else:
+            return col_titles, values
+    return filter(lambda x: x, [process_one_sheet(sheet) for sheet in worksheets])
 
 
 def parse_float(flt_str):
@@ -193,6 +197,8 @@ def spreadsheet_header_body(sheet_list2d):
         Everything in the spreadsheet below the header row, with superfluous
         columns removed.
     """
+    if not sheet_list2d:
+        return None, None
     try:
         header_i, header_j = get_cell_coords(sheet_list2d, HEADER_REGEX)
     except ValueError:
@@ -206,7 +212,7 @@ def spreadsheet_header_body(sheet_list2d):
     row_extract = lambda row: [elt for i, elt in enumerate(row) if i in valid_columns]
     remove_columns = lambda arr2d: [tuple(row_extract(row)) for row in arr2d]
     if len(sheet_list2d) < header_i + 2:
-        return row_extract(header), [[]]
+        return row_extract(header), None
     else:
         return row_extract(header), remove_columns(sheet_list2d[header_i + 1:])
 
@@ -279,7 +285,7 @@ def get_label_runranges():
         labels_to_runs[label] = d['runs']
     return labels_to_runs
 
-def get_label_property(label, property):
+def get_label_attribute(label, property):
     """
     Return the value of a label's property.
     """
@@ -331,7 +337,7 @@ def eventmask_params(label):
     result = []
     for p in handles:
         try:
-            result.append(get_label_property(label, p))
+            result.append(get_label_attribute(label, p))
         except KeyError:
             pass
     return result
@@ -356,7 +362,7 @@ def get_all_runlist(label, fname = 'labels.txt'):
             return list(groups)
         except KeyError:
             # TODO: make sure that the run number exists
-            print "label " + label + " not found"
+            print "logbook label " + label + ": not found"
             try:
                 runs = parse_run(label)
             except ValueError:
@@ -367,19 +373,9 @@ def spreadsheet_mapping(url):
     sheet_headers_bodies = get_logbook_data(url)
     mapping_list =\
         [get_label_mapping_one_sheet(col_titles, data)
-        for col_titles, data in sheet_headers_bodies
-        if col_titles]
+        for col_titles, data in sheet_headers_bodies]
     return utils.merge_dicts(*mapping_list)
 
-#def all_runs(logbook_dict):
-#    """
-#    Returns a set of all run numbers in a logbook dict.
-#    """
-#    runs =\
-#        [entry['runs']
-#        for k, entry in logbook_dict.iteritems()
-#        if 'runs' in entry]
-#    return set(reduce(lambda x, y: x + y, runs))
 
 def main(url = config.url):
     while True:
