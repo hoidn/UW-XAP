@@ -53,13 +53,13 @@ if args.noplot:
     import config
     config.noplot = True
 
-try:
-#    playback.load_db(key)
-#    playback.execute()
-    mongo_commit()
-    sys.exit(0)
-except KeyError:
-    pass
+#try:
+##    playback.load_db(key)
+##    playback.execute()
+#    mongo_commit()
+#    sys.exit(0)
+#except KeyError:
+#    pass
 
 import os
 from mpi4py import MPI
