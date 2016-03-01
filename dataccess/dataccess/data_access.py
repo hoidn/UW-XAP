@@ -112,15 +112,12 @@ def get_data_and_filter_logbook(label, detid, event_data_getter = None,
 
         Raises KeyError if background label is not found.
         """
-        try:
-            bg_label = get_dataset_attribute_value(label, 'background')
-            print "using dark subtraction: ", bg_label
-            bg, _ =  get_label_data(bg_label, detid)
-        except KeyError:
-            pass# TODO
+        bg_label = get_dataset_attribute_value(label, 'background')
+        print "using dark subtraction: ", bg_label
+        bg, _ =  get_label_data(bg_label, detid)
+        return bg
 #            darks = query.DataSet(query.query_list([('material', r".*[dD]ark.*")])).runs
 #            preceding
-        return bg
     def get_event_mask(filterfunc, detid = None):
         """
         TODO
