@@ -33,4 +33,5 @@ def test_get_dark_data():
     assert data.get_dark_label('evaltest') == '377'
     assert data.get_dark_label('fe3o4lab') == '436'
 
-test_get_label_data()
+def test_get_data_and_filter_logbook():
+    assert data.get_data_and_filter_logbook('40', 'quad1')

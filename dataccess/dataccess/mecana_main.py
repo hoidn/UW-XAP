@@ -106,6 +106,7 @@ def call_eventframes(args):
     eventframes.main(args.label, args.detid, filtered = args.filter)
 
 def main():
+    import config
     parser = argparse.ArgumentParser()
     parser.add_argument('--noplot', '-n', action = 'store_true', help = 'If selected, plotting is suppressed')
     subparsers = parser.add_subparsers(help='sub-command help', dest = 'command')
@@ -138,9 +139,7 @@ def main():
 
     if cmd == 'init': # Enter init sub-command
         call_init(config_source, config_dst)
-
     if args.noplot:
-        import config
         config.noplot = True
 
     if config.playback:

@@ -110,8 +110,12 @@ def get_dark_label(label):
         import query
         darks = query.DataSet(query.query_list([('material', r".*[dD]ark.*")])).runs
         start_run = np.min(get_dataset_attribute_value(label, 'runs'))
-        closest_dark = np.max(filter(lambda x: x < start_run, darks))
-        return str(closest_dark)
+        preceding_darks = filter(lambda x: x < start_run, darks)
+        if not preceding_darks:
+            raise KeyError("No dark frames preceding dataset: %s" % label)
+        else:
+            closest_dark = np.max(preceding_darks)
+            return str(closest_dark)
     def get_label_darkframe():
         return get_dataset_attribute_value(label, 'background')
     try:

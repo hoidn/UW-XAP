@@ -537,9 +537,8 @@ def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwid
             path = 'spectra/' + label + '_' + eltname
         else:
             path = 'spectra/' + label
+        # add header?: 'energy (eV)\tintensity (arb)')
         utils.save_data(energies, intensities, path)
-        #np.savetxt('spectra/' + label + '_' + eltname,
-                [energies, intensities], header = 'energy (eV)\tintensity (arb)')
     if eltname:
         name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
     else:
