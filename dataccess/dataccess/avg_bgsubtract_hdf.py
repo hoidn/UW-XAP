@@ -15,6 +15,7 @@ import ipdb
 import dill
 import sys
 from time import time
+import config
 
 
 def idxgen(ds):
@@ -287,6 +288,8 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
     last = time()
     last_nevent = 0
     for nevent, evt in evtgen:
+        if config.testing and nevent % 10 != 0:
+            continue
         if event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             try:

@@ -231,19 +231,11 @@ def make_pulse_duration_and_run_filter(duration_min, duration_max, run_min, run_
     return conjunction
 
    
-## global filter detid
-#filter_detid = 'xrts1'
-## global event filter function
-#def filter_function(imarr):
-#    return filter_by_si_peaks(imarr)
-#    #return True
-
-
 # Size in microns of the beam spot at best focus
 best_focus_size = 2.
 
 def sum_window(smin, smax):
     return lambda arr: smin < np.sum(arr) < smax
 
-# port for ZMQ sockets
-port = 5681
+testing = True
+playback = True

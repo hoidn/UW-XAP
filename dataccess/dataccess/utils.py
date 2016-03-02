@@ -116,8 +116,8 @@ def ifplot(func):
             return func(*args, **kwargs)
     return inner
     
-        
-@playback.db_insert
+# playback fails for this function
+#@playback.db_insert
 @ifroot
 def save_image(save_path, imarr, fmt = 'tiff'):
     """
@@ -138,7 +138,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     im.save(save_path + '.tif')
     matplotlib.image.imsave(save_path + '.png', imarr)
 
-#@playback.db_insert
+@playback.db_insert
 @ifroot
 def save_data(x, y, save_path):
     import database
@@ -272,17 +272,7 @@ def make_hashable(obj):
     """
     return a hash of any python object
     """
-    if isinstance(obj, str) or isinstance(obj, np.ndarray):
-        return hashlib.sha1(dill.dumps(obj)).hexdigest()
-    try:
-        # This is a workaround for a cryptic error that occrs in pickle when
-        # obj is an iterable type (specifically: 'I/O operation on closed file')
-        slist =\
-            [make_hashable(x)
-            for x in obj]
-        return hashlib.sha1(''.join(slist)).hexdigest()
-    except TypeError:
-        return hashlib.sha1(dill.dumps(obj)).hexdigest()
+    return hashlib.sha1(dill.dumps(obj)).hexdigest()
 
 def hashable_dict(d):
     """

@@ -124,11 +124,10 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
         combined_mask = utils.combine_masks(imarray, extra_masks, transpose = True)
         imarray *= combined_mask
     min_val =  np.min(imarray)
-    #print "PERCENTILES", np.percentile(imarray, 1), np.percentile(imarray, 2), np.percentile(imarray, 5), np.percentile(imarray, 10), np.percentile(imarray, 15)
-    if min_val < 0:
-        return np.abs(min_val) + imarray, event_data
-    else:
-        return imarray, event_data
+#    if min_val < 0:
+#        return np.abs(min_val) + imarray, event_data
+#    else:
+    return imarray, event_data
 
 def get_x_y(imarray, phi, x0, y0, alpha, r):
     """

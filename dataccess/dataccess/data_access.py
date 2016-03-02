@@ -100,24 +100,33 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         return signal, event_data
         #print "event data is: ", event_data
 
+def get_dark_label(label):
+    """
+    Return the label of either (1) the dark run associated with the
+    given label in the logging spreadsheet or (2), if the former isn't
+    available, the most proximate preceding dark run.
+    """
+    def autofind_dark():
+        import query
+        darks = query.DataSet(query.query_list([('material', r".*[dD]ark.*")])).runs
+        start_run = np.min(get_dataset_attribute_value(label, 'runs'))
+        closest_dark = np.max(filter(lambda x: x < start_run, darks))
+        return str(closest_dark)
+    def get_label_darkframe():
+        return get_dataset_attribute_value(label, 'background')
+    try:
+        darklabel = get_label_darkframe()
+    except KeyError:
+        darklabel = autofind_dark()
+    print "using dark subtraction run: ", darklabel
+    return darklabel
+
 #@utils.eager_persist_to_file('cache/data_access/get_label_data_and_filter/')
 def get_data_and_filter_logbook(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
     """
     # TODO: update this. Make it clear that this function is the public interface.
     """
-    def get_background():
-        """
-        Returns background frame.
-
-        Raises KeyError if background label is not found.
-        """
-        bg_label = get_dataset_attribute_value(label, 'background')
-        print "using dark subtraction: ", bg_label
-        bg, _ =  get_label_data(bg_label, detid)
-        return bg
-#            darks = query.DataSet(query.query_list([('material', r".*[dD]ark.*")])).runs
-#            preceding
     def get_event_mask(filterfunc, detid = None):
         """
         TODO
@@ -131,7 +140,6 @@ def get_data_and_filter_logbook(label, detid, event_data_getter = None,
 
     try:
         if event_filter:
-            ipdb.set_trace()
             event_mask = get_event_mask(event_filter, detid = event_filter_detid)
         else:
             args = logbook.eventmask_params(label)
@@ -160,7 +168,8 @@ def get_data_and_filter_logbook(label, detid, event_data_getter = None,
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter)
     try:
-        bg = get_background()
+        dark_label = get_dark_label(label)
+        bg, _ =  get_label_data(dark_label, detid)
         return imarray - bg, event_data
     except KeyError:
         if utils.isroot():

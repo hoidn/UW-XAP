@@ -19,10 +19,10 @@ outputs, and for inserting and accessing derived datasets.
 
 MONGO_HOST = 'pslogin03'
 MONGO_PORT = 4040
-token = ''
-
-db_dir = 'db/'
-db = []
+if config.testing:
+    collection_prefix = config.expname + 'testing'
+else:
+    collection_prefix = config.expname
 
 
 def hash(obj):
@@ -33,9 +33,15 @@ def hash(obj):
 
 # Functions for interacting with Mongo and inserting into/loading from
 # appending to the interpreter-wide Mongodb cache.
+# TODO: put this into a class
 to_insert = {}
+
 client = MongoClient(MONGO_HOST, MONGO_PORT)
-collection = client.database[config.expname + token]
+
+collections_lookup =\
+    {'session_cache': client.database[collection_prefix], 
+    'logbook': client.database[collection_prefix + '_logbook']}
+
 # Use GridFS to fit store objects > 16 MB
 FS = gridfs.GridFS(client.database)
 
@@ -84,7 +90,7 @@ def mongo_insert_logbook_dict(d):
     Insert logging spreadsheet data into MongoDB.
     """
     d['name'] = config.logbook_ID
-    collection = client.database[config.expname + token]
+    collection = collections_lookup['logbook']
     query_dict = {'name': {"$eq": config.logbook_ID}}
     mongo_replace(collection, d, query_dict)
 
@@ -92,7 +98,11 @@ def mongo_get_logbook_dict():
     """
     Return the logging spreadsheet data dictionary.
     """
-    raw_dict = list(collection.find({"name": config.logbook_ID}))[0]
+    collection = collections_lookup['logbook']
+    try:
+        raw_dict = list(collection.find({"name": config.logbook_ID}))[0]
+    except IndexError:
+        raise IOError("No matching logbook document found.")
     for k, v in raw_dict.iteritems():
         if isinstance(v, dict) and 'runs' in v:
             v['runs'] = tuple(v['runs'])
@@ -119,12 +129,12 @@ def mongo_commit(label_dependencies = None):
         state_hash = get_state_hash(dependency_dicts)
     except KeyError:
         raise KeyError("Attempting to insert non-initialized dict into mongo database")
-    if not list(collection.find({'key': key, 'state_hash': state_hash})):
+    if not list(collections_lookup['session_cache'].find({'key': key, 'state_hash': state_hash})):
         to_insert['state_hash'] = state_hash
-        collection.insert(to_insert, check_keys = False) 
+        collections_lookup['session_cache'].insert(to_insert, check_keys = False) 
 
 def mongo_find(key):
-    return list(collection.find({'key': key}))
+    return list(collections_lookup['session_cache'].find({'key': key}))
 
 def mongo_store_object_by_label(obj, label):
     """
@@ -161,7 +171,7 @@ def mongo_insert_derived_dataset(data_dict):
         event data dictionary.
         -All logbook attributes that were used to evaluate the query.
     """
-    collection = client.database[config.expname + token + '_derived']
+    collection = client.database[collection_prefix + '_derived']
     # initialize to_insert with the remaining key/value pairs. These include
     # all applicable logbook attributes.
     to_insert =\
@@ -187,7 +197,7 @@ def mongo_get_all_derived_datasets():
     """
     Return a dictionary in the same format as that returned by logbook.get_pub_logbook_dict().
     """
-    collection = client.database[config.expname + token + '_derived']
+    collection = client.database[collection_prefix + '_derived']
     documents =\
         list(collection.find({'source_logbook': config.logbook_ID}))
     def insert_one(d):
@@ -205,7 +215,7 @@ def mongo_query_derived_dataset(label, detid, event_data_getter = None):
     
     The return value is a tuple containing an averaged frame and an event data dictionary.
     """
-    collection = client.database[config.expname + token + '_derived']
+    collection = client.database[collection_prefix + '_derived']
     result_list =\
         list(collection.find({'source_logbook': config.logbook_ID,
             'label': {'$regex': label}, 'detid': detid, 'event_data_getter': dumps_b2a(event_data_getter)}))
@@ -239,12 +249,13 @@ def get_derived_dataset_attribute(pat, attribute):
         print "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (pat, result_label)
     return attribute_map[result_label][attribute]
 
-def delete_collections():
+def delete_collections(delete_logbook = False):
     # TODO: flush cache in data_access as well
     collections =\
-        [client.database[config.expname + token],
-        client.database[config.expname + token + '_derived'],
+        [client.database[collection_prefix + '_derived'],
         client.database[config.logbook_ID + '_objects_by_label']]
     for collection in collections:
         collection.delete_many({})
+    if delete_logbook:
+       collections_lookup['logbook'].delete_many({})
     os.system('rm -rf cache/query/DataSet.evaluate*')
