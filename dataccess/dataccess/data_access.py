@@ -186,21 +186,11 @@ def event_data_dict_to_list(event_data_dict):
     run_dicts = event_data_dict.values()
     return reduce(lambda x, y: x + y, [d.values() for d in run_dicts])
 
-def query_event_data(label, detid, flux_min, flux_max, mode = 'all'):
-    def flux(beam_energy):
-        size = get_dataset_attribute_value(label, 'focal_size')
-        flux = 1e-3 * beam_energy * get_dataset_attribute_value(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
-        return flux
-    def flux_filter(beam_energy):
-        return flux_min < flux(beam_energy) < flux_max
-    if mode == 'all':
-        imarray, event_data = get_data_and_filter(label, detid, event_filter = flux_filter, event_filter_detid = 'GMD', event_data_getter = lambda x: flux(x))
-        return event_data
-    elif mode == 'mean':
-        imarray, event_data = get_data_and_filter(label, detid, event_filter = flux_filter, event_filter_detid = 'GMD')
-        return imarray
-    else:
-        raise ValueError("Invalid mode")
+# TODO: give this function a home.
+#def flux(beam_energy):
+#    size = get_dataset_attribute_value(label, 'focal_size')
+#    flux = 1e-3 * beam_energy * get_dataset_attribute_value(label, 'transmission') /  (np.pi * ((size * 0.5 * 1e-4)**2))
+#    return flux
 
 def main(label, fname = 'labels.txt'):
     get_label_data(label, 1)

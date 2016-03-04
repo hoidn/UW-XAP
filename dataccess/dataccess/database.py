@@ -122,6 +122,8 @@ def mongo_commit(label_dependencies = None):
     """
     Insert the interpreter session's cache (created by calls to mongo_add)
     into MongoDB.
+
+    Replaces pre-existing documents with a matching 'key' field.
     """
     def get_state_hash(dependency_dicts):
         """
@@ -142,10 +144,8 @@ def mongo_commit(label_dependencies = None):
         state_hash = get_state_hash(dependency_dicts)
     except KeyError:
         raise KeyError("Attempting to insert non-initialized dict into mongo database")
-    if not list(collections_lookup['session_cache'].find({'key': key, 'state_hash': state_hash})):
-        to_insert['state_hash'] = state_hash
-        mongo_insert_if_absent(collections_lookup['session_cache'], to_insert)
-        #collections_lookup['session_cache'].insert(to_insert, check_keys = False) 
+    to_insert['state_hash'] = state_hash
+    mongo_replace_atomic(collections_lookup['session_cache'], to_insert, {'key': key})
 
 def mongo_find(key):
     return list(collections_lookup['session_cache'].find({'key': key}))
