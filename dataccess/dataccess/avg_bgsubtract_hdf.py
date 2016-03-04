@@ -255,7 +255,7 @@ def get_signal_one_run_nonarea(runNum, detid,
             if event_valid(i)}
     else:
         event_data = {}
-    return event_mean, event_data
+    return event_mean, event_data, len(det_values_filtered)
 
 
 # TODO: more testing and refactor all of this!
@@ -329,7 +329,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
             print 'before merge'
             print event_data
             event_data = utils.merge_dicts(*event_data)
-        return signalsum_final, event_data
+        return signalsum_final, event_data, events_processed
     except UnboundLocalError:
         raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum) + ": " + str(events_processed))
 
@@ -360,7 +360,21 @@ def get_signal_many_parallel(runList, detid, event_data_getter = None,
             event_data_getter, event_mask = event_mask, **kwargs)
 
     if config.smd:
-        run_data = map(mapfunc_smd, runList)
+        # Iterate through runs. Bad runs are excluded from the returned
+        # data, unless all runs are bad, in which case a ValueError is
+        # raised.
+        run_data = []
+        exceptions = []
+        for run in runList:
+            try:
+                run_data.append(mapfunc_smd(run))
+            except ValueError, e:
+                exceptions.append(e)
+                print "WARNING: ", e
+        if not run_data:
+            raise ValueError('. '.join(map(str, e)))
+        elif exceptions:
+            print "WARNING: INVALID RUNS WILL BE EXCLUDED"
     else:
         MAXNODES = 14
         pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
@@ -368,11 +382,12 @@ def get_signal_many_parallel(runList, detid, event_data_getter = None,
         #run_data = map(mapfunc, runList)
     event_data = {}
     runindx = 0
-    for signal_increment, event_data_entry in run_data:
+    total_events = np.sum(map(lambda x: x[2], run_data))
+    for signal_increment, event_data_entry, events_processed in run_data:
         try:
-            signal += (signal_increment / len(runList))
+            signal += signal_increment * (float(events_processed) / total_events)
         except UnboundLocalError:
-            signal = signal_increment / len(runList)
+            signal = signal_increment * (float(events_processed) / total_events)
         event_data[runList[runindx]] = event_data_entry
         runindx += 1
     return signal, event_data

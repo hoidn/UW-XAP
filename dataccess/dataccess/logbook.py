@@ -249,11 +249,13 @@ def get_label_mapping_one_sheet(col_titles, data):
     return label_dict
 
 
-@utils.memoize(timeout = 5)
-def get_pub_logbook_dict():
-    if utils.isroot():
-        print "Querying MongoDB"
-    return database.mongo_get_logbook_dict()
+#@utils.memoize(timeout = 5)
+def get_attribute_dict():
+#    if utils.isroot():
+#        print "Querying MongoDB"
+    logbook = database.mongo_get_logbook_dict()
+    derived = database.mongo_get_all_derived_datasets()
+    return utils.merge_dicts(logbook, derived)
 
 
 def get_label_runranges():
@@ -264,7 +266,7 @@ def get_label_runranges():
 
     Output type: Dict mapping strings to lists of tuples.
     """
-    complete_dict = get_pub_logbook_dict()
+    complete_dict = get_attribute_dict()
     labels_to_runs = {}
     for label, d in complete_dict.iteritems():
         labels_to_runs[label] = d['runs']
@@ -278,7 +280,7 @@ def get_label_dict(label):
     """
     if not config.use_logbook:
         raise AttributeError("Logbook not available (disabled in config.py)")
-    complete_dict = get_pub_logbook_dict()
+    complete_dict = get_attribute_dict()
     def runs_to_label(run_range):
         """
         Given a run range, look for a label whose run range matches
@@ -307,6 +309,14 @@ def get_label_dict(label):
             # TODO: stale error message here
             raise KeyError("label: " + label + " is neither a label nor a valid range of run numbers")
     return complete_dict[label]
+
+def all_logbook_attributes():
+    d = get_attribute_dict()
+    keys = set()
+    for attribute_values in d.values():
+        for k in attribute_values:
+            keys.add(k)
+    return list(keys)
 
 def get_label_attribute(label, property):
     """
@@ -341,6 +351,7 @@ def get_all_runlist(label):
     A label may be either a string specified in the google drive logbook or
     a run range of the format 'abcd' or 'abcd-efgh'.
     """
+    #ipdb.set_trace()
     try:
         runs = parse_run(label)
         return list(runs)

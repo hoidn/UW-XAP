@@ -230,6 +230,13 @@ def make_pulse_duration_and_run_filter(duration_min, duration_max, run_min, run_
             and pulse_duration_filter(a, run = run, nevent = nevent)
     return conjunction
 
+def every_other_filter(arr, nevent = None, **kwargs):
+    """
+    For use in testing mode.
+    """
+    #ipdb.set_trace()
+    return bool(nevent % 20)
+
    
 # Size in microns of the beam spot at best focus
 best_focus_size = 2.

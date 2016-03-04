@@ -1,5 +1,7 @@
 import ipdb
 import sys
+#del sys.modules['pickle']
+#sys.path.insert(0, '/reg/neh/home/ohoidn/anaconda2/lib/python2.7/')
 sys.path.append('.') # so that config.py can be imported
 import database
 import playback
@@ -7,6 +9,7 @@ import argument_parsers
 import utils
 import argparse
 import time
+import config
 
 def call_init(config_source, config_dst):
     """
@@ -84,17 +87,18 @@ def call_xrd(args):
         peak_progression_compound = peak_progression_compound,
         bgsub = bgsub, compound_list = compound_list,
         normalization = normalization, maxpeaks = maxpeaks, plot_progression = args.plot_progression)
-    MPI.Finalize()
+    if not config.testing:
+        MPI.Finalize()
 
 def call_histogram(args):
-    from dataccess import summarymetrics
+    import summarymetrics
     labels = args.labels
     detid = args.detid
     nbins = args.nbins
     summarymetrics.main(labels, detid, funcstr = args.function, filtered = args.filter, nbins = nbins, separate = args.separate)
 
 def call_datashow(args):
-    from dataccess import datashow
+    import datashow
     labels = args.labels
     detid = args.detid
     rmax = args.max
@@ -102,11 +106,21 @@ def call_datashow(args):
     datashow.main(labels, detid, path = args.output, masked = args.masks, rmin = rmin, rmax = rmax, run = args.run)
 
 def call_eventframes(args):
-    from dataccess import eventframes
+    import eventframes
     eventframes.main(args.label, args.detid, filtered = args.filter)
 
+def call_query(args):
+    import query
+    if args.filter_function:
+        filter_function = eval('config.' + args.filter_function)
+    else:
+        filter_function = None
+    if args.filter_function:
+        if not args.filter_detid:
+            raise ValueError("FILTER_DETID must be provided along with FILTER_FUNCTION")
+    query.main(args.querylist, filter_function, args.filter_detid)
+
 def main():
-    import config
     parser = argparse.ArgumentParser()
     parser.add_argument('--noplot', '-n', action = 'store_true', help = 'If selected, plotting is suppressed')
     subparsers = parser.add_subparsers(help='sub-command help', dest = 'command')
@@ -118,6 +132,7 @@ def main():
     argument_parsers.addparser_histogram(subparsers)
     argument_parsers.addparser_datashow(subparsers)
     argument_parsers.addparser_eventframes(subparsers)
+    argument_parsers.addparser_query(subparsers)
 
     args = parser.parse_args()
 
@@ -166,6 +181,8 @@ def main():
             call_datashow(args)
         elif cmd == 'eventframes':
             call_eventframes(args)
+        elif cmd == 'query':
+            call_query(args)
 
     if utils.isroot():
         if config.playback:

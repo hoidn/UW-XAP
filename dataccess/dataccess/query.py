@@ -34,7 +34,7 @@ def query_generic(attribute, value_test_func):
         except KeyError:
             return False
     relational = []
-    d = logbook.get_pub_logbook_dict()
+    d = logbook.get_attribute_dict()
     for k, v in d.iteritems():
         v['label'] = k
         relational.append(v)
@@ -127,17 +127,14 @@ class DataSet(object):
         self.event_filter_detid = event_filter_detid
         if label is None:
             query_strings = [q.label for q in query]
-#            attribute_pairs =\
-#                [q.attribute + '-' + str(q.attribute_value)
-#                for q in query
-#                if q.attribute_value is not None]
             if event_filter is not None:
                 try:
                     filter_identifier = '-'.join(event_filter.params)
                 except:
                     filter_identifier = database.hash(utils.random_float())
-                filter_label = '-filter-' + event_filter.__name__ + '-' + filter_identifier + '-' + str(event_filter_detid)
-                #filter_label = '-filter-' + event_filter.__name__ + '-' + database.hash(event_filter) + '-' + event_filter_detid
+                filter_label =\
+                    '-filter-' + event_filter.__name__ + '-' +\
+                    filter_identifier + '-' + str(event_filter_detid)
             else:
                 filter_label = ''
             self.label = '-'.join(query_strings) + filter_label
@@ -147,10 +144,6 @@ class DataSet(object):
         self._store() 
         # Store a dict mapping self.label to the query parameters
         self._db_insert() 
-        # TODO: Have a way to insert a DataSet into MongoDB without having to do this
-        # type of dummy evaluation.
-#        if immediate_insert:
-#            self.evaluate('GMD')
 
     def _store(self):
         """
@@ -179,22 +172,10 @@ class DataSet(object):
             event_data_getter = eventsum
         runs = self.runs
         labels = map(str, runs)
-        pairs =\
-            [data_access.get_data_and_filter(label, detid,
-                event_data_getter = event_data_getter, event_filter = self.event_filter,
-                event_filter_detid = self.event_filter_detid)
-                for label in labels]
-        frames = np.array(map(lambda x: x[0], pairs))
-        event_data_dicts = map(lambda x: x[1], pairs)
-        def dict_nevents(d):
-            return len(d.values()[0].keys())
-        nevents_per_run = np.array(map(dict_nevents, event_data_dicts))
-
-        merged = utils.merge_dicts(*event_data_dicts)
-        # Mean of the averaged frames, weighted by the number of events
-        # processed from each run.
-        mean_frame = reduce(lambda x, y: x + y,
-            nevents_per_run[:, None, None] * frames)/np.sum(nevents_per_run)
+        mean_frame, merged =\
+            data_access.get_data_and_filter(self.label, detid,
+            event_data_getter = event_data_getter, event_filter = self.event_filter,
+            event_filter_detid = self.event_filter_detid)
         if insert:
             self._db_insert(mean_frame, merged, detid)
         return mean_frame, merged
@@ -204,7 +185,6 @@ class DataSet(object):
         """
         TODO
         """
-        #import database
         data_dict =\
             {q.attribute: q.attribute_value for q in self.query}
         data_dict['runs'] = tuple(self.runs)
@@ -243,33 +223,50 @@ materials_ref_match_dict = {
     "Lab6": r"lab.*6"
 }
 
-# TODO: move dependence on detid to DataSet.evaluate()
-def main(query_list_list = None, detid = 'si', event_filter = None, event_filter_detid = None, ):
-    """
-    For example, invoke with:
-    >>> main([['material', r"Fe3O4"], ['runs', 400, 405]])
-    """
-    def lk20_material_specifier_substitute(qlist):
-        if qlist[1] in materials_ref_match_dict:
-            print "Applying string regex substitution: %s --> %s" % (qlist[1], materials_ref_match_dict[qlist[1]])
-            qlist[1] = materials_ref_match_dict[qlist[1]]
-            
-        return tuple(qlist)
-    if query_list_list is not None:
-        q = query_list(map(lk20_material_specifier_substitute, query_list_list))
-    else:
-        q = query_list([('material', r".*Fe3O4.*"), ('transmission', 0.05, 0.8)])
-    dataset = DataSet(q)
-    dataset.evaluate(detid)
 
-#    probe = dataset.evaluate('si',event_data_getter = eval('config.si_spectrometer_probe'))
-#    pump = dataset.evaluate('si',event_data_getter = eval('config.si_spectrometer_pump'))
-#    extract_eventdata = lambda a: map(lambda x: x[2], utils.flatten_dict(a[1]))
-#    plt.scatter(extract_eventdata(pump), extract_eventdata(probe))
-#    plt.xlabel('pump intensity')
-#    plt.ylabel('probe intensity')
-#    plt.show()
-#    return probe, pump
+def parse_list_of_strings_to_query(slist, partial = ()):
+    """
+    Given a list of strings, group the strings into tuples, each corresponding to a
+    query, and convert string values into numeric ones where possible. The resulting
+    tuples may be used to construct Query instances using construct_query.
+    """
+    def _parse(slist, partial = ()):
+        """
+        This function destroys the input list
+        """
+        def parse_query_tuples(tup):
+            if not tup:
+                return tup
+            new = []
+            new.append(tup[0])
+            for elt in tup[1:]:
+                try:
+                    new.append(int(elt))
+                except ValueError:
+                    try:
+                        new.append(float(elt))
+                    except ValueError:
+                        return [tup]
+            return [tuple(new)]
+        if len(partial) > 3:
+            raise ValueError("Invalid query subsequence: %s" % str(partial))
+        if not slist:
+            return parse_query_tuples(partial)
+        next = slist.pop(0)
+        if next in logbook.all_logbook_attributes():
+            if len(partial) ==  1:
+                raise ValueError("Invalid query subsequence: %s" % str(partial))
+            if partial:
+                return parse_query_tuples(partial) + _parse(slist, partial = (next,))
+            else:
+                return _parse(slist, partial = (next,))
+        else:
+            return _parse(slist, partial = partial + (next,))
+    return _parse([s for s in slist])
 
-if __name__ == '__main__':
-    main()
+def main(query_string_list, event_filter = None, event_filter_detid = None):
+    q = query_list(parse_list_of_strings_to_query(query_string_list))
+    dataset = DataSet(q, event_filter = event_filter, event_filter_detid = event_filter_detid)
+    print dataset.label
+    return dataset
+    

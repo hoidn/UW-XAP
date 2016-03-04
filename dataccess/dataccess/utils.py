@@ -26,6 +26,9 @@ def identity(x, **kwargs):
 def square(x, **kwargs):
     return np.sum(x)**2
 
+def usum(x, **kwargs):
+    return np.sum(x)
+
 
 def random_float():
     from datetime import datetime
@@ -80,7 +83,7 @@ def isroot():
     """
     Return true if the MPI core rank is 0 and false otherwise.
     """
-    if 'OMPI' not in ' '.join(os.environ.keys()):
+    if 'OMPI_COMM_WORLD_RANK' not in ' '.join(os.environ.keys()):
         return True
     else:
         rank = int(os.environ['OMPI_COMM_WORLD_RANK'])

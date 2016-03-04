@@ -72,7 +72,16 @@ def mongo_add(key, obj):
     to_insert[key] = obj
 
 @utils.ifroot
-def mongo_replace(collection, d, mongo_query_dict):
+def mongo_insert_if_absent(collection, d):
+    """
+    mongo_query_dict: a query that will match stale documents
+    that must be removed.
+    """
+    if not list(collection.find(d)):
+        collection.insert(d, check_keys = False)
+
+@utils.ifroot
+def mongo_replace_atomic(collection, d, mongo_query_dict):
     """
     mongo_query_dict: a query that will match stale documents
     that must be removed.
@@ -92,7 +101,7 @@ def mongo_insert_logbook_dict(d):
     d['name'] = config.logbook_ID
     collection = collections_lookup['logbook']
     query_dict = {'name': {"$eq": config.logbook_ID}}
-    mongo_replace(collection, d, query_dict)
+    mongo_replace_atomic(collection, d, query_dict)
 
 def mongo_get_logbook_dict():
     """
@@ -119,10 +128,14 @@ def mongo_commit(label_dependencies = None):
         Return a string containing the hash of each element in a list.
         """
         return '_'.join(map(hash, dependency_dicts))
-    from dataccess import logbook
+    import logbook
+    import data_access
 
+#    dependency_dicts =\
+#        [logbook.get_label_dict(label)
+#        for label in label_dependencies]
     dependency_dicts =\
-        [logbook.get_label_dict(label)
+        [data_access.get_dataset_attribute_map(label)
         for label in label_dependencies]
     try:
         key = to_insert['key']
@@ -131,7 +144,8 @@ def mongo_commit(label_dependencies = None):
         raise KeyError("Attempting to insert non-initialized dict into mongo database")
     if not list(collections_lookup['session_cache'].find({'key': key, 'state_hash': state_hash})):
         to_insert['state_hash'] = state_hash
-        collections_lookup['session_cache'].insert(to_insert, check_keys = False) 
+        mongo_insert_if_absent(collections_lookup['session_cache'], to_insert)
+        #collections_lookup['session_cache'].insert(to_insert, check_keys = False) 
 
 def mongo_find(key):
     return list(collections_lookup['session_cache'].find({'key': key}))
@@ -143,7 +157,7 @@ def mongo_store_object_by_label(obj, label):
     collection = client.database[config.logbook_ID + '_objects_by_label']
     d = {'label': label, 'object': dumps_b2a(obj)}
     query_dict = {'label': label}
-    mongo_replace(collection, d, query_dict)
+    mongo_replace_atomic(collection, d, query_dict)
 
 def mongo_query_object_by_label(label):
     """
@@ -200,12 +214,17 @@ def mongo_get_all_derived_datasets():
     collection = client.database[collection_prefix + '_derived']
     documents =\
         list(collection.find({'source_logbook': config.logbook_ID}))
-    def insert_one(d):
+    def process_one_row(d):
         label = d.pop('label')
-        return label, d
+        newd = {}
+        for k, v in d.iteritems():
+            if isinstance(v, list):
+                v = tuple(v)
+            newd[k] = v
+        return label, newd
     attribute_dict =\
         {k: v
-        for k, v in map(insert_one, documents)}
+        for k, v in map(process_one_row, documents)}
     return attribute_dict
     
 

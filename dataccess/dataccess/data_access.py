@@ -28,6 +28,12 @@ Module for accessing data associated with logbook-specified run group labels,
 using a mapping published by a running instance of logbook.main.
 """
 
+def get_dataset_attribute_map(label):
+    try:
+        return logbook.get_label_dict(label)
+    except ValueError:
+        return database.mongo_get_all_derived_datasets()[label]
+
 def get_dataset_attribute_value(label, attribute):
     """
     Get the value of an attribute belonging to a dataset label. The dataset
@@ -72,19 +78,7 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
         event_data_getter on each event frame in the dataset.
     #TODO: finish docstring
     """
-    try:
-        runList = logbook.get_all_runlist(label)
-    # look for matching derived dataset and return it if possible
-    except ValueError, e:
-        from dataccess import database
-        dataset = database.mongo_query_derived_dataset(label, detid)
-        if dataset is None:
-            raise ValueError(str(e) + '\nNo matching derived dataset found.')
-        signal, event_data = dataset
-        return signal, event_data
-        #print "Logbook label not found. Searching derived datasets."
-
-    # Compute logbook-based dataset
+    runList = logbook.get_all_runlist(label)
     if detid in config.nonarea:
         subregion_index = None
     else:
@@ -125,8 +119,7 @@ def get_dark_label(label):
     print "using dark subtraction run: ", darklabel
     return darklabel
 
-#@utils.eager_persist_to_file('cache/data_access/get_label_data_and_filter/')
-def get_data_and_filter_logbook(label, detid, event_data_getter = None,
+def get_data_and_filter(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
     """
     # TODO: update this. Make it clear that this function is the public interface.
@@ -163,7 +156,7 @@ def get_data_and_filter_logbook(label, detid, event_data_getter = None,
         print "Event mask True entries: ", sum_true, "Total number of events: ", n_events
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)
-    except Exception, e:
+    except (KeyError, AttributeError), e:
         if utils.isroot():
             print "!!!!!!!!!!!!!!!!!!"
             print "WARNING: Event filtering will not be performed."
@@ -180,17 +173,6 @@ def get_data_and_filter_logbook(label, detid, event_data_getter = None,
             print "No background label found"
         return imarray, event_data
 
-def get_data_and_filter(label, detid, event_data_getter = None,
-    event_filter = None, event_filter_detid = None):
-    try:
-        return get_data_and_filter_logbook(label, detid, event_data_getter = event_data_getter,
-            event_filter = event_filter, event_filter_detid = event_filter_detid)
-    except:# TODO: catch specific exceptions TODO
-        try:
-            return database.mongo_query_derived_dataset(label, detid,
-                event_data_getter = event_data_getter)
-        except KeyError:
-            raise ValueError("%s: no matching derived dataset found." % label)
 
 def flux_constructor(label):
     size = get_dataset_attribute_value(label, 'focal_size')

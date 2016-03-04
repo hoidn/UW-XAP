@@ -1,7 +1,9 @@
 import config
+import ipdb
 from dataccess import query
+import numpy as np
 
-def test_main():
+def test_DataSet():
     # Edge case test
     assert query.DataSet([])
 
@@ -15,3 +17,17 @@ def test_query_generic():
         616, 617, 618, 619, 620, 621])
     assert runs == target
 
+def test_parse_list_of_strings_to_query():
+    assert query.parse_list_of_strings_to_query(['transmission', '1','2', 'runs', '2', 'bar']) == [('transmission', 1.0, 2.0), ('runs', '2', 'bar')]
+    assert query.parse_list_of_strings_to_query(['transmission', '1', 'runs', '2', '3']) == [('transmission', 1.0), ('runs', 2.0, 3.0)]
+
+def test_main():
+    slist = "runs 530 535".split()
+    dataset1 = query.main(slist)
+    frame1, edd1 = dataset1.evaluate('si')
+    f = config.every_other_filter
+    dataset2 = query.main(slist, event_filter = f, event_filter_detid = 'si')
+    frame2, edd2 = dataset2.evaluate('si')
+    assert not np.all(frame1 == frame2)
+    return edd1, edd2
+    

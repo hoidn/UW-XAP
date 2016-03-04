@@ -3,11 +3,24 @@ import sys
 #del sys.modules['pickle']
 
 from dataccess import data_access as data
+from dataccess import utils
 from dataccess import query
 import ipdb
 
 def even_filter(arr, nevent = None, **kwargs):
     return bool(nevent % 2)
+
+def test_get_label_data():
+    from dataccess import database
+    database.delete_collections()
+    d = query.DataSet(query.query_list([('label', r"evaltest"), ('transmission', 0.1)]))
+    si = data.get_label_data('label-evaltest-transmission-0.1', 'si', event_data_getter = utils.usum)
+    assert si[1][620][30]
+    
+    d_filtered = query.DataSet(query.query_list([('label', r"evaltest"), ('transmission', 0.1)]), event_filter = even_filter, event_filter_detid = 'si')
+    unfiltered = data.get_data_and_filter(d.label, 'si')
+    filtered = data.get_data_and_filter(d_filtered.label, 'si')
+    return unfiltered, filtered
 
 def test_get_dataset_attribute_value():
     assert data.get_dataset_attribute_value('label-evaltest-transmission-0.1', 'transmission') == 0.1
@@ -17,21 +30,10 @@ def test_get_dataset_attribute_value():
     assert data.get_dataset_attribute_value('205', 'runs') == (205,)
     assert data.get_dataset_attribute_value('205-206', 'runs') == (205, 206)
 
-def test_get_label_data():
-    from dataccess import database
-    database.delete_collections()
-    d = query.DataSet(query.query_list([('label', r"evaltest"), ('transmission', 0.1)]))
-    si = data.get_label_data('label-evaltest-transmission-0.1', 'si')
-    assert si[1][620][30]
-    
-    d_filtered = query.DataSet(query.query_list([('label', r"evaltest"), ('transmission', 0.1)]), event_filter = even_filter, event_filter_detid = 'si')
-    unfiltered = data.get_data_and_filter(d.label, 'si')
-    filtered = data.get_data_and_filter(d_filtered.label, 'si')
-    return unfiltered, filtered
 
 def test_get_dark_data():
     assert data.get_dark_label('evaltest') == '377'
     assert data.get_dark_label('fe3o4lab') == '436'
 
 def test_get_data_and_filter_logbook():
-    assert data.get_data_and_filter_logbook('40', 'quad1')
+    assert data.get_data_and_filter('40', 'quad1')

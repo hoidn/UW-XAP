@@ -70,3 +70,9 @@ def addparser_eventframes(subparsers):
     eventframes.add_argument('detid', type = str, help = 'Detector ID.')
     eventframes.add_argument('label', help = 'Label of dataset to process.')
     eventframes.add_argument('--filter', '-f', action = 'store_true', help = 'If selected, logbook-specified event filtering will be applied.')
+
+def addparser_query(subparsers):
+    query = subparsers.add_parser('query', help = 'Query a dataset based on (one or both of) logbook attribute values and a user-defined event filter')
+    query.add_argument('querylist', nargs = '*', help = "A query composed of zero or more occurrences of <attribute name> <attribute value> [<attribute value>]. For string attributes a single attribute value is required; it is interpreted as a regular expression. For numeric attributes one or two attribute values may be provided. One value selects for exact matches; two values specifies a range.")
+    query.add_argument('--filter_function', '-f', nargs = 1, help = "The name of a user-defined function (defined in config.py) to be applied as an event filter")
+    query.add_argument('--filter_detid', '-d', nargs = 1, help = "The detid to which [FILTER_FUNCTION] is applied")
