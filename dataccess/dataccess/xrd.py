@@ -697,7 +697,6 @@ def process_one_detid(detid, data_identifiers, labels, mode = 'label', peak_prog
             normalization = normalization, bgsub = bgsub)
     except ValueError:
         peak_progression_output = ()
-    #doplot(normalization, peak_progression_compound, maxpeaks, labels)
     return patterns, imarrays, normalized_patterns, peak_progression_output
 
 def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
@@ -742,9 +741,9 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
             zip(*[process_one_detid(detid, data_identifiers, labels,
                 compound_list = compound_list, bgsub = bgsub, mode = mode, **kwargs)
                 for detid in detid_list]))
-    for label, pattern, imarray in zip(labels, patterns, imarrays):
+    for label, normalized_pattern, imarray in zip(labels, normalized_patterns, imarrays):
         path = 'xrd_patterns/' + label + '_' + str(detid)
-        utils.save_data(pattern[0], list(pattern[1]), path)
+        utils.save_data(normalized_pattern[0], list(normalized_pattern[1]), path)
         # TODO: imarray should not be background-subtracted but it appears that it is.
         utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray.tolist())
     if not peak_progression_compound and compound_list:
