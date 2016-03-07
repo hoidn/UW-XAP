@@ -62,7 +62,6 @@ def CSPAD_pieces(arr):
     split_x = [0, 196, 825/2, 622, 825]
     split_y = [0, 198, 830/2, 625, 830]
     result = []
-    #f, ax = plt.subplots(4, 4)
     def piece(n, m):
         subsec =  arr[split_y[n]: split_y[n + 1], split_x[m]: split_x[m + 1]]
         result.append(subsec)
@@ -200,7 +199,8 @@ def binData(mi, ma, stepsize, valenza = True):
 
 
 #@utils.eager_persist_to_file("cache/xrd.process_imarray/")
-def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True, compound_list = []):
+def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True, compound_list = [],
+        **kwargs):
     """
     Given a detector ID and assembeled CSPAD image data array, compute the
     powder pattern.
@@ -209,14 +209,9 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellip
     """
 
     # TODO: make this take dataset as an argument
-    # Manually entered data after 2015/04/01 calibration. (really)
-    # See Testing.nb for details.
-    # Coordinates in pixels. 0.011cm per pixel.
-    # LD67 inputs
-    #(phi, x0, y0, alpha, r) = (0.027763, 322.267, 524.473, 0.787745, 1082.1)
     (phi, x0, y0, alpha, r) = get_detid_parameters(detid)
     if bgsub:
-        imarray = subtract_background_full_frame(imarray, detid, compound_list)
+        imarray = subtract_background_full_frame(imarray, detid, compound_list, **kwargs)
     data, imarray = translate(phi, x0, y0, alpha, r, imarray, fiducial_ellipses = fiducial_ellipses)
     
     thetas = data[:,0]
@@ -247,10 +242,12 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellip
     return binangles, adjInten, imarray
 
 #@utils.eager_persist_to_file("cache/xrd.process_dataset/")
-def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True):
+def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = None,
+        bgsub = True, **kwargs):
     imarray, event_data = data_extractor(dataset)
     binangles, adjInten, imarray = process_imarray(dataset.detid, imarray,
-        fiducial_ellipses = fiducial_ellipses, bgsub = bgsub, compound_list = dataset.compound_list)
+        fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
+        compound_list = dataset.compound_list, **kwargs)
     return binangles, adjInten, imarray
 
 # Todo: memoize mpimap instead of this function?
@@ -467,46 +464,58 @@ def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WI
 
 @playback.db_insert
 @utils.ifplot
-def plot_patterns_core(ax, norm_array, patterns, labels, label_angles = None, show = False):
-    patterns = [map(np.array, p) for p in patterns]
+def plot_patterns(ax, normalized_patterns, labels, label_angles = None, show = False):
     if ax is None:
         f, ax = plt.subplots(1)
-    combined = map(lambda x, y, z: x + [y, z], patterns, labels, norm_array)
-    for angles, intensities, label, norm in combined:
-        ax.plot(angles, intensities/norm, label = label)
+    combined = map(lambda x, y: x + [y], normalized_patterns, labels)
+    for angles, intensities, label in combined:
+        ax.plot(angles, intensities, label = label)
     if label_angles:
         for ang in filter(lambda a: np.min(angles) < a < np.max(angles), label_angles):
-            ax.plot([ang, ang], [np.min(intensities/norm), np.max(intensities/norm)], color = 'k')
+            ax.plot([ang, ang], [np.min(intensities), np.max(intensities)], color = 'k')
     ax.legend()
     ax.set_xlabel('Scattering angle (deg)')
     ax.set_ylabel('Integrated intensity')
     if show:
         plt.show()
 
-
-def plot_patterns(datasets, patterns, labels, ax = None, show = False, normalization = None,
-    label_angles = None):
+def get_normalized_patterns(datasets, patterns, labels, normalization = None):
     def get_max(pattern):
         angles, intensities = map(lambda x: np.array(x), pattern)
         return np.max(intensities[angles > 15.])
     if normalization == 'maximum':
         norm_array = map(get_max, patterns)
     elif normalization:
-        norm_array = list(get_normalization(datasets, type = normalization))
+        norm_array = get_normalization(datasets, type = normalization)
     else:
         norm_array = [1.] * len(datasets)
     print "NORM", norm_array
-    # This step is necessary because pickling chokes, it seems, if a function's
-    # arguments contain any numpy arrays.
-    # Finding out more about this probable bug in dill is a TODO
-    patterns = [map(list, p) for p in patterns]
-    plot_patterns_core(ax, norm_array, patterns, labels, label_angles = label_angles, show = show)
+    def normalize_pattern(pattern, norm):
+        return [pattern[0], pattern[1] / norm]
+    return [normalize_pattern(p, n) for p, n in zip(patterns, norm_array)]
 
-def plot_peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
-    normalization = 'transmission', log = True, ax = None, show = False, maxpeaks = 'all'):
-    labels = np.array(map(lambda x: x.dataref, datasets))
-    powder_angles, label_fluxes, progression, normalized_progression = peak_progression(
-        datasets, compound_name, peak_width = peak_width, normalization = normalization)
+def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all'):
+    print "normalized progression ", normalized_progression
+    if maxpeaks != 'all':
+        intensity_reference = progression[:, 0]
+        goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
+    else:
+        goodpeaks = range(len(powder_angles))
+    def plotting():
+        if ax is None:
+            f, ax = plt.subplots(1)
+        for label, curve in zip(powder_angles[goodpeaks], normalized_progression[goodpeaks]):
+            ax.plot(label_fluxes, curve, label = label)
+        if log:
+            ax.set_xscale('log')
+        ax.legend()
+        ax.set_xlabel('Flux density (J/cm^2)')
+        ax.set_ylabel('Relative Bragg peak intensity')
+        if show:
+            plt.show()
+    plotting()
+
+def plot_peak_progression2(powder_angles, label_fluxes, progression, normalized_progression):
     print "normalized progression ", normalized_progression
     if maxpeaks != 'all':
         intensity_reference = progression[:, 0]
@@ -581,32 +590,34 @@ def get_peak_and_background_signal_from_dataref(dataset, smoothing = 10, width =
     return peaksum, bgsum
 
 @utils.eager_persist_to_file("cache/xrd.get_normalization/")
-def get_normalization(datasets, peak_width = DEFAULT_PEAK_WIDTH, type = 'transmission'):
+def get_normalization(datasets, type = 'transmission', **kwargs):
     if type == 'transmission':
         labels = np.array(map(lambda x: x.dataref, datasets))
         label_transmissions = np.array(map(lambda label:
             logbook.get_label_property(label, 'transmission'), labels))
         return label_transmissions
     elif type == 'background':
-        peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, width = peak_width) for ds in datasets))
+        peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, **kwargs) for ds in datasets))
         return np.array(bgsums)
     else:
         raise ValueError("Invalid normalization type: " + type)
 
-def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
-    normalization = 'transmission'):
+def peak_progression(datasets, compound_name, normalization = 'transmission',
+        peak_width = 2.5, **kwargs):
     """
     Note: this function may only be called if the elements of labels are
     google spreadsheet dataset labels, rather than paths to data files.
     """
+    if not compound_name:
+        raise ValueError("invalid compound; peak intensity progression cannot be computed.")
     def get_flux_density(dset):
         label = dset.dataref
         try:
-            transmission = logbook.get_label_property(label, 'transmission')
+            transmission = logbook.get_label_attribute(label, 'transmission')
         except KeyError:
             transmission = 1.
         try:
-            size = logbook.get_label_property(label, 'focal_size')
+            size = logbook.get_label_attribute(label, 'focal_size')
             if not size:
                 size = 1.
         except:
@@ -619,7 +630,7 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
     labels = np.array(map(lambda x: x.dataref, datasets))
     # TODO: check that all detids are the same
     detid = datasets[0].detid
-    patterns, imarrays = proc_all_datasets(datasets, bgsub = True)
+    patterns, imarrays = proc_all_datasets(datasets, **kwargs)
     peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, width = peak_width) for ds in datasets))
     bgsums = np.array(bgsums)
     make_interval = lambda angle: [angle - peak_width, angle + peak_width]
@@ -650,9 +661,9 @@ def peak_progression(datasets, compound_name, peak_width = DEFAULT_PEAK_WIDTH,
 
 
 
-def main(detid, data_identifiers, mode = 'label', peak_progression_compound = None,
-    plot = True, bgsub = True, fiducial_ellipses = None, compound_list = [],
-    normalization = None, maxpeaks = 6, plot_progression = False):
+def process_one_detid(detid, data_identifiers, labels, mode = 'label', peak_progression_compound = None,
+    plot = True, bgsub = False, fiducial_ellipses = None, compound_list = [],
+    normalization = None, maxpeaks = 6, plot_progression = False, peak_width = 2.5):
     """
     Arguments:
         detid: id of a quad CSPAD detector
@@ -671,33 +682,28 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         compound_list: list of compound identifiers corresponding to crystals
             for which simulated diffraction data is available.
     """
-    # TODO: don't do peak intensity plot if no scattering angles have been 
-    # provided.
-    def doplot(normalization, peak_progression_compound, maxpeaks, labels):
-        if not peak_progression_compound and compound_list:
-            peak_progression_compound = compound_list[0]
-        if peak_progression_compound:
-            label_angles = get_powder_angles(peak_progression_compound)
-        else:
-            label_angles = None
+    input_datasets = [Dataset(dataref, mode, detid, compound_list, None) for dataref in data_identifiers]
+    imarrays, _ = zip(*map(data_extractor, input_datasets))
+    datasets = [Dataset(dataref, mode, detid, compound_list, imarray) for dataref, imarray in zip(data_identifiers, imarrays)]
+    patterns, imarrays =\
+        proc_all_datasets(datasets, fiducial_ellipses = fiducial_ellipses,
+        bgsub = bgsub)
+    normalized_patterns =\
+        get_normalized_patterns(datasets, patterns, data_identifiers,
+        normalization = normalization)
+    try:
+        peak_progression_output =\
+            peak_progression(datasets, peak_progression_compound, peak_width = peak_width,
+            normalization = normalization, bgsub = bgsub)
+    except ValueError:
+        peak_progression_output = ()
+    #doplot(normalization, peak_progression_compound, maxpeaks, labels)
+    return patterns, imarrays, normalized_patterns, peak_progression_output
 
-        if len(datasets) > 1 and plot_progression:
-            f, axes = plt.subplots(2)
-            plot_patterns(datasets, patterns, labels, show = False, ax = axes[0],
-                normalization = normalization,
-                label_angles = label_angles)
-            if not peak_progression_compound and compound_list:
-                peak_progression_compound = compound_list[0]
-            if not normalization:
-                normalization = 'transmission'
-            plot_peak_progression(datasets, peak_progression_compound,
-                show = False, ax = axes[1], normalization = normalization,
-                maxpeaks = maxpeaks) 
-        else:
-            plot_patterns(datasets, patterns, labels, show = False,
-                normalization = normalization,
-                label_angles = label_angles)
-        utils.global_save_and_show('xrd_plot/' + str(detid) + '_'.join(labels) + '.png')
+def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
+        peak_progression_compound = None, compound_list = [], 
+        plot_progression = False, **kwargs):
+    assert(isinstance(detid_list, list))
     if not isinstance(data_identifiers, list):
         raise ValueError("data_identifiers: must be a list of strings or arrays")
     # TODO: pass background smoothing as a parameter here
@@ -705,15 +711,46 @@ def main(detid, data_identifiers, mode = 'label', peak_progression_compound = No
         labels = ['unknown_' + str(detid)]
     else:
         labels = data_identifiers
-    datasets = [Dataset(dataref, mode, detid, compound_list, None) for dataref in data_identifiers]
-    imarrays, _ = zip(*map(data_extractor, datasets))
-    datasets = [Dataset(dataref, mode, detid, compound_list, imarray) for dataref, imarray in zip(data_identifiers, imarrays)]
-    patterns, imarrays = proc_all_datasets(datasets, fiducial_ellipses = fiducial_ellipses,
-        bgsub = bgsub)
+    if bgsub:
+        if not compound_list:
+            bsub = False
+            print "No compounds provided: disabling background subtraction."
+    # TODO: don't do peak intensity plot if no scattering angles have been 
+    # provided.
+    def doplot(normalized_patterns, peak_progression_output, peak_progression_compound = None):
+        if peak_progression_compound:
+            powder_angles = get_powder_angles(peak_progression_compound)
+        else:
+            powder_angles = None
+
+        if len(data_identifiers) > 1 and plot_progression and peak_progression_output:
+            f, axes = plt.subplots(2)
+            plot_patterns(axes[0], normalized_patterns, labels, label_angles = powder_angles, show = False)
+            if not peak_progression_compound and compound_list:
+                peak_progression_compound = compound_list[0]
+            if not normalization:
+                normalization = 'transmission'
+            powder_angles, label_fluxes, progression, normalized_progression = peak_progression_output
+            plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = maxpeaks)
+        else:
+            f, ax = plt.subplots(1)
+            plot_patterns(ax, normalized_patterns, labels, label_angles = powder_angles, show = False)
+        utils.global_save_and_show('xrd_plot/' + str(detid) + '_'.join(labels) + '.png')
+
+#    def hstack_list(a, b):
+#        return np.hstack((np.array(a), np.array(b)))
+    patterns, imarrays, normalized_patterns, peak_progression_output =\
+        map(lambda t: utils.merge_lists(*t),
+            zip(*[process_one_detid(detid, data_identifiers, labels,
+                compound_list = compound_list, bgsub = bgsub, mode = mode, **kwargs)
+                for detid in detid_list]))
     for label, pattern, imarray in zip(labels, patterns, imarrays):
         path = 'xrd_patterns/' + label + '_' + str(detid)
         utils.save_data(pattern[0], list(pattern[1]), path)
         # TODO: imarray should not be background-subtracted but it appears that it is.
         utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray.tolist())
-    doplot(normalization, peak_progression_compound, maxpeaks, labels)
+    if not peak_progression_compound and compound_list:
+        peak_progression_compound = compound_list[0]
+    doplot(normalized_patterns, peak_progression_output, peak_progression_compound)
     return patterns, imarrays
+    

@@ -133,9 +133,6 @@ def mongo_commit(label_dependencies = None):
     import logbook
     import data_access
 
-#    dependency_dicts =\
-#        [logbook.get_label_dict(label)
-#        for label in label_dependencies]
     dependency_dicts =\
         [data_access.get_dataset_attribute_map(label)
         for label in label_dependencies]

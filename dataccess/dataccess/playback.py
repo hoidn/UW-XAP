@@ -63,4 +63,7 @@ def db_insert(func):
         def execute():
             return func(*args, **kwargs)
         db.append(execute)
-    return inner
+    if config.playback:
+        return inner
+    else:
+        return func

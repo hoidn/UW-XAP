@@ -1,6 +1,7 @@
 # Author: O. Hoidn
 
 import numpy as np
+import copy
 import os
 import cPickle
 import dill
@@ -34,6 +35,34 @@ def random_float():
     from datetime import datetime
     random.seed(datetime.now())
     return random.uniform(0., 1.)
+
+
+def merge_lists(*args):
+    """
+    Merge a nested structure of tuples and/or lists and/or
+    np.ndarrays by horizontal stacking along the innermost
+    possible axis.
+    """
+    assert len(args) > 0
+    if len(args) == 1:
+        return args[0]
+    import operator
+    a, b = args[:2]
+    assert np.shape(a) == np.shape(b)
+    assert type(a) == type(b)
+    l_type = type(a) # list, tuple or ndarray
+    assert l_type in [list, tuple, np.ndarray]
+    if l_type in [list, tuple]:
+        op = operator.add
+        l_make = l_type
+    else:
+        op = lambda x, y: np.hstack((x, y))
+        l_make = np.array
+    if len(np.shape(a)) == 1:
+        return reduce(op, args)
+    else:
+        return l_make(map(merge_lists, *args))
+        
 
 def merge_dicts(*args):
     final = {}

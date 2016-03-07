@@ -32,7 +32,7 @@ def addparser_xes(subparsers):
 def addparser_xrd(subparsers):
     xrd = subparsers.add_parser('xrd', help = 'Process quad CSPAD data into powder patterns.')
     
-    xrd.add_argument('detid', type = str, help = 'Detector ID.')
+    xrd.add_argument('detid', nargs = '+', type = str, help = 'One or more detector IDs.')
     xrd.add_argument('labels', nargs = '+', help = 'One or more dataset labels to process.')
     xrd.add_argument('--compounds', '-c', nargs = '+', help = 'Chemical formulas of crystalline species in the sample. If --background_subtraction is passed these MUST be provided.')
     xrd.add_argument('--background_subtraction', '-b', action = 'store_true', help = 'If selected, background subtraction will be performed by interpolation based on the signal between Bragg peaks.')

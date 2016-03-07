@@ -9,6 +9,7 @@ def reset():
     os.system('rm -rf cache')
     os.system('rm -rf db')
     database.delete_collections()
+    database.collections_lookup['session_cache'].delete_many({})
 
 def test_xrd():
     reset()
