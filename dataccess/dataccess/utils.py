@@ -175,8 +175,8 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     im.save(save_path + '.tif')
     matplotlib.image.imsave(save_path + '.png', imarr)
 
-@playback.db_insert
 @ifroot
+@playback.db_insert
 def save_data(x, y, save_path):
     import database
     mongo_key = 'data'

@@ -59,11 +59,11 @@ def db_insert(func):
     Decorator that causes the modified function call to be stored instead of
     evaluated.
     """
-    def inner(*args, **kwargs):
-        def execute():
-            return func(*args, **kwargs)
-        db.append(execute)
-    if config.playback:
-        return inner
-    else:
+    if not config.playback:
         return func
+    else:
+        def inner(*args, **kwargs):
+            def execute():
+                return func(*args, **kwargs)
+            db.append(execute)
+        return inner
