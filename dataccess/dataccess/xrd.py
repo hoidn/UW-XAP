@@ -716,6 +716,7 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
             print "No compounds provided: disabling background subtraction."
     # TODO: don't do peak intensity plot if no scattering angles have been 
     # provided.
+    @utils.ifplot
     def doplot(normalized_patterns, peak_progression_output, peak_progression_compound = None):
         if peak_progression_compound:
             powder_angles = get_powder_angles(peak_progression_compound)

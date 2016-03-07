@@ -132,9 +132,13 @@ class DataSet(object):
                     filter_identifier = '-'.join(event_filter.params)
                 except:
                     filter_identifier = database.hash(utils.random_float())
-                filter_label =\
-                    '-filter-' + event_filter.__name__ + '-' +\
-                    filter_identifier + '-' + str(event_filter_detid)
+                try:
+                    filter_label =\
+                        event_filter.label
+                except AttributeError:
+                    filter_label =\
+                        '-filter-' + event_filter.__name__ + '-' +\
+                        filter_identifier + '-' + str(event_filter_detid)
             else:
                 filter_label = ''
             self.label = '-'.join(query_strings) + filter_label
