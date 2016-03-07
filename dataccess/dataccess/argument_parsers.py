@@ -1,3 +1,4 @@
+import config
 
 def addparser_init(subparsers):
     init = subparsers.add_parser('init', help =  'Initialize config.py in local directory.')
@@ -76,3 +77,7 @@ def addparser_query(subparsers):
     query.add_argument('querylist', nargs = '*', help = "A query composed of zero or more occurrences of <attribute name> <attribute value> [<attribute value>]. For string attributes a single attribute value is required; it is interpreted as a regular expression. For numeric attributes one or two attribute values may be provided. One value selects for exact matches; two values specifies a range.")
     query.add_argument('--filter_function', '-f', nargs = 1, help = "The name of a user-defined function (defined in config.py) to be applied as an event filter")
     query.add_argument('--filter_detid', '-d', nargs = 1, help = "The detid to which [FILTER_FUNCTION] is applied")
+
+def addparser_showderived(subparsers):
+    config.playback = False
+    showderived = subparsers.add_parser('showderived', help = 'output the names of all existing derived datasets.')

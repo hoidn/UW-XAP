@@ -36,6 +36,7 @@ def random_float():
     random.seed(datetime.now())
     return random.uniform(0., 1.)
 
+    
 
 def merge_lists(*args):
     """
@@ -148,6 +149,10 @@ def ifplot(func):
             return func(*args, **kwargs)
     return inner
     
+@ifroot
+def rprint(expr):
+    print expr
+
 # playback fails for this function
 #@playback.db_insert
 @ifroot

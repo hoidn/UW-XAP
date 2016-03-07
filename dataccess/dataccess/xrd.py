@@ -737,8 +737,6 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
             plot_patterns(ax, normalized_patterns, labels, label_angles = powder_angles, show = False)
         utils.global_save_and_show('xrd_plot/' + str(detid) + '_'.join(labels) + '.png')
 
-#    def hstack_list(a, b):
-#        return np.hstack((np.array(a), np.array(b)))
     patterns, imarrays, normalized_patterns, peak_progression_output =\
         map(lambda t: utils.merge_lists(*t),
             zip(*[process_one_detid(detid, data_identifiers, labels,

@@ -1,5 +1,4 @@
 # Author: O. Hoidn
-print "import avg_bgsubtract_hdf"
 import pandas as pd
 import re
 import pdb

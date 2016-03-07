@@ -120,6 +120,10 @@ def call_query(args):
             raise ValueError("FILTER_DETID must be provided along with FILTER_FUNCTION")
     query.main(args.querylist, filter_function, args.filter_detid)
 
+def call_showderived(args):
+    import query
+    print '\n'.join(query.get_derived_datset_labels())
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--noplot', '-n', action = 'store_true', help = 'If selected, plotting is suppressed')
@@ -133,6 +137,7 @@ def main():
     argument_parsers.addparser_datashow(subparsers)
     argument_parsers.addparser_eventframes(subparsers)
     argument_parsers.addparser_query(subparsers)
+    argument_parsers.addparser_showderived(subparsers)
 
     args = parser.parse_args()
 
@@ -183,6 +188,8 @@ def main():
             call_eventframes(args)
         elif cmd == 'query':
             call_query(args)
+        elif cmd == 'showderived':
+            call_showderived(args)
 
     if utils.isroot():
         if config.playback:
