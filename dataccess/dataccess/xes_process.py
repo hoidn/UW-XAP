@@ -392,7 +392,10 @@ def main(detid, data_identifiers, nevents = None, cold_calibration_label = None,
     spectrumList = []
     scale_ev = (energy_ref1_energy_ref2_calibration or calib_load_path)
     if not os.path.exists('spectra/'):
-        os.makedirs('spectra')
+        try:
+            os.makedirs('spectra')
+        except OSError, e:
+            raise OSError("data directory 'spectra/' could not be created: %s" % str(e))
     if cold_calibration_label:
         cold_calibration_data = data_extractor(cold_calibration_label)
     else:

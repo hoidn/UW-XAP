@@ -34,7 +34,7 @@ def addparser_xrd(subparsers):
     xrd = subparsers.add_parser('xrd', help = 'Process quad CSPAD data into powder patterns.')
     
     xrd.add_argument('detid', nargs = '+', type = str, help = 'One or more detector IDs.')
-    xrd.add_argument('labels', nargs = '+', help = 'One or more dataset labels to process.')
+    xrd.add_argument('--labels', '-l', nargs = '+', help = 'One or more dataset labels to process.')
     xrd.add_argument('--compounds', '-c', nargs = '+', help = 'Chemical formulas of crystalline species in the sample. If --background_subtraction is passed these MUST be provided.')
     xrd.add_argument('--background_subtraction', '-b', action = 'store_true', help = 'If selected, background subtraction will be performed by interpolation based on the signal between Bragg peaks.')
     xrd.add_argument('--peak_progression_compound', '-p', type = str, help = 'Compound for which to plot the progression of Bragg peak intensities as a function of incident flux if two or more datasets are being processed. If not specified, this option defaults to the first value of COMPOUNDS.')
@@ -77,6 +77,7 @@ def addparser_query(subparsers):
     query.add_argument('querylist', nargs = '*', help = "A query composed of zero or more occurrences of <attribute name> <attribute value> [<attribute value>]. For string attributes a single attribute value is required; it is interpreted as a regular expression. For numeric attributes one or two attribute values may be provided. One value selects for exact matches; two values specifies a range.")
     query.add_argument('--filter_function', '-f', nargs = 1, help = "The name of a user-defined function (defined in config.py) to be applied as an event filter")
     query.add_argument('--filter_detid', '-d', nargs = 1, help = "The detid to which [FILTER_FUNCTION] is applied")
+    query.add_argument('--name', '-o', help = 'String to assign as the label for the queried dataset.')
 
 def addparser_showderived(subparsers):
     config.playback = False

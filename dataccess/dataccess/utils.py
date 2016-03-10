@@ -36,7 +36,22 @@ def random_float():
     random.seed(datetime.now())
     return random.uniform(0., 1.)
 
-    
+def dict_leaf_mean(d):
+    """
+    Return the average value of the values of the 'leaf' values
+    in a (nested) dictionary.
+    """    
+    def _gather(d):
+        leaf_list = []
+        for k, v in d.iteritems():
+            if isinstance(v, dict):
+                leaf_list += _gather(v)
+            else:
+                leaf_list += [v]
+        return leaf_list
+    leaf_values = _gather(d)
+    return reduce(lambda x, y: x + y, leaf_values) / len(leaf_values)
+
 
 def merge_lists(*args):
     """
@@ -49,7 +64,7 @@ def merge_lists(*args):
         return args[0]
     import operator
     a, b = args[:2]
-    assert np.shape(a) == np.shape(b)
+    #assert np.shape(a) == np.shape(b)
     assert type(a) == type(b)
     l_type = type(a) # list, tuple or ndarray
     assert l_type in [list, tuple, np.ndarray]

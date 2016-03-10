@@ -146,7 +146,14 @@ def parse_focal_size(flt_str):
     else:
         if 'um' in flt_str:
             flt_str = flt_str.strip('um')
-        return parse_float(flt_str)
+        try:
+            return parse_float(flt_str)
+        except ValueError:
+            paranthetical_match = re.findall(r".*?\(([0-9]+) *um\).*", flt_str)
+            if not paranthetical_match:
+                raise ValueError("Incorrect format for focal spot size string")
+            else:
+                return float(paranthetical_match[0])
 
 def parse_string(string):
     return string
@@ -249,7 +256,9 @@ def get_label_mapping_one_sheet(col_titles, data):
     return label_dict
 
 
-#@utils.memoize(timeout = 5)
+# TODO TODO: add a mechanism for cache invalidation when stuff is inserted into
+# MongoDB.
+@utils.memoize(timeout = 1)
 def get_attribute_dict():
 #    if utils.isroot():
 #        print "Querying MongoDB"
@@ -284,19 +293,30 @@ def get_label_dict(label):
     def runs_to_label(run_range):
         """
         Given a run range, look for a label whose run range matches
-        and return it. If a matching label isn't found, return None.
+        and return it. If serveral matches are found, that with the smallest
+        number of runs and largest number of attributes (in that order of sorting)
+        is returned. If a matching label isn't found, return None.
         """
         red = lambda x, y: x + y
         # TODO: poorly-abstracted...
         filtered_dict = {k: v for k, v in complete_dict.iteritems() if v['runs'] != (None,)}
         labels_to_runtuples = {lab: tuple(get_all_runlist(lab)) for lab in
             filtered_dict}
+
+        # Find the best matching superset label
+        best_runset = None
+        # TODO: this doesn't work properly if there are colliding labels with
+        # same set of runs.
         runtuples_to_labels = {v: k for k, v in labels_to_runtuples.items()}
         target_set = set(run_range)
         for runtuple in runtuples_to_labels:
             if target_set <= set(runtuple):
-                return runtuples_to_labels[runtuple]
-        return None
+                if best_runset is None or len(runtuple) < len(best_runset):
+                    best_runset = runtuple
+        if best_runset:
+            return runtuples_to_labels[best_runset]
+        else:
+            return None
 
     if label not in complete_dict:
         try:

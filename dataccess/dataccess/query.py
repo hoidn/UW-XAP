@@ -268,9 +268,9 @@ def parse_list_of_strings_to_query(slist, partial = ()):
             return _parse(slist, partial = partial + (next,))
     return _parse([s for s in slist])
 
-def main(query_string_list, event_filter = None, event_filter_detid = None):
+def main(query_string_list, event_filter = None, event_filter_detid = None, label = None):
     q = query_list(parse_list_of_strings_to_query(query_string_list))
-    dataset = DataSet(q, event_filter = event_filter, event_filter_detid = event_filter_detid)
+    dataset = DataSet(q, event_filter = event_filter, event_filter_detid = event_filter_detid, label = label)
     print dataset.label
     return dataset
     

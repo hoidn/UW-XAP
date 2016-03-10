@@ -63,7 +63,7 @@ def get_all_runs(exppath = config.exppath):
     return result
 
 
-@utils.eager_persist_to_file('cache/data_access/get_label_data/')
+#@utils.eager_persist_to_file('cache/data_access/get_label_data/')
 def get_label_data(label, detid, default_bg = None, override_bg = None,
     event_data_getter = None, event_mask = None, **kwargs):
     """
@@ -82,7 +82,10 @@ def get_label_data(label, detid, default_bg = None, override_bg = None,
     if detid in config.nonarea:
         subregion_index = None
     else:
-        subregion_index = config.detinfo_map[detid].subregion_index
+        try:
+            subregion_index = config.detinfo_map[detid].subregion_index
+        except KeyError, e:
+            raise ValueError("Invalid detector id: %s" % detid)
     output = avg_bgsubtract_hdf.get_signal_many_parallel(
         runList, detid, event_data_getter = event_data_getter,
         event_mask = event_mask, subregion_index = subregion_index,

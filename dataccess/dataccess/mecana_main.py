@@ -118,7 +118,7 @@ def call_query(args):
     if args.filter_function:
         if not args.filter_detid:
             raise ValueError("FILTER_DETID must be provided along with FILTER_FUNCTION")
-    query.main(args.querylist, filter_function, args.filter_detid)
+    query.main(args.querylist, filter_function, args.filter_detid, args.name)
 
 def call_showderived(args):
     import query
@@ -127,6 +127,7 @@ def call_showderived(args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--noplot', '-n', action = 'store_true', help = 'If selected, plotting is suppressed')
+    parser.add_argument('--testing', '-t', action = 'store_true', help =  'If selected, process only 1 out of 10 events')
     subparsers = parser.add_subparsers(help='sub-command help', dest = 'command')
 
     # Add sub-commands to parser
@@ -161,6 +162,8 @@ def main():
         call_init(config_source, config_dst)
     if args.noplot:
         config.noplot = True
+    if args.testing:
+        config.testing = True
 
     if config.playback:
         try:

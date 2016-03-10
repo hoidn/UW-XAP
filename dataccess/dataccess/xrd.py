@@ -123,10 +123,10 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
         combined_mask = utils.combine_masks(imarray, extra_masks, transpose = True)
         imarray *= combined_mask
     min_val =  np.min(imarray)
-#    if min_val < 0:
-#        return np.abs(min_val) + imarray, event_data
-#    else:
-    return imarray, event_data
+    if min_val < 0:
+        return np.abs(min_val) + imarray, event_data
+    else:
+        return imarray, event_data
 
 def get_x_y(imarray, phi, x0, y0, alpha, r):
     """
@@ -494,14 +494,14 @@ def get_normalized_patterns(datasets, patterns, labels, normalization = None):
         return [pattern[0], pattern[1] / norm]
     return [normalize_pattern(p, n) for p, n in zip(patterns, norm_array)]
 
-def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all'):
+def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all', ax = None, log = True, show = False):
     print "normalized progression ", normalized_progression
     if maxpeaks != 'all':
         intensity_reference = progression[:, 0]
         goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
     else:
         goodpeaks = range(len(powder_angles))
-    def plotting():
+    def plotting(ax):
         if ax is None:
             f, ax = plt.subplots(1)
         for label, curve in zip(powder_angles[goodpeaks], normalized_progression[goodpeaks]):
@@ -513,28 +513,28 @@ def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_p
         ax.set_ylabel('Relative Bragg peak intensity')
         if show:
             plt.show()
-    plotting()
+    plotting(ax)
 
-def plot_peak_progression2(powder_angles, label_fluxes, progression, normalized_progression):
-    print "normalized progression ", normalized_progression
-    if maxpeaks != 'all':
-        intensity_reference = progression[:, 0]
-        goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
-    else:
-        goodpeaks = range(len(powder_angles))
-    def plotting():
-        if ax is None:
-            f, ax = plt.subplots(1)
-        for label, curve in zip(powder_angles[goodpeaks], normalized_progression[goodpeaks]):
-            ax.plot(label_fluxes, curve, label = label)
-        if log:
-            ax.set_xscale('log')
-        ax.legend()
-        ax.set_xlabel('Flux density (J/cm^2)')
-        ax.set_ylabel('Relative Bragg peak intensity')
-        if show:
-            plt.show()
-    plotting()
+#def plot_peak_progression2(powder_angles, label_fluxes, progression, normalized_progression):
+#    print "normalized progression ", normalized_progression
+#    if maxpeaks != 'all':
+#        intensity_reference = progression[:, 0]
+#        goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
+#    else:
+#        goodpeaks = range(len(powder_angles))
+#    def plotting():
+#        if ax is None:
+#            f, ax = plt.subplots(1)
+#        for label, curve in zip(powder_angles[goodpeaks], normalized_progression[goodpeaks]):
+#            ax.plot(label_fluxes, curve, label = label)
+#        if log:
+#            ax.set_xscale('log')
+#        ax.legend()
+#        ax.set_xlabel('Flux density (J/cm^2)')
+#        ax.set_ylabel('Relative Bragg peak intensity')
+#        if show:
+#            plt.show()
+#    plotting()
 
 def mask_peaks_and_iterpolate(x, y, peak_ranges):
     for peakmin, peakmax in peak_ranges:
@@ -590,40 +590,35 @@ def get_peak_and_background_signal_from_dataref(dataset, smoothing = 10, width =
     return peaksum, bgsum
 
 @utils.eager_persist_to_file("cache/xrd.get_normalization/")
-def get_normalization(datasets, type = 'transmission', **kwargs):
+def get_normalization(datasets, type = 'transmission', peak_width = 2.5, **kwargs):
     if type == 'transmission':
         labels = np.array(map(lambda x: x.dataref, datasets))
         label_transmissions = np.array(map(lambda label:
-            logbook.get_label_property(label, 'transmission'), labels))
+            logbook.get_label_attribute(label, 'transmission'), labels))
         return label_transmissions
     elif type == 'background':
-        peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, **kwargs) for ds in datasets))
+        peaksums, bgsums = zip(*[get_peak_and_background_signal_from_dataref(ds, width = peak_width, **kwargs) for ds in datasets])
         return np.array(bgsums)
     else:
         raise ValueError("Invalid normalization type: " + type)
 
-def peak_progression(datasets, compound_name, normalization = 'transmission',
+
+def peak_progression(datasets, compound_name, normalization = None,
         peak_width = 2.5, **kwargs):
     """
     Note: this function may only be called if the elements of labels are
     google spreadsheet dataset labels, rather than paths to data files.
     """
+    if normalization is None:
+        normalization = 'transmission'
     if not compound_name:
         raise ValueError("invalid compound; peak intensity progression cannot be computed.")
     def get_flux_density(dset):
         label = dset.dataref
-        try:
-            transmission = logbook.get_label_attribute(label, 'transmission')
-        except KeyError:
-            transmission = 1.
-        try:
-            size = logbook.get_label_attribute(label, 'focal_size')
-            if not size:
-                size = 1.
-        except:
-            size = 1.
+        beam_energy = config.beam_intensity_diagnostic(label)
+        size = logbook.get_label_attribute(label, 'focal_size')
         # convert length units from microns to cm
-        return config.pulse_energy * transmission / (np.pi * ((size * 0.5 * 1e-4)**2))
+        return beam_energy / (np.pi * ((size * 0.5 * 1e-4)**2))
 
     # sort by increasing beam intensity
     datasets = sorted(datasets, key = get_flux_density)
@@ -631,6 +626,8 @@ def peak_progression(datasets, compound_name, normalization = 'transmission',
     # TODO: check that all detids are the same
     detid = datasets[0].detid
     patterns, imarrays = proc_all_datasets(datasets, **kwargs)
+    # TODO: fix peak progression calculation for two-detid mode
+    #anglemin, anglemax = patterns[0][0][0], patterns[0][0][-1]
     peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, width = peak_width) for ds in datasets))
     bgsums = np.array(bgsums)
     make_interval = lambda angle: [angle - peak_width, angle + peak_width]
@@ -639,13 +636,6 @@ def peak_progression(datasets, compound_name, normalization = 'transmission',
 
     # ranges over which to integrate the powder patterns
     peak_ranges = make_ranges(powder_angles)
-
-    # get transmission values 
-    try:
-        label_transmissions = np.array(map(lambda label:
-            logbook.get_label_property(label, 'transmission'), labels))
-    except:
-        raise ValueError("Can't plot peak intensity progression with missing transmission data")
     label_flux_densities = map(get_flux_density, datasets)
 
     # indices: label, peak
@@ -657,6 +647,7 @@ def peak_progression(datasets, compound_name, normalization = 'transmission',
     # indices: peak, label
     heating_progression = normalized_peaksize_array.T
     normalized_heating_progression = heating_progression / heating_progression[:, 0][:, np.newaxis]
+    ipdb.set_trace()
     return powder_angles, label_flux_densities, heating_progression, normalized_heating_progression
 
 
@@ -691,17 +682,17 @@ def process_one_detid(detid, data_identifiers, labels, mode = 'label', peak_prog
     normalized_patterns =\
         get_normalized_patterns(datasets, patterns, data_identifiers,
         normalization = normalization)
-    try:
+    if plot_progression:
         peak_progression_output =\
             peak_progression(datasets, peak_progression_compound, peak_width = peak_width,
             normalization = normalization, bgsub = bgsub)
-    except ValueError:
+    else:
         peak_progression_output = ()
     return patterns, imarrays, normalized_patterns, peak_progression_output
 
 def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
         peak_progression_compound = None, compound_list = [], 
-        plot_progression = False, **kwargs):
+        plot_progression = False, maxpeaks = 6, **kwargs):
     assert(isinstance(detid_list, list))
     if not isinstance(data_identifiers, list):
         raise ValueError("data_identifiers: must be a list of strings or arrays")
@@ -714,10 +705,12 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
         if not compound_list:
             bsub = False
             print "No compounds provided: disabling background subtraction."
+    if not peak_progression_compound and compound_list:
+        peak_progression_compound = compound_list[0]
     # TODO: don't do peak intensity plot if no scattering angles have been 
     # provided.
     @utils.ifplot
-    def doplot(normalized_patterns, peak_progression_output, peak_progression_compound = None):
+    def doplot(normalized_patterns, peak_progression_output):
         if peak_progression_compound:
             powder_angles = get_powder_angles(peak_progression_compound)
         else:
@@ -726,22 +719,21 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
         if len(data_identifiers) > 1 and plot_progression and peak_progression_output:
             f, axes = plt.subplots(2)
             plot_patterns(axes[0], normalized_patterns, labels, label_angles = powder_angles, show = False)
-            if not peak_progression_compound and compound_list:
-                peak_progression_compound = compound_list[0]
-            if not normalization:
-                normalization = 'transmission'
             powder_angles, label_fluxes, progression, normalized_progression = peak_progression_output
-            plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = maxpeaks)
+            plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = maxpeaks, ax = axes[1])
         else:
             f, ax = plt.subplots(1)
             plot_patterns(ax, normalized_patterns, labels, label_angles = powder_angles, show = False)
         utils.global_save_and_show('xrd_plot/' + str(detid) + '_'.join(labels) + '.png')
 
+    to_merge =\
+        zip(*[process_one_detid(detid, data_identifiers, labels,
+        compound_list = compound_list, bgsub = bgsub, mode = mode,
+        peak_progression_compound = peak_progression_compound,
+        plot_progression = plot_progression, **kwargs)
+        for detid in detid_list])
     patterns, imarrays, normalized_patterns, peak_progression_output =\
-        map(lambda t: utils.merge_lists(*t),
-            zip(*[process_one_detid(detid, data_identifiers, labels,
-                compound_list = compound_list, bgsub = bgsub, mode = mode, **kwargs)
-                for detid in detid_list]))
+        map(lambda t: utils.merge_lists(*t), to_merge)
     for label, normalized_pattern, imarray in zip(labels, normalized_patterns, imarrays):
         path = 'xrd_patterns/' + label + '_' + str(detid)
         utils.save_data(normalized_pattern[0], list(normalized_pattern[1]), path)
@@ -749,6 +741,6 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
         utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray.tolist())
     if not peak_progression_compound and compound_list:
         peak_progression_compound = compound_list[0]
-    doplot(normalized_patterns, peak_progression_output, peak_progression_compound)
+    doplot(normalized_patterns, peak_progression_output)
     return patterns, imarrays
     
