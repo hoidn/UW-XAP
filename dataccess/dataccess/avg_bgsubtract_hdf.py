@@ -149,6 +149,9 @@ event_data_getter = None, event_mask = None, **kwargs):
 def get_area_detector_subregion(quad, det, evt, detid):
     """
     Extracts data from an individual quad detector.
+
+    if chip_level_correction, the 50th percentile value for each
+    chip is subtracted.
     """
     if quad>3 : quad = 3
     if quad >= 0:
@@ -176,6 +179,10 @@ def get_area_detector_subregion(quad, det, evt, detid):
         
         ped.shape = (4, 8, 185, 388)
         pedq = ped[quad,:]
+        if config.chip_level_correction:
+            for chip_pedestal, chip_nda in zip(pedq, ndaq):
+                offset = np.percentile(chip_nda, 45) - np.mean(chip_pedestal)
+                chip_pedestal += offset
         #print_ndarr(ndaq, 'nda[%d,:]'%quad)
 
         # reconstruct image for quad
@@ -292,7 +299,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         if event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             try:
-                increment = get_area_detector_subregion(subregion_index, det, evt, detid)
+                increment = get_area_detector_subregion(subregion_index, det, evt, detid, **kwargs)
             except AttributeError:
                 continue
             if increment is not None:

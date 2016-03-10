@@ -160,7 +160,34 @@ def get_beta_rho(imarray, phi, x0, y0, alpha, r):
     # beta is the twotheta value for a given (x,y)
     beta = np.arctan2((y1**2 + x2**2)**0.5, z1) * 180 / np.pi
     return beta, rho
-    
+
+def get_phi2(imarray, detid):
+    """
+    Given CSPAD geometry parameters and an assembeled image data array, return
+    (1) an array (of the same shape as the image data) with values of phi2,
+    the azimuthal angle with respect to the x-ray beam.
+    """
+    (phi, x0, y0, alpha, r) = get_detid_parameters(detid)
+    x, y = get_x_y(imarray, phi, x0, y0, alpha, r)
+    try:
+        x2 = -np.cos(phi) *(x-x0) + np.sin(phi) * (y-y0)
+        y2 = -np.sin(phi) * (x-x0) - np.cos(phi) * (y-y0)
+    except AttributeError:
+        raise AttributeError("Missing geometry data in config.py")
+    rho = (r**2 + x2**2 + y2**2)**0.5
+    y1 = y2 * np.cos(alpha) + r * np.sin(alpha)
+    z1 = - y2 * np.sin(alpha) + r * np.cos(alpha)
+    phi2 = np.arctan2(y1, z1)
+    return phi2
+
+def select_phi2(imarray, phi2_0, delta_phi2, detid):
+    """
+    Mask out all values outside of the specified phi2 range.
+    """
+    result = imarray.copy()
+    phi2 = get_phi2(imarray, detid)
+    result = np.where(np.logical_and(phi2 > phi2_0 - delta_phi2/2, phi2 < phi2_0 + delta_phi2/2), result, 0.)
+    return result
 
 # translate(phi, x0, y0, alpha, r)
 # Produces I vs theta values for imarray. For older versions, see bojangles_old.py
@@ -591,14 +618,19 @@ def get_peak_and_background_signal_from_dataref(dataset, smoothing = 10, width =
 
 @utils.eager_persist_to_file("cache/xrd.get_normalization/")
 def get_normalization(datasets, type = 'transmission', peak_width = 2.5, **kwargs):
+    labels = np.array(map(lambda x: x.dataref, datasets))
     if type == 'transmission':
-        labels = np.array(map(lambda x: x.dataref, datasets))
         label_transmissions = np.array(map(lambda label:
             logbook.get_label_attribute(label, 'transmission'), labels))
         return label_transmissions
     elif type == 'background':
         peaksums, bgsums = zip(*[get_peak_and_background_signal_from_dataref(ds, width = peak_width, **kwargs) for ds in datasets])
         return np.array(bgsums)
+    elif type == 'intensity_diagnostic':
+        try:
+            return np.array([config.beam_intensity_diagnostic(label) for label in labels])
+        except AttributeError:
+            raise ValueError("Function config.beam_intensity_diagnostic(<image array>) must be defined to use the 'intensity_diagnostic' normalization option.")
     else:
         raise ValueError("Invalid normalization type: " + type)
 
@@ -647,7 +679,7 @@ def peak_progression(datasets, compound_name, normalization = None,
     # indices: peak, label
     heating_progression = normalized_peaksize_array.T
     normalized_heating_progression = heating_progression / heating_progression[:, 0][:, np.newaxis]
-    ipdb.set_trace()
+    #ipdb.set_trace()
     return powder_angles, label_flux_densities, heating_progression, normalized_heating_progression
 
 
