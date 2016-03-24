@@ -81,11 +81,13 @@ def mongo_insert_if_absent(collection, d):
         collection.insert(d, check_keys = False)
 
 @utils.ifroot
-def mongo_replace_atomic(collection, d, mongo_query_dict):
+def mongo_replace_atomic(collection, d, mongo_query_dict = None):
     """
     mongo_query_dict: a query that will match stale documents
     that must be removed.
     """
+    if mongo_query_dict is None:
+        mongo_query_dict = d
     remove_query_dict = {k: v for k, v in mongo_query_dict.iteritems()}
     inserted = collection.insert(d, check_keys = False)
     remove_query_dict['_id'] = {"$ne": inserted}
@@ -117,6 +119,7 @@ def mongo_get_logbook_dict():
             v['runs'] = tuple(v['runs'])
     return {k: v for k, v in raw_dict.iteritems() if isinstance(v, dict)}
 
+# TODO: currently deprecated
 @utils.ifroot
 def mongo_commit(label_dependencies = None):
     """
@@ -133,9 +136,15 @@ def mongo_commit(label_dependencies = None):
     import logbook
     import data_access
 
-    dependency_dicts =\
-        [data_access.get_dataset_attribute_map(label)
-        for label in label_dependencies]
+    dependency_dicts = []
+    for label in label_dependencies:
+        try:
+            dependency_dicts.append(data_access.get_dataset_attribute_map(label))
+        except KeyError:
+            pass
+#    dependency_dicts =\
+#        [data_access.get_dataset_attribute_map(label)
+#        for label in label_dependencies]
     try:
         key = to_insert['key']
         state_hash = get_state_hash(dependency_dicts)

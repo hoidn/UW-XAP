@@ -6,6 +6,7 @@ from dataccess import data_access as data
 from dataccess import utils
 from dataccess import query
 import ipdb
+import time
 
 def even_filter(arr, nevent = None, **kwargs):
     return bool(nevent % 2)
@@ -14,6 +15,7 @@ def test_get_label_data():
     from dataccess import database
     database.delete_collections()
     d = query.DataSet(query.query_list([('label', r"evaltest"), ('transmission', 0.1)]))
+    time.sleep(1)
     si = data.get_label_data('label-evaltest-transmission-0.1', 'si', event_data_getter = utils.usum)
     assert si[1][620][30]
     
@@ -26,14 +28,14 @@ def test_get_dataset_attribute_value():
     assert data.get_dataset_attribute_value('label-evaltest-transmission-0.1', 'transmission') == 0.1
     assert data.get_dataset_attribute_value('label-e.*est-transmission-0.1', 'transmission') == 0.1
     assert data.get_dataset_attribute_value('evaltest', 'transmission') == 0.1
-    assert data.get_dataset_attribute_value('fe3o4lab', 'runs') == (608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 602, 603, 604, 605, 606, 607)
+    assert data.get_dataset_attribute_value('fe3o4lab1', 'runs') == (608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 607)
     assert data.get_dataset_attribute_value('205', 'runs') == (205,)
     assert data.get_dataset_attribute_value('205-206', 'runs') == (205, 206)
 
 
 def test_get_dark_data():
     assert data.get_dark_label('evaltest') == '377'
-    assert data.get_dark_label('fe3o4lab') == '436'
+    assert data.get_dark_label('fe3o4lab1') == '436'
 
 def test_get_data_and_filter_logbook():
     assert data.get_data_and_filter('40', 'quad1')

@@ -25,9 +25,6 @@ def addparser_xes(subparsers):
     xes.add_argument('--nosubtraction', '-ns', action = 'store_true', help = 'If selected, background subtraction is suppressed')
     xes.add_argument('--variation', '-v', action="store_const", default = False, const=True, help ="Plot shot to shot variation")
     xes.add_argument('--variation_n', '-vn', type=int, default = 50, help="How many shots to use for variation")
-    xes.add_argument('--variation_center', '-vc', type = int, default = 408, help="to the right is the pump, to the left is the probe")
-    xes.add_argument('--variation_skip_width', '-vs', type=int, default=0, help="from vc skip this many inds before summing pump and probe area")
-    xes.add_argument('--variation_width', '-vw', type=int, default=50, help="from vc sum out this many inds")
 
 
 def addparser_xrd(subparsers):

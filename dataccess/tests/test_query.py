@@ -2,6 +2,7 @@ import config
 import ipdb
 from dataccess import query
 import numpy as np
+import time
 
 def test_DataSet():
     # Edge case test
@@ -24,9 +25,11 @@ def test_parse_list_of_strings_to_query():
 def test_main():
     slist = "runs 530 535".split()
     dataset1 = query.main(slist)
+    time.sleep(1)
     frame1, edd1 = dataset1.evaluate('si')
     f = config.every_other_filter
     dataset2 = query.main(slist, event_filter = f, event_filter_detid = 'si')
+    time.sleep(1)
     frame2, edd2 = dataset2.evaluate('si')
     assert not np.all(frame1 == frame2)
     return edd1, edd2

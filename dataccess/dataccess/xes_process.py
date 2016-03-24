@@ -9,6 +9,7 @@ import matplotlib as mp
 import os
 import pandas as pd
 from scipy import interpolate
+import functools
 
 import data_access as data
 import utils
@@ -90,30 +91,49 @@ def mean_from_label(detid, transpose = False):
     """
     def data_getter(label):
         arr = data.get_data_and_filter(label, detid)[0]
-        arr = arr.astype('float')
+        arr = arr.astype('float64')
         if transpose:
             return arr.T
         else:
             return arr
     return data_getter
 
-def events_from_label(detid, nevents, transpose = False):
-    def data_getter_events(label):
+def events_from_label(detid, event_indices = None,
+        number_events = None, event_data_getter = None):
+    if event_data_getter is None:
         def event_data_getter(x, **kwargs):
             return x
+    def data_getter_events(label):
+        """
+        Returns:
+        event data, run numbers
+        event data : list of np.ndarray
+        run numbers : list of str
+        """
+
+        def get_run_events_and_runstrings(rundict, event_indices):
+            result = [rundict[k]
+                for k in event_indices
+                if k in rundict]
+            utils.rprint("searching for events: " + str(event_indices))
+            good_indices = filter(lambda k: k in rundict, event_indices)
+            utils.rprint("found events: " + str(good_indices))
+            assert len(result) > 0
+            return result, map(lambda key, event_index: str(key) + '_' + str(event_index), len(result) * [k], good_indices)
+
         d = data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1]
-        if len(d) > 1:
-            raise ValueError("Invalid dataset label: %s. Label must refer to exactly one run." % label)
-        try:
-            rundict = d.values()[0]
-            result = [rundict[k].astype('float')
-                for k in nevents]
-        except KeyError, e:
-            raise KeyError("Event not found: %s" % e)
-        if transpose:
-            return map(lambda x: x.T, result)
+        if event_indices:
+            if len(d) > 1:
+                raise ValueError("Invalid dataset label: %s. Label must refer to exactly one run." % label)
+            result, run_strings = get_run_events_and_runstrings(d.values()[0], event_indices)
+        elif number_events:
+            indices =\
+                [np.linspace(0, len(rundict), number_events, dtype = int)
+                for rundict in d.values()]
+            result, run_strings = reduce(lambda x, y: x + y, map(get_run_events_and_runstrings, d.values(), indices))
         else:
-            return result
+            raise ValueError("number_events and event_indices are both None")
+        return result, run_strings
     return data_getter_events
 
 def center_col(data):
@@ -301,8 +321,6 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
             calibration at all.
     Output: array, array -> energy or index, normalized intensity
     """
-#    if np.shape(data) != (391, 370):
-#        print "WARNING: array dimensions ", np.shape(data), " differ from recorded shape of CSPAD140k"
     if energy_ref1_energy_ref2_calibration or calib_load_path:
         peak_width = 150
     else:
@@ -314,8 +332,6 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
         cencol_calibration_data = data
     cencol = center_col(cencol_calibration_data)
     intensities = lineout(data, cencol, pxwidth = pxwidth)
-#    if calib_load_path:
-#        x = load_calib(calib_load_path)
     if calib_load_path:
         x = load_calib(calib_load_path)
     elif energy_ref1_energy_ref2_calibration and eltname and (cold_calibration_data is not None):
@@ -382,20 +398,68 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
     show()
 
 
-def main(detid, data_identifiers, nevents = None, cold_calibration_label = None,
+def get_plotinfo_one_label(detid, label, get_spectrum_partial,
+        event_indices = None, number_events = None, transpose = False):
+    """
+    Arguments:
+    detid : str
+            
+    Returns sufficient info for plotting the spectrum/spectra corresponding to
+    one dataset label. Each spectrum is either an average over a dataset or an
+    individual event, depending on the values of number_events and event_indices.
+    
+    Returns:
+        spectrumList, labels 
+    spectrumList : list
+        List of spectra in the format [x, y]
+    labels : list of strings
+        Legend labels associated with each spectrum.
+    eltname : string
+        Element whose k alpha/beta emission dominates the spectrum (equals
+        None if not applicable).
+    """
+    # Extract data from labels. 
+    data_extractor = mean_from_label(detid, transpose = transpose)
+
+    def spectrum_extractor(arr, **kwargs):
+        """
+        Given area detector data, return a spectrum.
+        """
+        # Cast to float64 to avoid overflows.
+        arr = arr.astype('float64')
+        if transpose:
+            arr = arr.T
+        return get_spectrum_partial(arr, cencol_calibration_data = arr)
+
+    # Get event-by-event spectra
+    if (event_indices is not None) or (number_events is not None):
+        spectrumList, run_strings = events_from_label(detid,
+            event_indices = event_indices, number_events = number_events,
+            event_data_getter = spectrum_extractor)(label)
+        if event_indices is None:
+            labels = run_strings
+        else:
+            labels =\
+                [label + '_' + str(n)
+                for n in event_indices]
+    # Get a single averaged spectrum for the dataset label
+    else:
+        mean_arr = data.get_data_and_filter(label, detid)[0]
+        spectrumList = [spectrum_extractor(mean_arr)]
+        return spectrumList, [label]
+        
+    return spectrumList, labels
+
+
+def main(detid, data_identifiers, event_indices = None, number_events = None,
+        cold_calibration_label = None,
         pxwidth = 3, calib_load_path = None, calib_save_path = None,
         dark_label = None, energy_ref1_energy_ref2_calibration = True,
         eltname = '', transpose = False,
         normalization = True, bgsub = True):
     # Extract data from labels. 
     data_extractor = mean_from_label(detid, transpose = transpose)
-    spectrumList = []
     scale_ev = (energy_ref1_energy_ref2_calibration or calib_load_path)
-    if not os.path.exists('spectra/'):
-        try:
-            os.makedirs('spectra')
-        except OSError, e:
-            raise OSError("data directory 'spectra/' could not be created: %s" % str(e))
     if cold_calibration_label:
         cold_calibration_data = data_extractor(cold_calibration_label)
     else:
@@ -405,148 +469,39 @@ def main(detid, data_identifiers, nevents = None, cold_calibration_label = None,
     else:
         dark = None
 
-    if nevents is None:
-        data_arrays = map(data_extractor, data_identifiers)
-        labels = map(os.path.basename, data_identifiers)
-    else:
-        assert type(nevents[0]) == int
-        if len(data_identifiers) > 1:
-            raise ValueError("Can only accept one dataset label in event-picking mode")
-        data_arrays = events_from_label(detid, nevents, transpose = transpose)(data_identifiers[0])
-        labels =\
-            [data_identifiers[0] + '_' + str(n)
-            for n in nevents]
-    for data, label in zip(data_arrays, labels):
-        energies, intensities = get_spectrum(data,
-            cencol_calibration_data = data,
-            dark = dark, cold_calibration_data = cold_calibration_data,
+    get_spectrum_partial = functools.partial(get_spectrum, dark = dark,
+            cold_calibration_data = cold_calibration_data,
             pxwidth = pxwidth, calib_load_path = calib_load_path,
             calib_save_path = calib_save_path,
             energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
             eltname = eltname, normalization = normalization,
             bg_sub = bgsub)
-        spectrumList.append([energies, intensities])
+
+    # TODO: form nevents.
+    spectrumList, labels =\
+        reduce(lambda x, y: (x[0] + y[0], x[1] + y[1]),
+            [get_plotinfo_one_label(detid, data_identifier, get_spectrum_partial,
+            event_indices = event_indices, number_events = number_events, transpose = transpose)
+            for data_identifier in data_identifiers])
+
+    for label, spectrum in zip(labels, spectrumList):
         if eltname:
             path = 'spectra/' + label + '_' + eltname
         else:
             path = 'spectra/' + label
-        utils.save_data(energies, intensities, path)
+        if (event_indices is not None) or (number_events is not None):
+            init_dict = {'event_label': label}
+        else:
+            init_dict = {}
+        try:
+            utils.save_data(spectrum[0], spectrum[1], path, init_dict = init_dict)
+        except OSError, e:
+            raise OSError("data directory 'spectra/' could not be created: %s" % str(e))
+
     if eltname:
         name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
     else:
         name = 'plots_xes/' + '_'.join(labels)
     plot_spectra(spectrumList, labels, scale_ev, name = name, eltname = eltname)
     return spectrumList
-
-
-def main_variation(detid, data_identifiers, cold_calibration_label = None, pxwidth = 3,
-        calib_load_path = None, calib_save_path = None,
-        dark_label = None, energy_ref1_energy_ref2_calibration = True,
-        eltname = '', transpose = False, vn=0, vc=0, vs=0, vw=0,
-        normalization = True, bgsub = True):
-    print("starting xes_process.main_variation")
-    # Extract data from labels. 
-    data_extractor = mean_from_label(detid, transpose = transpose)
-    spectrumList = []
-    scale_ev = (energy_ref1_energy_ref2_calibration or calib_load_path)
-    if not os.path.exists('spectra/'):
-        os.makedirs('spectra')
-    if cold_calibration_label:
-        cold_calibration_data = data_extractor(cold_calibration_label)
-    else:
-        cold_calibration_data = None
-    if dark_label:
-        dark = data_extractor(dark_label)
-    else:
-        dark = None
-    data_arrays = map(data_extractor, data_identifiers)
-    labels = map(os.path.basename, data_identifiers)
-
-    def evg(x, **kwargs): return x
-
-    al, ah, bl, bh = vc-vw, vc-vs, vc+vs, vc+vw
-
-    ax = 1
-    if transpose: ax=0
-    for data,label in zip(data_arrays, labels):
-        #get_label_data(label, detid, default_bg = None, override_bg = None,
-        # separate = False, event_data_getter = None, event_mask = None, **kwargs):
-        a,b = data_access.get_label_data(label, detid, event_data_getter=evg)
-
-        print label
-        ilabel = int(label)
-        plt.figure()
-        for i in range(vn):
-            imagei = b[ilabel][i]
-            #print(i)
-            #print(type(imagei))
-            #print(imagei.shape)
-            linei = imagei.sum(axis=ax)
-            bg = linei[-100:].mean()
-            #print(linei.shape)
-            if calib_load_path:
-                energies = load_calib(calib_load_path)
-                plt.plot([energies[al],energies[al]],plt.ylim(),'k')
-                plt.plot([energies[ah],energies[ah]],plt.ylim(),'k')
-                plt.plot([energies[bl],energies[bl]],plt.ylim(),'k')
-                plt.plot([energies[bh],energies[bh]],plt.ylim(),'k')
-                plt.plot(energies, linei-bg)
-                plt.xlabel("Energy (eV)")
-            else:
-                plt.plot(linei-bg)
-                plt.plot([al,al],plt.ylim(),'k')
-                plt.plot([ah,ah],plt.ylim(),'k')
-                plt.plot([bl,bl],plt.ylim(),'k')
-                plt.plot([bh,bh],plt.ylim(),'k')
-                plt.xlabel("index")
-
-        plt.ylabel("spectral intensity (arb)")
-        plt.title("run %s, %i events, summed along axis %i, detid: %s"%(label, vn, ax, detid))
-
-        aa=[]
-        bb=[]
-        for i in range(len(b[ilabel])):
-            imagei = b[ilabel][i]
-            linei = imagei.sum(axis=ax)
-            bg = linei[-300:-100:].mean()
-            linei-=bg
-            aa.append( linei[al:ah].sum())
-            bb.append( linei[bl:bh].sum())
-        aa=np.array(aa,dtype="float")
-        bb=np.array(bb,dtype="float")
-
-        plt.figure()
-        ymax = np.median(bb/aa)+np.std(bb/aa)*3
-        plt.hist(bb/aa,np.linspace(0, ymax,100))
-        plt.ylabel("number of occurences")
-        plt.xlabel("pump sum / probe sum")
-        plt.title("run %s"%(label))
-
-        plt.ylim(0,ymax)
-
-
-  
-    for data, label in zip(data_arrays, labels):
-        energies, intensities = get_spectrum(data,
-            cencol_calibration_data = data,
-            dark = dark, cold_calibration_data = cold_calibration_data,
-            pxwidth = pxwidth, calib_load_path = calib_load_path,
-            calib_save_path = calib_save_path,
-            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
-            eltname = eltname, normalization = normalization,
-            bg_sub = bgsub)
-        spectrumList.append([energies, intensities])
-        if eltname:
-            path = 'spectra/' + label + '_' + eltname
-        else:
-            path = 'spectra/' + label
-        # add header?: 'energy (eV)\tintensity (arb)')
-        utils.save_data(energies, intensities, path)
-    if eltname:
-        name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
-    else:
-        name = 'plots_xes/' + '_'.join(labels)
-    plt.figure()
-    plot_spectra(spectrumList, labels, scale_ev, name = name, eltname = eltname)
-
 

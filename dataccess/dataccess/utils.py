@@ -8,6 +8,7 @@ import dill
 import pkg_resources
 from time import time
 import ipdb
+import pdb
 import config
 import hashlib
 import itertools
@@ -20,6 +21,9 @@ import random
 #from libtiff import TIFF
 
 PKG_NAME = __name__.split('.')[0]
+
+#class ConfigAttributeError(Exception):
+#    pass
 
 def identity(x, **kwargs):
     return x
@@ -35,6 +39,30 @@ def random_float():
     from datetime import datetime
     random.seed(datetime.now())
     return random.uniform(0., 1.)
+
+#def resample(x, y, smoothing = 0, relative_sample_interval = 1.):
+#    from scipy.interpolate import interp1d
+#    from scipy.ndimage.filters import gaussian_filter
+#    intermediate_sample_relative_density = 2.
+#    def regrid(x, y, gridratio):
+#        x, y = x[np.argsort(x)], y[np.argsort(x)]
+#        interpolated = interp1d(x, y, fill_value = 0.)
+#        dx = np.min(np.abs(np.diff(x)))/gridratio
+#        npoints = int((interpolated.x[-1] - interpolated.x[0]) / dx)
+#        regridded_x = np.linspace(interpolated.x[0], interpolated.x[1], num = npoints)
+#        regridded_y = interpolated(regridded_x)
+#        return regridded_x, regridded_y, regridded_x[1] - regridded_x[0]
+#    # sort the arrays
+#    finex, finey, dx = regrid(x, y, intermediate_sample_relative_density)
+#    finey = gaussian_filter(oversampled_y, smoothing / dx)
+#
+#    finalx, finaly, _ = regrid(finex, finey, relative_sample_interval / intermediate_sample_relative_density
+
+def angles_to_q(angles, e0):
+    hbarc = 1973. # in eV * Angstrom
+    def _angle_to_q(angle):
+        return 2 * e0 * np.sin(np.deg2rad(angle)/2)/hbarc
+    return map(_angle_to_q, angles)
 
 def dict_leaf_mean(d):
     """
@@ -192,14 +220,23 @@ def save_image(save_path, imarr, fmt = 'tiff'):
 
 @ifroot
 @playback.db_insert
-def save_data(x, y, save_path):
+def save_data(x, y, save_path, mongo_key = 'data', init_dict = {}):
     import database
-    mongo_key = 'data'
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
     np.savetxt(save_path, [x, y])
-    database.mongo_add(mongo_key, [list(x), list(y)])
+    #database.mongo_add(mongo_key, [list(x), list(y)])
+    # TODO: collection should be referred to by a string
+    to_insert_local = merge_dicts({k: v for k, v in database.to_insert.iteritems()}, init_dict)
+    to_insert_local[mongo_key] = [list(x), list(y)]
+    database.mongo_replace_atomic(database.collections_lookup['session_cache'], to_insert_local)
+
+#def load_data(search_dict = {}, mongo_key = 'data'):
+#    """
+#    
+#    import database
+#    return database.collections_lookup['session_cache'].find(search_dict)
 
 def flatten_dict(d):
     """

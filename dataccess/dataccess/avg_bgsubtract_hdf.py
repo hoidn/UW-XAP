@@ -11,6 +11,7 @@ import argparse
 import os
 import random
 import ipdb
+import pdb
 import dill
 import sys
 from time import time
@@ -179,10 +180,15 @@ def get_area_detector_subregion(quad, det, evt, detid):
         
         ped.shape = (4, 8, 185, 388)
         pedq = ped[quad,:]
-        if config.chip_level_correction:
-            for chip_pedestal, chip_nda in zip(pedq, ndaq):
-                offset = np.percentile(chip_nda, 45) - np.mean(chip_pedestal)
-                chip_pedestal += offset
+# TODO: should we keep chip-level correction disabled?
+#        try:
+#            chip_correction = config.chip_level_correction
+#        except AttributeError, e:
+#            raise utils.ConfigAttributeError(str(e))
+#        if chip_correction:
+#            for chip_pedestal, chip_nda in zip(pedq, ndaq):
+#                offset = np.percentile(chip_nda, 45) - np.mean(chip_pedestal)
+#                chip_pedestal += offset
         #print_ndarr(ndaq, 'nda[%d,:]'%quad)
 
         # reconstruct image for quad

@@ -27,6 +27,6 @@ def test_xrd_2():
     reset()
 
 def test_datashow():
-    sys.argv = ['mecana.py'] + '-n datashow quad1 40'.split()
+    sys.argv = ['mecana.py'] + '-n datashow quad1 530'.split()
     return mecana_main.main()
 

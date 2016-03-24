@@ -245,4 +245,5 @@ def sum_window(smin, smax):
     return lambda arr: smin < np.sum(arr) < smax
 
 testing = True
-playback = True
+# TODO: fix playback mode
+playback = False

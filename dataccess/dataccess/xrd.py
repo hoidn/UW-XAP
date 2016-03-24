@@ -13,6 +13,7 @@ import scipy.interpolate as interpolate
 from functools import partial
 from recordclass import recordclass
 import copy
+import pdb
 import ipdb
 
 import config
@@ -25,7 +26,8 @@ import playback
 #from mpi4py import MPI
 
 # default powder peak width, in degrees
-DEFAULT_PEAK_WIDTH = 2.5
+DEFAULT_PEAK_WIDTH = 5.0
+DEFAULT_SMOOTHING = 5
 
 # hbar c in eV * Angstrom
 HBARC = 1973. 
@@ -202,7 +204,10 @@ def translate(phi, x0, y0, alpha, r, imarray, fiducial_ellipses = None):
         fiducial_value = np.max(np.nan_to_num(imarray))/5.
         for ang in fiducial_ellipses:
             imarray = np.where(np.logical_and(beta > ang - ew, beta < ang + ew), fiducial_value, imarray)
-    imarray = imarray * np.square(rho)
+    # Commented out because this converts a flat background level into an
+    # angularly-varying one, which introduces a systematic effect related to
+    # binning pixels into angle ranges. 
+    # imarray = imarray * np.square(rho)
     
     newpoints = np.vstack((beta.flatten(), imarray.flatten()))
     
@@ -226,7 +231,9 @@ def binData(mi, ma, stepsize, valenza = True):
 
 
 #@utils.eager_persist_to_file("cache/xrd.process_imarray/")
-def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True, compound_list = [],
+def process_imarray(detid, imarray, nbins = 1000, verbose = True,
+        fiducial_ellipses = None, bgsub = True, compound_list = [],
+        pre_integration_smoothing = 1,
         **kwargs):
     """
     Given a detector ID and assembeled CSPAD image data array, compute the
@@ -234,11 +241,24 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True, fiducial_ellip
 
     Outputs:  data in bins, intensity vs. theta. Saves data to file
     """
-
+    @utils.eager_persist_to_file('cache/xrd/process_imarray/expanded_mask')
+    def expanded_mask(arr):
+        """
+        Return a boolean array that masks out zero values
+        in and their neighbors in the input array.\
+        """
+        import numpy.ma as ma
+        import maskmaker
+        mask = ma.make_mask(np.ones_like(arr))
+        mask = np.where(arr == 0, False, True)
+        return maskmaker.makemask(mask, 2 * pre_integration_smoothing)
     # TODO: make this take dataset as an argument
     (phi, x0, y0, alpha, r) = get_detid_parameters(detid)
     if bgsub:
         imarray = subtract_background_full_frame(imarray, detid, compound_list, **kwargs)
+    
+    mask = expanded_mask(imarray)
+    imarray = gaussian_filter(imarray, pre_integration_smoothing) * mask
     data, imarray = translate(phi, x0, y0, alpha, r, imarray, fiducial_ellipses = fiducial_ellipses)
     
     thetas = data[:,0]
@@ -341,7 +361,7 @@ def pad_array(imarray):
     return padded
     
 
-def fit_background(imarray, detid, smoothing = 10, method = 'nearest'):
+def fit_background(imarray, detid, smoothing = DEFAULT_SMOOTHING, method = 'nearest'):
     """
     Return a background frame for imarray. 
 
@@ -383,7 +403,7 @@ def subtract_background(imarray, detid, order = 5, resize_function = trim_array,
     else:
         return imarray[:size, :size] - background
 
-def get_background_full_frame(imarray, detid, compound_list, smoothing = 10, width = DEFAULT_PEAK_WIDTH):
+def get_background_full_frame(imarray, detid, compound_list, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH):
     # TODO: reorganize this and the other background-calculation function
     """
     Calculate a background frame from imarray and return the result. 
@@ -423,7 +443,7 @@ def get_background_full_frame(imarray, detid, compound_list, smoothing = 10, wid
     bg_smooth[~pixel_mask] = 0.
     return bg_smooth
 
-def subtract_background_full_frame(imarray, detid, compound_list, smoothing = 10, width = DEFAULT_PEAK_WIDTH):
+def subtract_background_full_frame(imarray, detid, compound_list, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH):
     """
     Background-subtract imarray and return the result. 
 
@@ -578,7 +598,7 @@ def peak_sizes(x, y, peak_ranges):
         sizeList += [np.sum(y[peakIndices])]
     return np.array(sizeList)
 
-def get_peak_and_background_signal_from_imarray(imarray, detid, compound_list, smoothing = 10, width = DEFAULT_PEAK_WIDTH):
+def get_peak_and_background_signal_from_imarray(imarray, detid, compound_list, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH):
     # interpolated background
     # TODO: docstring
     bg = get_background_full_frame(imarray, detid, compound_list, smoothing = smoothing, width = width)
@@ -597,7 +617,7 @@ def get_peak_and_background_signal_from_imarray(imarray, detid, compound_list, s
     return np.sum(peaks_imarray_subtracted), np.sum(bg)
 
 @utils.eager_persist_to_file("cache/xrd.get_peak_and_background_signal/")
-def get_peak_and_background_signal_from_dataref(dataset, smoothing = 10, width = DEFAULT_PEAK_WIDTH, event_data_getter = None):
+def get_peak_and_background_signal_from_dataref(dataset, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH, event_data_getter = None):
     """
     Evaluates signal and background levels for an array, or for the mean
     of all events in a run group label.
@@ -617,7 +637,7 @@ def get_peak_and_background_signal_from_dataref(dataset, smoothing = 10, width =
     return peaksum, bgsum
 
 @utils.eager_persist_to_file("cache/xrd.get_normalization/")
-def get_normalization(datasets, type = 'transmission', peak_width = 2.5, **kwargs):
+def get_normalization(datasets, type = 'transmission', peak_width = DEFAULT_PEAK_WIDTH, **kwargs):
     labels = np.array(map(lambda x: x.dataref, datasets))
     if type == 'transmission':
         label_transmissions = np.array(map(lambda label:
@@ -636,7 +656,7 @@ def get_normalization(datasets, type = 'transmission', peak_width = 2.5, **kwarg
 
 
 def peak_progression(datasets, compound_name, normalization = None,
-        peak_width = 2.5, **kwargs):
+        peak_width = DEFAULT_PEAK_WIDTH, **kwargs):
     """
     Note: this function may only be called if the elements of labels are
     google spreadsheet dataset labels, rather than paths to data files.
@@ -686,7 +706,7 @@ def peak_progression(datasets, compound_name, normalization = None,
 
 def process_one_detid(detid, data_identifiers, labels, mode = 'label', peak_progression_compound = None,
     plot = True, bgsub = False, fiducial_ellipses = None, compound_list = [],
-    normalization = None, maxpeaks = 6, plot_progression = False, peak_width = 2.5):
+    normalization = None, maxpeaks = 6, plot_progression = False, peak_width = DEFAULT_PEAK_WIDTH):
     """
     Arguments:
         detid: id of a quad CSPAD detector

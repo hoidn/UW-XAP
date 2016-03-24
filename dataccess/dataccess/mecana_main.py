@@ -26,7 +26,7 @@ def call_xes(args):
     """
     Input: args, a value returned by argparse.ArgumentParser.parse_args()
 
-    Calls the xes sub-command of this script.
+    Calls the spectrum sub-command of this script.
     """
     from dataccess import xes_process
     labels = args.labels
@@ -44,25 +44,18 @@ def call_xes(args):
     dark_label = args.subtraction
     energy_ref1_energy_ref2_calibration = args.energy_ref1_energy_ref2_calibration
     if args.variation:
-        # plot shot to shot variation
-        # TODO: bring this up to date with addition of the --events option
-        xes_process.main_variation(args.detid, labels, cold_calibration_label = cold_calibration_label,
-            pxwidth = pxwidth,
-            calib_save_path = calibration_save_path, calib_load_path =
-                calibration_load_path, dark_label = dark_label,
-                energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
-                eltname = eltname, transpose = args.rotate, vn=args.variation_n, vc=args.variation_center,
-                vs=args.variation_skip_width, vw=args.variation_width,
-                normalization = normalization, bgsub = bgsub)
+        number_events = args.variation_n
     else:
-        # plot summed spectra
-        xes_process.main(args.detid, labels, nevents = args.events,
-            cold_calibration_label = cold_calibration_label, pxwidth = pxwidth,
-            calib_save_path = calibration_save_path, calib_load_path =
-                calibration_load_path, dark_label = dark_label,
-                energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
-                eltname = eltname, transpose = args.rotate,
-                normalization = normalization, bgsub = bgsub)
+        number_events = None
+    # plot summed spectra
+    xes_process.main(args.detid, labels, event_indices = args.events,
+        cold_calibration_label = cold_calibration_label, pxwidth = pxwidth,
+        calib_save_path = calibration_save_path, calib_load_path =
+            calibration_load_path, dark_label = dark_label,
+            energy_ref1_energy_ref2_calibration = energy_ref1_energy_ref2_calibration,
+            eltname = eltname, transpose = args.rotate,
+            normalization = normalization, bgsub = bgsub,
+            number_events = number_events)
 
 def call_xrd(args):
     """
@@ -74,6 +67,8 @@ def call_xrd(args):
     from dataccess import xrd
     detid = args.detid
     data_identifiers = args.labels
+    if data_identifiers is None:
+        raise ValueError("At least one dataset label must be provided.")
     mode = 'label'
     peak_progression_compound = args.peak_progression_compound
     bgsub = args.background_subtraction
@@ -156,6 +151,7 @@ def main():
     # try to execute from database
     key = '_'.join(sys.argv[1:])
 
+    # sets the 'key' field in database.to_insert. # TODO: find a cleaner method for this.
     database.mongo_init(key)
 
     if cmd == 'init': # Enter init sub-command
@@ -199,7 +195,7 @@ def main():
             playback.save_db(key)
             print playback.db
             playback.execute()
-        mongo_commit()
+        #mongo_commit()
     return key
 
 if __name__ == '__main__':
