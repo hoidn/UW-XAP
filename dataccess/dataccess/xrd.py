@@ -3,7 +3,6 @@
 import os
 import numpy as np
 import numpy.ma as ma
-import matplotlib.pyplot as plt
 import itertools
 import scipy
 from scipy.ndimage.filters import gaussian_filter
@@ -14,19 +13,22 @@ from functools import partial
 from recordclass import recordclass
 import copy
 import pdb
-import ipdb
 
 import config
 
 import utils
 import logbook
 import playback
+from output import rprint
 
-
-#from mpi4py import MPI
+# Select console- or jupyter-based plotting
+if config.plotting_mode == 'notebook':
+    import plotting as plt
+else:
+    import matplotlib.pyplot as plt
 
 # default powder peak width, in degrees
-DEFAULT_PEAK_WIDTH = 5.0
+DEFAULT_PEAK_WIDTH = 3.
 DEFAULT_SMOOTHING = 5
 
 # hbar c in eV * Angstrom
@@ -219,7 +221,7 @@ def binData(mi, ma, stepsize, valenza = True):
     Input:  a minimum, a maximum, and a stepsize
     Output:  a list of bins
     """
-    if verbose: print "creating angle bins"
+    if verbose: rprint( "creating angle bins")
     binangles = list()
     binangles.append(mi)
     i = mi
@@ -241,6 +243,10 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
 
     Outputs:  data in bins, intensity vs. theta. Saves data to file
     """
+    if bgsub and not compound_list:
+        bgsub = False
+        rprint( "Overriding bg_sub to False due to empty compound_list")
+        
     @utils.eager_persist_to_file('cache/xrd/process_imarray/expanded_mask')
     def expanded_mask(arr):
         """
@@ -272,7 +278,7 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
     numPix = [0] * (nbins+1)
     intenValue = [0] * (nbins+1)
     
-    if verbose: print "putting data in bins"        
+    if verbose: rprint( "putting data in bins"        )
     # find which bin each theta lies in and add it to count
     for j,theta in enumerate(thetas):
         if intens[j] != 0:
@@ -280,7 +286,7 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
             numPix[k]=numPix[k]+1
             intenValue[k]=intenValue[k]+intens[j]
     # form average by dividing total intensity by the number of pixels
-    if verbose: print "adjusting intensity"
+    if verbose: rprint( "adjusting intensity")
     adjInten = np.nan_to_num((np.array(intenValue)/np.array(numPix)))
     
 #    if np.min(adjInten) < 0:
@@ -291,17 +297,17 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
 #@utils.eager_persist_to_file("cache/xrd.process_dataset/")
 def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = None,
         bgsub = True, **kwargs):
-    imarray, event_data = data_extractor(dataset)
+    imarray, event_data = data_extractor(dataset, **kwargs)
     binangles, adjInten, imarray = process_imarray(dataset.detid, imarray,
         fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
         compound_list = dataset.compound_list, **kwargs)
     return binangles, adjInten, imarray
 
 # Todo: memoize mpimap instead of this function?
-#@utils.eager_persist_to_file("cache/xrd.proc_all_datasets/", rootonly = False)
-def proc_all_datasets(datasets, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True):
+@utils.eager_persist_to_file("cache/xrd/proc_all_datasets/", rootonly = False)
+def proc_all_datasets(datasets, nbins = 1000, verbose = True, fiducial_ellipses = None, bgsub = True, **kwargs):
     outputs = utils.mpimap(partial(process_dataset, nbins = nbins,
-        verbose = verbose, bgsub = bgsub), datasets)
+        verbose = verbose, bgsub = bgsub, **kwargs), datasets)
 #    outputs = map(partial(process_dataset, nbins = nbins,
 #        verbose = verbose, bgsub = bgsub), datasets)
     binangles_list, intensities_list, imarrays = zip(*outputs)
@@ -361,7 +367,7 @@ def pad_array(imarray):
     return padded
     
 
-def fit_background(imarray, detid, smoothing = DEFAULT_SMOOTHING, method = 'nearest'):
+def interp_2d_nearest_neighbor(imarray, detid, smoothing = DEFAULT_SMOOTHING):
     """
     Return a background frame for imarray. 
 
@@ -387,14 +393,58 @@ def fit_background(imarray, detid, smoothing = DEFAULT_SMOOTHING, method = 'near
     z = imarray.flatten()
 
     z_good = np.where(z != 0)[0]
-    resampled = griddata(np.array([x[z_good], y[z_good]]).T, z[z_good], (gridx, gridy), method = method)
+    resampled = griddata(np.array([x[z_good], y[z_good]]).T, z[z_good], (gridx, gridy), method = 'nearest')
     smoothed = gaussian_filter(resampled, smoothing)
     return smoothed, resampled
+
+@utils.eager_persist_to_file('cache/xrd/CTinterpolation')
+def CTinterpolation(imarray, detid, smoothing = 10):
+    """
+    Do a 2d interpolation to fill in zero values of a 2d ndarray.
+    
+    Uses scipy.interpolate import CloughTocher2DInterpolator.
+    
+    Arguments:
+        imarray : np.ndarray
+        detid : string
+        smoothing : numeric
+    """
+    smoothed = np.where(np.isclose(imarray, 0), gaussian_filter(imarray, smoothing), 0.)
+    from scipy.interpolate import CloughTocher2DInterpolator as ct
+    geometry_params = get_detid_parameters(detid)
+    dimx, dimy = np.shape(imarray)
+    min_dimension = min(dimx, dimy)
+    gridx, gridy = map(lambda arr: 1. * arr, get_x_y(imarray, *geometry_params))
+    
+
+    def interp_2d(imarray):
+        # flattened values of all pixels
+        z = imarray.flatten()
+        z_good = np.where(z != 0)[0]
+        x, y = gridx.flatten(), gridy.flatten()
+        xgood, ygood = x[z_good], y[z_good]
+
+        points = np.vstack((xgood, ygood)).T
+        values = z[z_good]
+        interpolator = ct(points, values)
+        return interpolator(x, y).reshape(imarray.shape)
+
+    # Input to the CT interpolation is a smoothed NN interpolation
+    # This pre-interpolation step, combined with a sufficiently large value of
+    # smoothing, is often necessary to prevent the interpolation from
+    # oscillating/overshooting.
+    smoothNN, _ = interp_2d_nearest_neighbor(imarray, detid, smoothing = smoothing)
+    smooth_masked = np.where(np.isclose(imarray, 0), 0., smoothNN)
+    CTinterpolated = interp_2d(smooth_masked)
+    
+    # Fill in NAN values from outside the convex hull of the interpolated points
+    combined = np.where(np.isnan(CTinterpolated), smoothNN, CTinterpolated)
+    return combined
 
 def subtract_background(imarray, detid, order = 5, resize_function = trim_array, mutate = True):
     resized = resize_function(imarray)
     size = min(resized.shape)
-    background = fit_background(imarray, detid, order = order, resize_function = resize_function)
+    background = CTinterpolation(imarray, detid, order = order, resize_function = resize_function)
     if mutate:
         if resize_function == pad_array:
             raise ValueError("if mutate == True, resize_function must be bound to trim_array")
@@ -420,10 +470,8 @@ def get_background_full_frame(imarray, detid, compound_list, smoothing = DEFAULT
     if not compound_list:
         raise ValueError("compounds_list is empty")
     bgfit = imarray.copy()
-    #extra_masks = config.extra_masks[detid]
     
     # mask based on good pixels
-    #pixel_mask = utils.combine_masks(bgfit, extra_masks)
     pixel_mask = utils.combine_masks(bgfit, [], transpose = True)
 
     # mask based on powder peak locations
@@ -435,13 +483,16 @@ def get_background_full_frame(imarray, detid, compound_list, smoothing = DEFAULT
     combined_mask = powder_mask & pixel_mask
     bgfit[~combined_mask] = 0.
 
+    # TODO: Need a mechanism for getting dataset-specific paths.
+    if utils.isroot():
+        np.save('powder_with_cutout.npy', bgfit)
+
     # compute interpolated background
-    bg_smooth, bg = fit_background(bgfit, detid, smoothing = smoothing)
-    #ipdb.set_trace()
+    bg = CTinterpolation(bgfit, detid, smoothing = smoothing)
 
     # zero out bad/nonexistent pixels
-    bg_smooth[~pixel_mask] = 0.
-    return bg_smooth
+    bg[~pixel_mask] = 0.
+    return bg
 
 def subtract_background_full_frame(imarray, detid, compound_list, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH):
     """
@@ -536,13 +587,13 @@ def get_normalized_patterns(datasets, patterns, labels, normalization = None):
         norm_array = get_normalization(datasets, type = normalization)
     else:
         norm_array = [1.] * len(datasets)
-    print "NORM", norm_array
+    rprint( "NORM", norm_array)
     def normalize_pattern(pattern, norm):
         return [pattern[0], pattern[1] / norm]
     return [normalize_pattern(p, n) for p, n in zip(patterns, norm_array)]
 
 def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all', ax = None, log = True, show = False):
-    print "normalized progression ", normalized_progression
+    rprint( "normalized progression ", normalized_progression)
     if maxpeaks != 'all':
         intensity_reference = progression[:, 0]
         goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
@@ -550,14 +601,18 @@ def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_p
         goodpeaks = range(len(powder_angles))
     def plotting(ax):
         if ax is None:
-            f, ax = plt.subplots(1)
-        for label, curve in zip(powder_angles[goodpeaks], normalized_progression[goodpeaks]):
+            if log:
+                f, ax = plt.subplots(1, kwarg_list = [{'x_axis_type': 'log'}])
+            else:
+                f, ax = plt.subplots(1)
+        for label, curve in zip(map(str, powder_angles[goodpeaks]), normalized_progression[goodpeaks]):
             ax.plot(label_fluxes, curve, label = label)
-        if log:
-            ax.set_xscale('log')
+            # TODO: fix this for config.plotting_mode == 'console'
+#            ax.set_xscale('log')
         ax.legend()
         ax.set_xlabel('Flux density (J/cm^2)')
         ax.set_ylabel('Relative Bragg peak intensity')
+        ax.set_xlim((min(label_fluxes), max(label_fluxes)))
         if show:
             plt.show()
     plotting(ax)
@@ -591,7 +646,6 @@ def mask_peaks_and_iterpolate(x, y, peak_ranges):
     return interpolate.interp1d(x, y)
 
 def peak_sizes(x, y, peak_ranges):
-    #backgnd = mask_peaks_and_iterpolate(x, y, peak_ranges)
     sizeList = []
     for peakmin, peakmax in peak_ranges:
         peakIndices = np.where(np.logical_and(x >= peakmin, x <= peakmax))[0]
@@ -632,7 +686,7 @@ def get_peak_and_background_signal_from_dataref(dataset, smoothing = DEFAULT_SMO
         integrated signal outside of powder peaks
     """
     imarray, event_data = data_extractor(dataset)
-    peaksum, bgsum =  get_peak_and_background_signal_from_imarray(imarray, dataset.detid, dataset.compound_list,
+    peaksum, bgsum = get_peak_and_background_signal_from_imarray(imarray, dataset.detid, dataset.compound_list,
         smoothing = smoothing, width = width)
     return peaksum, bgsum
 
@@ -646,13 +700,11 @@ def get_normalization(datasets, type = 'transmission', peak_width = DEFAULT_PEAK
     elif type == 'background':
         peaksums, bgsums = zip(*[get_peak_and_background_signal_from_dataref(ds, width = peak_width, **kwargs) for ds in datasets])
         return np.array(bgsums)
-    elif type == 'intensity_diagnostic':
+    else: # Interpret type as the name of a function in config.py
         try:
-            return np.array([config.beam_intensity_diagnostic(label) for label in labels])
+            return np.array([eval('config.%s' % type)(label) for label in labels])
         except AttributeError:
-            raise ValueError("Function config.beam_intensity_diagnostic(<image array>) must be defined to use the 'intensity_diagnostic' normalization option.")
-    else:
-        raise ValueError("Invalid normalization type: " + type)
+            raise ValueError("Function config.%s(<image array>) not found." % type)
 
 
 def peak_progression(datasets, compound_name, normalization = None,
@@ -682,7 +734,7 @@ def peak_progression(datasets, compound_name, normalization = None,
     #anglemin, anglemax = patterns[0][0][0], patterns[0][0][-1]
     peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, width = peak_width) for ds in datasets))
     bgsums = np.array(bgsums)
-    make_interval = lambda angle: [angle - peak_width, angle + peak_width]
+    make_interval = lambda angle: [angle - peak_width/2.0, angle + peak_width/2.0]
     make_ranges = lambda angles: map(make_interval, angles)
     powder_angles = np.array(get_powder_angles(compound_name))
 
@@ -699,14 +751,15 @@ def peak_progression(datasets, compound_name, normalization = None,
     # indices: peak, label
     heating_progression = normalized_peaksize_array.T
     normalized_heating_progression = heating_progression / heating_progression[:, 0][:, np.newaxis]
-    #ipdb.set_trace()
     return powder_angles, label_flux_densities, heating_progression, normalized_heating_progression
 
 
 
-def process_one_detid(detid, data_identifiers, labels, mode = 'label', peak_progression_compound = None,
+def process_one_detid(detid, data_identifiers, labels, mode = 'label',
+    peak_progression_compound = None,
     plot = True, bgsub = False, fiducial_ellipses = None, compound_list = [],
-    normalization = None, maxpeaks = 6, plot_progression = False, peak_width = DEFAULT_PEAK_WIDTH):
+    normalization = None, maxpeaks = 6, plot_progression = False,
+    peak_width = DEFAULT_PEAK_WIDTH, **kwargs):
     """
     Arguments:
         detid: id of a quad CSPAD detector
@@ -726,7 +779,7 @@ def process_one_detid(detid, data_identifiers, labels, mode = 'label', peak_prog
             for which simulated diffraction data is available.
     """
     input_datasets = [Dataset(dataref, mode, detid, compound_list, None) for dataref in data_identifiers]
-    imarrays, _ = zip(*map(data_extractor, input_datasets))
+    imarrays, _ = zip(*map(lambda d: data_extractor(d, **kwargs), input_datasets))
     datasets = [Dataset(dataref, mode, detid, compound_list, imarray) for dataref, imarray in zip(data_identifiers, imarrays)]
     patterns, imarrays =\
         proc_all_datasets(datasets, fiducial_ellipses = fiducial_ellipses,
@@ -756,7 +809,7 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
     if bgsub:
         if not compound_list:
             bsub = False
-            print "No compounds provided: disabling background subtraction."
+            rprint( "No compounds provided: disabling background subtraction.")
     if not peak_progression_compound and compound_list:
         peak_progression_compound = compound_list[0]
     # TODO: don't do peak intensity plot if no scattering angles have been 
@@ -769,13 +822,17 @@ def main(detid_list, data_identifiers, bgsub = False, mode = 'label',
             powder_angles = None
 
         if len(data_identifiers) > 1 and plot_progression and peak_progression_output:
-            f, axes = plt.subplots(2)
+            if config.plotting_mode == 'notebook':
+                f, axes = plt.subplots(2, kwarg_list = [{}, {'x_axis_type': 'log'}])
+            else:
+                f, axes = plt.subplots(2)
             plot_patterns(axes[0], normalized_patterns, labels, label_angles = powder_angles, show = False)
             powder_angles, label_fluxes, progression, normalized_progression = peak_progression_output
             plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = maxpeaks, ax = axes[1])
         else:
             f, ax = plt.subplots(1)
             plot_patterns(ax, normalized_patterns, labels, label_angles = powder_angles, show = False)
+        
         utils.global_save_and_show('xrd_plot/' + str(detid) + '_'.join(labels) + '.png')
 
     to_merge =\

@@ -33,4 +33,10 @@ def test_main():
     frame2, edd2 = dataset2.evaluate('si')
     assert not np.all(frame1 == frame2)
     return edd1, edd2
+
+def test_main_2():
+    first = query.main('material Fe3O4 runs 876 961 transmission 1'.split())
+    second = query.main('material Fe3O4HEF runs 876 961 transmission 1'.split())
+    third = query.main('material Fe3O4 runs 876 961 transmission 1'.split())
+    assert first.runs == third.runs
     

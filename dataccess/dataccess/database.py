@@ -1,5 +1,4 @@
 import hashlib
-import ipdb
 import dill
 import config
 from pymongo import MongoClient
@@ -8,6 +7,7 @@ import gridfs
 import os
 import binascii
 import utils
+from output import rprint
 
 """
 Interface module for mecana's MongoDB collection.
@@ -17,7 +17,7 @@ mecana's modules, for storing logging spreadsheet data, for caching mecana's
 outputs, and for inserting and accessing derived datasets.
 """
 
-MONGO_HOST = 'pslogin03'
+MONGO_HOST = 'pslogin02'
 MONGO_PORT = 4040
 if config.testing:
     collection_prefix = config.expname + 'testing'
@@ -93,7 +93,7 @@ def mongo_replace_atomic(collection, d, mongo_query_dict = None):
     remove_query_dict['_id'] = {"$ne": inserted}
     if list(collection.find(remove_query_dict)):
         collection.remove(remove_query_dict)
-        print "removed"
+        rprint( "removed")
 
 
 def mongo_insert_logbook_dict(d):
@@ -249,9 +249,9 @@ def mongo_query_derived_dataset(label, detid, event_data_getter = None):
         return dataset.evaluate(detid, event_data_getter = event_data_getter)
     result = result_list[0]
     if len(result_list) > 1:
-        print "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (label, result['label'])
+        rprint( "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (label, result['label']))
     blob = FS.get(result['gridFS_ID']).read()
-    print "loading dataset from MongoDB"
+    rprint( "loading dataset from MongoDB")
     return cPickle.loads(blob)
 
 
@@ -271,7 +271,7 @@ def get_derived_dataset_attribute(pat, attribute):
         raise KeyError("%s: no matching derived dataset label found" % pat) 
     result_label = matching_labels[0]
     if len(matching_labels) > 1:
-        print "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (pat, result_label)
+        rprint( "WARNING: regex '%s' matches more than one derived dataset. First match will be selected: %s" % (pat, result_label))
     return attribute_map[result_label][attribute]
 
 def delete_collections(delete_logbook = False):

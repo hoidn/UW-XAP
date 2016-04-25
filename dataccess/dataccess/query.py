@@ -4,7 +4,6 @@ For querying datasets by spreadsheet attribute values.
 
 import sys
 import re
-import ipdb
 import config
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,7 +13,8 @@ import summarymetrics
 import data_access
 import database
 from recordclass import recordclass
-
+from output import rprint
+import pdb
 
 
 def query_generic(attribute, value_test_func):
@@ -34,7 +34,7 @@ def query_generic(attribute, value_test_func):
         except KeyError:
             return False
     relational = []
-    d = logbook.get_attribute_dict()
+    d = logbook.get_attribute_dict(logbook_only = True)
     for k, v in d.iteritems():
         v['label'] = k
         relational.append(v)
@@ -70,10 +70,10 @@ def construct_query(attribute, param1, param2 = None):
     """
     # TODO: Validate data type of param1 and param2 and raise exception if it's wrong.
     def match_string():
-        bash_special = r"|&;<>()$`\"' \t\n"
+        bash_special = r"|&;<>()$`\"' \t\n!"
         pat = param1.encode('string-escape')
         pat_bashsafe = filter(lambda c: c not in bash_special, pat)
-        label = '-'.join(map(str, [attribute, param1]))
+        label = '-'.join(map(str, [attribute, pat_bashsafe]))
         def match(cell_value):
             return bool(re.search(pat, cell_value, flags = re.IGNORECASE))
         return Query(attribute, match, pat_bashsafe, label)
@@ -122,7 +122,6 @@ class DataSet(object):
             for q in query]
         self.runs = list(reduce(lambda x, y: x & y, runsets))
         self.runs.sort()
-        print "Matching runs: %s" % str(self.runs)
         self.event_filter = event_filter
         self.event_filter_detid = event_filter_detid
         if label is None:
@@ -153,6 +152,7 @@ class DataSet(object):
         """
         Store this object to MongoDB.
         """
+        rprint( "Storing DataSet. Runs: %s" % str(self.runs))
         database.mongo_store_object_by_label(self, self.label)
 
     @utils.eager_persist_to_file('cache/query/DataSet.evaluate')
@@ -205,6 +205,13 @@ class DataSet(object):
         data_dict['label'] = label
         database.mongo_insert_derived_dataset(data_dict)
 
+    def runfilter(self, filter_func):
+        """
+        Filter self.runs using filter_func.
+        """
+        self.runs = filter(filter_func, self.runs)
+        self._store()
+
 
 def query_list(attribute_param_tuples):
     return [construct_query(*tup) for tup in attribute_param_tuples]
@@ -213,19 +220,6 @@ def get_derived_datset_labels():
     import database
     return database.mongo_get_all_derived_datasets().keys()
 
-# TODO: This will eventually be moved into an LK20-specific script that
-# wraps mecana.py.
-materials_ref_match_dict = {
-    "Fe3O4": r"Fe.*O(?!.*HEF)",
-    "Fe3O4HEF": r"Fe.*O.*HEF",
-    "MgO": r"MgO(?!.*HEF)",
-    "MgOHEF": r"MgO.*HEF",
-    "Diamond": r"Diamond",
-    "Graphite": r"Graphite(?!.*HEF)",
-    "GraphiteHEF": r"Graphite.*HEF",
-    "Dark": r"Dark",
-    "Lab6": r"lab.*6"
-}
 
 
 def parse_list_of_strings_to_query(slist, partial = ()):
@@ -269,8 +263,37 @@ def parse_list_of_strings_to_query(slist, partial = ()):
     return _parse([s for s in slist])
 
 def main(query_string_list, event_filter = None, event_filter_detid = None, label = None):
-    q = query_list(parse_list_of_strings_to_query(query_string_list))
+    # TODO: This will eventually be moved into an LK20-specific script that
+    # wraps mecana.py.
+    # LK20-specific: allow filtering based range of values of the 'delay' attribute,
+    # which is evaluated using xtcav.py
+    if 'delay' in query_string_list:
+        delay_index = query_string_list.index('delay')
+        delay_min, delay_max = query_string_list[delay_index + 1], query_string_list[delay_index + 2]
+        query_string_list = query_string_list[:delay_index] + query_string_list[delay_index + 3:]
+    if not label:
+        label = '_'.join(query_string_list)
+    materials_ref_match_dict = {
+        "Fe3O4": r"Fe.*O(?!.*HEF)",
+        "Fe3O4HEF": r"Fe.*O.*HEF",
+        "MgO": r"MgO(?!.*HEF)",
+        "MgOHEF": r"MgO.*HEF",
+        "Diamond": r"Diamond",
+        "Graphite": r"Graphite(?!.*HEF)",
+        "GraphiteHEF": r"Graphite.*HEF",
+        "Dark": r"Dark",
+        "Lab6": r"lab.*6"
+    }
+    substituted_query_string_list =\
+        [materials_ref_match_dict[k] if k in materials_ref_match_dict else k
+        for k in query_string_list]
+    q = query_list(parse_list_of_strings_to_query(substituted_query_string_list))
     dataset = DataSet(q, event_filter = event_filter, event_filter_detid = event_filter_detid, label = label)
-    print dataset.label
+    if 'delay_min' in locals():
+        import xtcav
+        def delay_filter(run_number):
+            return float(delay_min) < xtcav.get_delay(run_number) <= float(delay_max)
+        dataset.runfilter(delay_filter)
+    rprint(dataset.label)
     return dataset
     

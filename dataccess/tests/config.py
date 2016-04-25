@@ -1,6 +1,6 @@
 from collections import namedtuple
 import numpy as np
-import ipdb
+from dataccess.default_config import *
 
 
 # if True, use MPI when extracting data from psana-python. Otherwise use
@@ -247,3 +247,4 @@ def sum_window(smin, smax):
 testing = True
 # TODO: fix playback mode
 playback = False
+stdout_to_file = False

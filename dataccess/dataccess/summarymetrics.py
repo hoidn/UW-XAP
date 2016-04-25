@@ -1,12 +1,12 @@
 
 import os
-import ipdb
 import config
 import numpy as np
 import matplotlib.pyplot as plt
 from dataccess import utils
 
 import playback
+from output import rprint
 
 def npsum(arr, **kwargs):
     return np.sum(arr)
@@ -64,7 +64,7 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
                 try:
                     event_data_dicts.append(data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1])
                 except ValueError:# no events found in one or more runs in label
-                    print label, ": no events found"
+                    rprint( label, ": no events found")
                     pass
         merged = utils.merge_dicts(*event_data_dicts)
         if plot:

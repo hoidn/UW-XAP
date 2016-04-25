@@ -1,8 +1,8 @@
-import ipdb
 import dill
 import os
 import hashlib
 import config
+from output import rprint
 
 # TODO: fix this module
 
@@ -47,7 +47,7 @@ def save_db(key):
         os.system('mkdir -p %s' % db_dir)
     with open(db_dir + fname, 'w') as f:
         dill.dump(db, f)
-    print "saved db"
+    rprint( "saved db")
 
 def execute():
     """

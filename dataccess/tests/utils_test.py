@@ -11,4 +11,4 @@ def test_mpimap():
 
 test_mpimap()
 
-MPI.Finalize()
+#MPI.Finalize()

@@ -10,13 +10,13 @@ import sys
 import zmq
 import dill
 import re
-import ipdb
 import hashlib
 
 import utils
 import logbook
 import database
 import config
+from output import rprint
 
 # TODO: make logbook data not required for labels that can be parsed as run
 # ranges.
@@ -119,9 +119,10 @@ def get_dark_label(label):
         darklabel = get_label_darkframe()
     except KeyError:
         darklabel = autofind_dark()
-    print "using dark subtraction run: ", darklabel
+    rprint( "using dark subtraction run: ", darklabel)
     return darklabel
 
+@utils.eager_persist_to_file('cache/data_access/get_data_and_filter/')
 def get_data_and_filter(label, detid, event_data_getter = None,
     event_filter = None, event_filter_detid = None):
     """
@@ -137,7 +138,6 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         imarray, event_data = get_label_data(label, detid,
             event_data_getter = filterfunc)
         return event_data
-
     try:
         if event_filter:
             event_mask = get_event_mask(event_filter, detid = event_filter_detid)
@@ -147,24 +147,24 @@ def get_data_and_filter(label, detid, event_data_getter = None,
                 funcstr = get_dataset_attribute_value(label, 'filter_func')
                 filterfunc = eval('config.' + funcstr)(*args)
                 filter_detid = get_dataset_attribute_value(label, 'filter_det')
-                print "DETID IS ", filter_detid
-                print "ARGS ARE ", args
-                print "FUNCSTR IS", funcstr
+                rprint( "DETID IS ", filter_detid)
+                rprint( "ARGS ARE ", args)
+                rprint( "FUNCSTR IS", funcstr)
             except AttributeError:
                 raise ValueError("Function " + funcstr + " not found, and no filter_function/filter_detid in config.py")
             event_mask = get_event_mask(filterfunc, detid = filter_detid)
         merged_mask = utils.merge_dicts(*event_mask.values())
         sum_true = sum(map(lambda d2: sum(d2.values()), event_mask.values()))
         n_events = sum(map(lambda d: len(d.keys()), event_mask.values()))
-        print "Event mask True entries: ", sum_true, "Total number of events: ", n_events
+        rprint( "Event mask True entries: ", sum_true, "Total number of events: ", n_events)
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter, event_mask = event_mask)
     except (KeyError, AttributeError), e:
         if utils.isroot():
-            print "!!!!!!!!!!!!!!!!!!"
-            print "WARNING: Event filtering will not be performed."
-            print e
-            print "!!!!!!!!!!!!!!!!!!"
+            rprint( "!!!!!!!!!!!!!!!!!!")
+            rprint( "WARNING: Event filtering will not be performed.")
+            rprint( e)
+            rprint( "!!!!!!!!!!!!!!!!!!")
         imarray, event_data =  get_label_data(label, detid,
             event_data_getter = event_data_getter)
     try:
@@ -173,7 +173,7 @@ def get_data_and_filter(label, detid, event_data_getter = None,
         return imarray - bg, event_data
     except KeyError:
         if utils.isroot():
-            print "No background label found"
+            rprint( "No background label found")
         return imarray, event_data
 
 

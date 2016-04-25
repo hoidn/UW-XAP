@@ -8,7 +8,6 @@ import webbrowser
 import logging
 import argparse
 import hashlib
-import ipdb
 
 import httplib2
 import os.path
@@ -28,6 +27,7 @@ import utils
 import database
 
 import config
+from output import rprint
 
 # Format specification for column headers in logbook. Column descriptions:
 # runs: range of run numbers in the format 'integer' or 'integer-integer'.
@@ -246,25 +246,28 @@ def get_label_mapping_one_sheet(col_titles, data):
                             # Delete possible duplicates
                             local_dict[property_key] = tuple(set(local_dict[property_key]))
                         except ValueError:
-                            print "Malformed run range: ", row[k]
+                            rprint( "Malformed run range: ", row[k])
                     # TODO: make this non-obvious behaviour clear to the user.
                     elif property and (property not in local_dict) and row[k]:
                         try:
                             local_dict[property_key] = parser_dispatch[property_key](row[k])
                         except ValueError, e:
-                            print "Malformed attribute: %s" % e
+                            rprint( "Malformed attribute: %s" % e)
     return label_dict
 
 
 # TODO TODO: add a mechanism for cache invalidation when stuff is inserted into
 # MongoDB.
 @utils.memoize(timeout = 1)
-def get_attribute_dict():
+def get_attribute_dict(logbook_only = False):
 #    if utils.isroot():
-#        print "Querying MongoDB"
+#(        print "Querying MongoDB")
     logbook = database.mongo_get_logbook_dict()
-    derived = database.mongo_get_all_derived_datasets()
-    return utils.merge_dicts(logbook, derived)
+    if logbook_only:
+        return logbook
+    else:
+        derived = database.mongo_get_all_derived_datasets()
+        return utils.merge_dicts(logbook, derived)
 
 
 def get_label_runranges():
@@ -371,7 +374,6 @@ def get_all_runlist(label):
     A label may be either a string specified in the google drive logbook or
     a run range of the format 'abcd' or 'abcd-efgh'.
     """
-    #ipdb.set_trace()
     try:
         runs = parse_run(label)
         return list(runs)
@@ -385,7 +387,7 @@ def get_all_runlist(label):
             return list(groups)
         except KeyError:
             # TODO: make sure that the run number exists
-            print "logbook label " + label + ": not found"
+            rprint( "logbook label " + label + ": not found")
             try:
                 runs = parse_run(label)
             except ValueError:
@@ -404,6 +406,6 @@ def main(url = config.url):
     while True:
         topic = config.expname
         mapping = spreadsheet_mapping(url)
-        print mapping
+        rprint( mapping)
         database.mongo_insert_logbook_dict(mapping)
         time.sleep(1)

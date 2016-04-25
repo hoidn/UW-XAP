@@ -7,13 +7,16 @@ import cPickle
 import dill
 import pkg_resources
 from time import time
-import ipdb
 import pdb
 import config
 import hashlib
 import itertools
 import playback
 import random
+from output import isroot
+from output import ifroot
+from output import rprint
+from output import conditional_decorator
 #from datetime import import datetime
 #from atomicwrites import atomic_write
 #import collections
@@ -152,25 +155,6 @@ def mpimap(func, lst):
         results = list(roundrobin(*results))
     return results
 
-def isroot():
-    """
-    Return true if the MPI core rank is 0 and false otherwise.
-    """
-    if 'OMPI_COMM_WORLD_RANK' not in ' '.join(os.environ.keys()):
-        return True
-    else:
-        rank = int(os.environ['OMPI_COMM_WORLD_RANK'])
-        return (rank == 0)
-    
-def ifroot(func):
-    """
-    Decorator that causes the decorated function to execute only if
-    the MPI core rank is 0.
-    """
-    def inner(*args, **kwargs):
-        if isroot():
-            return func(*args, **kwargs)
-    return inner
 
 def is_plottable():
     import config
@@ -187,14 +171,11 @@ def ifplot(func):
     def inner(*args, **kwargs):
         import config
         if config.noplot:
-            print "PLOTTING DISABLED, EXITING." 
+            rprint( "PLOTTING DISABLED, EXITING." )
         else:
             return func(*args, **kwargs)
     return inner
     
-@ifroot
-def rprint(expr):
-    print expr
 
 # playback fails for this function
 #@playback.db_insert
@@ -205,7 +186,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
     """
     if not isinstance(imarr, np.ndarray):
         imarr = np.array(imarr)
-    import Image
+    from PIL import Image
     from scipy import misc
     import matplotlib
     dirname = os.path.dirname(save_path)
@@ -216,7 +197,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
         imarr = imarr.astype('float')
     im = Image.fromarray(imarr)
     im.save(save_path + '.tif')
-    matplotlib.image.imsave(save_path + '.png', imarr)
+    matplotlib.pyplot.imsave(save_path + '.png', imarr)
 
 @ifroot
 @playback.db_insert
@@ -231,6 +212,8 @@ def save_data(x, y, save_path, mongo_key = 'data', init_dict = {}):
     to_insert_local = merge_dicts({k: v for k, v in database.to_insert.iteritems()}, init_dict)
     to_insert_local[mongo_key] = [list(x), list(y)]
     database.mongo_replace_atomic(database.collections_lookup['session_cache'], to_insert_local)
+
+
 
 #def load_data(search_dict = {}, mongo_key = 'data'):
 #    """
@@ -293,10 +276,10 @@ def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = N
         rmax = ave + 5 * rms
     @ifplot
     def show():
-        print "rmin", rmin
-        print "rmax", rmax
+        rprint( "rmin", rmin)
+        rprint( "rmax", rmax)
         import pyimgalgos.GlobalGraphics as gg
-        gg.plotImageLarge(imarr, amp_range=(rmin, rmax), title = title)
+        gg.plotImageLarge(imarr, amp_range=(rmin, rmax), title = title, origin = 'lower')
         if show_plot:
             gg.show()
     save_image(save_path, imarr)
@@ -309,8 +292,19 @@ def global_save_and_show(save_path):
     """
     Save current matplotlib plot to file and then show it.
     """
-    import matplotlib.pyplot as plt
+    if config.plotting_mode == 'notebook':
+        import plotting  as plt
+    else:
+        import matplotlib.pyplot as plt
     dirname = os.path.dirname(save_path)
+    name = os.path.basename(save_path)
+    extsplit = name.split('.')
+    if len(extsplit) <= 1:
+        ext = ''
+    else:
+        ext = '.' + extsplit[-1]
+    name = name[:255 - (len(ext) + 1)]
+    save_path = dirname + '/' + name + ext
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
     plt.savefig(save_path)
@@ -418,14 +412,15 @@ def memoize(timeout = None):
     def set_timestamp():
         cache2[0] = time()
     def decorator(f):
-        def new_func(*args):
-            if args in cache:
+        def new_func(*args, **kwargs):
+            key = dill.dumps([args, kwargs])
+            if key in cache:
                 if (not timeout) or (time() - get_timestamp() < timeout):
-                    return cache[args]
+                    return cache[key]
             if timeout:
                 set_timestamp()
-            cache[args] = f(*args)
-            return cache[args]
+            cache[key] = f(*args, **kwargs)
+            return cache[key]
         return new_func
     return decorator
 
@@ -544,7 +539,7 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
             key = make_hashable(tuple(map(make_hashable, [args, merged_dict, closure_dict.items(), list(kwargs.iteritems())])))
             #print "key is", key
 #            for k, v in kwargs.iteritems():
-#                print k, v
+#(                print k, v)
             return key
 
         @ifroot# TODO: fix this
@@ -577,7 +572,7 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
                             cache[key] = cPickle.load(f)
                     except EOFError:
                         os.remove(full_name)
-                        print "corrupt cache file deleted"
+                        rprint( "corrupt cache file deleted")
                         raise ValueError("Corrupt file")
                     #print "cache found"
                 except (IOError, ValueError):
@@ -607,7 +602,7 @@ def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
     base_mask = ma.make_mask(np.ones(np.shape(imarray)))
     base_mask[imarray == 0.] = False
     if not mask_paths:
-        print "No additional masks provided"
+        rprint( "No additional masks provided")
         return base_mask
     else:
         # Data arrays must be transposed here for the same reason that they
@@ -616,7 +611,7 @@ def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
             masks = map(lambda path: np.load(path).T, mask_paths)
         else:
             masks = map(lambda path: np.load(path), mask_paths)
-        print "Applying mask(s): ", mask_paths
+        rprint( "Applying mask(s): ", mask_paths)
         return base_mask & reduce(lambda x, y: x & y, masks)
 
 

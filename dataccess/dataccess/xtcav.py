@@ -1,4 +1,3 @@
-import ipdb
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mpldates
@@ -11,6 +10,7 @@ from scipy.ndimage.filters import gaussian_filter as filt
 
 from dataccess import utils
 from dataccess import logbook
+from output import rprint
 
 xtcav_path = utils.resource_path('data/xtcav.dat')
 xtcav = pd.read_table(xtcav_path)
@@ -101,7 +101,7 @@ def plot():
 
 def get_run_human_time(run_number):
     t = datetime.datetime.fromtimestamp(get_run_epoch_time(run_number))
-    print t
+    rprint( t)
     return t
 
 def get_run_pulse_duration(run_number):

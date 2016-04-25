@@ -18,8 +18,8 @@ import logbook
 import playback
 
 import pdb
-import ipdb
 from scipy.ndimage.filters import gaussian_filter as filt
+from output import rprint
 
 # TODO: use the same data extractor as in xrd.py
 
@@ -338,9 +338,9 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
         x = energies_from_data(cold_calibration_data, cencol, save_path = calib_save_path, eltname = eltname)
     else:
         if energy_ref1_energy_ref2_calibration and not eltname:
-            print "No element identifier provided; skipping energy calibration."
+            rprint( "No element identifier provided; skipping energy calibration.")
         elif energy_ref1_energy_ref2_calibration and not cold_calibration_data:
-            print "No file for calibration specified; skipping energy calibration"
+            rprint( "No file for calibration specified; skipping energy calibration")
         x = np.array(range(len(intensities)))
     if bg_sub:
         smoothed = filt(intensities, 5)
@@ -355,7 +355,7 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
 
 @utils.ifplot
 @playback.db_insert
-def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
+def plot_spectra(spectrumList, labels, scale_ev, eltname = ''):
     if not os.path.exists('plots_xes/'):
         os.makedirs('plots_xes/')
     elist = spectrumList[0][0]
@@ -389,6 +389,10 @@ def plot_spectra(spectrumList, labels, scale_ev, name = None, eltname = ''):
         plt.xlabel("pixel index", size="large")
     plt.ylabel("Counts", size="large")
     plt.ylim((0, 1.15 * max_intensity))
+    if eltname:
+        name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
+    else:
+        name = 'plots_xes/' + '_'.join(labels)
     if name:
         plt.savefig(name + '.png', bbox_inches='tight')
         plt.savefig(name + '.svg', bbox_inches='tight')
@@ -414,9 +418,6 @@ def get_plotinfo_one_label(detid, label, get_spectrum_partial,
         List of spectra in the format [x, y]
     labels : list of strings
         Legend labels associated with each spectrum.
-    eltname : string
-        Element whose k alpha/beta emission dominates the spectrum (equals
-        None if not applicable).
     """
     # Extract data from labels. 
     data_extractor = mean_from_label(detid, transpose = transpose)
@@ -477,7 +478,6 @@ def main(detid, data_identifiers, event_indices = None, number_events = None,
             eltname = eltname, normalization = normalization,
             bg_sub = bgsub)
 
-    # TODO: form nevents.
     spectrumList, labels =\
         reduce(lambda x, y: (x[0] + y[0], x[1] + y[1]),
             [get_plotinfo_one_label(detid, data_identifier, get_spectrum_partial,
@@ -498,10 +498,6 @@ def main(detid, data_identifiers, event_indices = None, number_events = None,
         except OSError, e:
             raise OSError("data directory 'spectra/' could not be created: %s" % str(e))
 
-    if eltname:
-        name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
-    else:
-        name = 'plots_xes/' + '_'.join(labels)
-    plot_spectra(spectrumList, labels, scale_ev, name = name, eltname = eltname)
+    plot_spectra(spectrumList, labels, scale_ev, eltname = eltname)
     return spectrumList
 

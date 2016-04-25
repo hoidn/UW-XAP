@@ -1,6 +1,5 @@
 from collections import namedtuple
 import numpy as np
-import ipdb
 
 
 # if True, use MPI when extracting data from psana-python. Otherwise use

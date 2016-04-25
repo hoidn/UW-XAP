@@ -9,6 +9,7 @@ import numpy as np
 
 import utils
 import config
+from output import rprint
 
 
 # TODO: rename this module so that it's clear that it's only used with the deprecated version
@@ -55,7 +56,7 @@ def getImg(detid, run):
             else:
                 cropframe = calibframe.astype(float)
         else:
-            print 'this event does not contain %s' % det.__str__()
+            rprint( 'this event does not contain %s' % det.__str__())
             continue        
         #print cropframe.shape
         arraylist.append(cropframe)

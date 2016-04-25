@@ -1,4 +1,3 @@
-import ipdb
 import sys
 #del sys.modules['pickle']
 #sys.path.insert(0, '/reg/neh/home/ohoidn/anaconda2/lib/python2.7/')
@@ -10,6 +9,7 @@ import utils
 import argparse
 import time
 import config
+from output import rprint
 
 def call_init(config_source, config_dst):
     """
@@ -82,8 +82,8 @@ def call_xrd(args):
         peak_progression_compound = peak_progression_compound,
         bgsub = bgsub, compound_list = compound_list,
         normalization = normalization, maxpeaks = maxpeaks, plot_progression = args.plot_progression)
-    if not config.testing:
-        MPI.Finalize()
+#    if not config.testing:
+#        MPI.Finalize()
 
 def call_histogram(args):
     import summarymetrics
@@ -117,7 +117,7 @@ def call_query(args):
 
 def call_showderived(args):
     import query
-    print '\n'.join(query.get_derived_datset_labels())
+    rprint( '\n'.join(query.get_derived_datset_labels()))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -193,7 +193,7 @@ def main():
     if utils.isroot():
         if config.playback:
             playback.save_db(key)
-            print playback.db
+            rprint( playback.db)
             playback.execute()
         #mongo_commit()
     return key
