@@ -39,4 +39,10 @@ def test_main_2():
     second = query.main('material Fe3O4HEF runs 876 961 transmission 1'.split())
     third = query.main('material Fe3O4 runs 876 961 transmission 1'.split())
     assert first.runs == third.runs
+
+def test_main_3():
+    ds = query.main('material dark'.split())
+    ds2 = query.main('material Fe3O4'.split())
+    ds3 = ds.union(ds2, 'foo')
+    assert len(ds3.runs) == len(ds.runs) + len(ds2.runs)
     

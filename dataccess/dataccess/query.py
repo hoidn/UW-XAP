@@ -212,6 +212,23 @@ class DataSet(object):
         self.runs = filter(filter_func, self.runs)
         self._store()
 
+    # TODO: this method makes the assumption query, event_filter, and event_filter_detid
+    # methods are consistent (which requires a match on certain query parameters but not
+    # others). Should handle cases where this doesn't hold. This should probably be done
+    # by implementing a union method for Query.
+    def union(self, other, label):
+        """
+        Return a Dataset that's the union of self and other and insert it
+        into MongoDB.
+        """
+        if not isinstance(other, DataSet):
+            raise ValueError("Argument other must be of type DataSet")
+        new_ds = DataSet(self.query, self.event_filter, self.event_filter_detid, immediate_insert = False)
+        merged_runs = list(set(self.runs) | set(other.runs))
+        new_ds.runs = merged_runs
+        new_ds.label = label
+        return new_ds
+
 
 def query_list(attribute_param_tuples):
     return [construct_query(*tup) for tup in attribute_param_tuples]
@@ -296,4 +313,3 @@ def main(query_string_list, event_filter = None, event_filter_detid = None, labe
         dataset.runfilter(delay_filter)
     rprint(dataset.label)
     return dataset
-    

@@ -188,7 +188,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
         imarr = np.array(imarr)
     from PIL import Image
     from scipy import misc
-    import matplotlib
+    import matplotlib.image as image
     dirname = os.path.dirname(save_path)
     if dirname and (not os.path.exists(dirname)):
         os.system('mkdir -p ' + os.path.dirname(save_path))
@@ -197,7 +197,7 @@ def save_image(save_path, imarr, fmt = 'tiff'):
         imarr = imarr.astype('float')
     im = Image.fromarray(imarr)
     im.save(save_path + '.tif')
-    matplotlib.pyplot.imsave(save_path + '.png', imarr)
+    image.imsave(save_path + '.png', imarr)
 
 @ifroot
 @playback.db_insert

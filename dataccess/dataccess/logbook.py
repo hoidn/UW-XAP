@@ -8,6 +8,7 @@ import webbrowser
 import logging
 import argparse
 import hashlib
+import pdb
 
 import httplib2
 import os.path
@@ -65,6 +66,7 @@ def get_property_key(col_title):
     raise KeyError(col_title + ": no match found")
 
 # TODO: support the addition of authentication tokens for new users.
+# TODO: need a mechanism for indicating bad rows from the logbook itself.
 
 def acquire_oauth2_credentials(secrets_file):
     """
@@ -225,34 +227,36 @@ def spreadsheet_header_body(sheet_list2d):
 
 def get_label_mapping_one_sheet(col_titles, data):
     label_dict = {}
-    invalid_count = 0
     enumerated_titles = list(enumerate(col_titles))
     enumerated_labels = filter(lambda pair: pair[1] and re.search(PROPERTY_REGEXES['labels'], pair[1]), enumerated_titles)
     enumerated_properties = filter(lambda pair: pair[1] and not re.search(PROPERTY_REGEXES['labels'], pair[1]), enumerated_titles)
+
+    def insert_one_label(row, label_value):
+        local_dict = label_dict.setdefault(label_value, {})
+        for k, property in enumerated_properties:
+            property_key = get_property_key(property)
+            if property_key == 'runs':
+                try:
+                    val = local_dict.setdefault(property_key, ())
+                    local_dict[property_key] = val + parse_run(row[k])
+                    # Delete possible duplicates
+                    local_dict[property_key] = tuple(set(local_dict[property_key]))
+                except ValueError:
+                    rprint( "Malformed run range: ", row[k])
+            # TODO: make this non-obvious behaviour clear to the user.
+            elif property and (property not in local_dict) and row[k]:
+                try:
+                    local_dict[property_key] = parser_dispatch[property_key](row[k])
+                except ValueError, e:
+                    rprint( "Malformed attribute: %s" % e)
+
     for i, row in enumerate(data):
         for j, label in enumerated_labels:
-            if label:
-                label_value = row[j]
-                if not label_value:
-                    label_value = database.hash(str(row))
-                    invalid_count += 1
-                local_dict = label_dict.setdefault(label_value, {})
-                for k, property in enumerated_properties:
-                    property_key = get_property_key(property)
-                    if property_key == 'runs':
-                        try:
-                            val = local_dict.setdefault(property_key, ())
-                            local_dict[property_key] = val + parse_run(row[k])
-                            # Delete possible duplicates
-                            local_dict[property_key] = tuple(set(local_dict[property_key]))
-                        except ValueError:
-                            rprint( "Malformed run range: ", row[k])
-                    # TODO: make this non-obvious behaviour clear to the user.
-                    elif property and (property not in local_dict) and row[k]:
-                        try:
-                            local_dict[property_key] = parser_dispatch[property_key](row[k])
-                        except ValueError, e:
-                            rprint( "Malformed attribute: %s" % e)
+            label_value = row[j]
+            if label_value:
+                insert_one_label(row, row[j])
+            # Also insert an 'anonymous' label for this single row
+            insert_one_label(row, database.hash(str(row)))
     return label_dict
 
 

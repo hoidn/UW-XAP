@@ -645,8 +645,23 @@ def mask_peaks_and_iterpolate(x, y, peak_ranges):
         x = x[good_indices]
     return interpolate.interp1d(x, y)
 
-def peak_sizes(x, y, peak_ranges):
+def peak_sizes(x, y, compound_name, peak_width = DEFAULT_PEAK_WIDTH):
+    """
+    x : np.ndarray
+        angles
+    y : np.ndarray
+        intensities
+    compound_name : str
+        compound name
+    """
     sizeList = []
+    powder_angles = np.array(get_powder_angles(compound_name))
+    make_interval = lambda angle: [angle - peak_width/2.0, angle + peak_width/2.0]
+    make_ranges = lambda angles: map(make_interval, angles)
+
+    # ranges over which to integrate the powder patterns
+    peak_ranges = make_ranges(powder_angles)
+
     for peakmin, peakmax in peak_ranges:
         peakIndices = np.where(np.logical_and(x >= peakmin, x <= peakmax))[0]
         sizeList += [np.sum(y[peakIndices])]
@@ -700,6 +715,12 @@ def get_normalization(datasets, type = 'transmission', peak_width = DEFAULT_PEAK
     elif type == 'background':
         peaksums, bgsums = zip(*[get_peak_and_background_signal_from_dataref(ds, width = peak_width, **kwargs) for ds in datasets])
         return np.array(bgsums)
+    elif type == 'peak': # Normalize by size of first peak
+        def first_peak_intensity(ds):
+            angles, intensities, _ = process_dataset(ds, bgsub = True)
+            return peak_sizes(angles, intensities, ds.compound_list[0], peak_width = peak_width)[0]
+        norm = np.array([first_peak_intensity(ds) for ds in datasets])
+        return norm
     else: # Interpret type as the name of a function in config.py
         try:
             return np.array([eval('config.%s' % type)(label) for label in labels])
@@ -734,16 +755,12 @@ def peak_progression(datasets, compound_name, normalization = None,
     #anglemin, anglemax = patterns[0][0][0], patterns[0][0][-1]
     peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, width = peak_width) for ds in datasets))
     bgsums = np.array(bgsums)
-    make_interval = lambda angle: [angle - peak_width/2.0, angle + peak_width/2.0]
-    make_ranges = lambda angles: map(make_interval, angles)
     powder_angles = np.array(get_powder_angles(compound_name))
 
-    # ranges over which to integrate the powder patterns
-    peak_ranges = make_ranges(powder_angles)
     label_flux_densities = map(get_flux_density, datasets)
 
     # indices: label, peak
-    peaksize_array = np.array([peak_sizes(angles, intensities, peak_ranges)
+    peaksize_array = np.array([peak_sizes(angles, intensities, compound_name, peak_width = peak_width)
         for angles, intensities in patterns])
     normalized_peaksize_array = peaksize_array / get_normalization(datasets,
         peak_width = peak_width, type = normalization)[:, np.newaxis]

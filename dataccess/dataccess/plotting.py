@@ -18,15 +18,11 @@ class BokehPlot:
     Class containing a single Bokeh plot implementing a subset of the API of
     matplotlib.figure.Figure
     """
-    #from bokeh.palettes import Spectral9
-    #palette = Spectral9
     palette = ['#332288',  '#44aa99',  '#999933',\
          '#cc6677',  '#aa4499', '#000000']
-    #palette = ['#332288', '#88ccee', '#44aa99', '#117733', '#999933',\
-    #    '#ddcc77', '#cc6677', '#882255', '#aa4499']
     counter = 0
     def __init__(self, **kwargs):
-        TOOLS = 'wheel_zoom,box_zoom,pan,crosshair,hover,resize,reset'
+        TOOLS = 'wheel_zoom,box_zoom,crosshair,hover,resize,reset'
         self.figure = figure(plot_width = 800, plot_height = 500, tools = TOOLS, **kwargs)
 #        self.figure.legend.border_line_alpha = 0.5
 #        self.figure.legend.background_fill_alpha = 0.5
@@ -59,9 +55,9 @@ class Plt:
             return None, self.plots
     def show(self):
         if len(self.plots) == 1:
-            p = self.plots[0]
+            p = self.plots[0].figure
         elif len(self.plots) == 2:
-            TOOLS = 'wheel_zoom,box_zoom,pan,crosshair,hover,resize,reset'
+            TOOLS = 'wheel_zoom,box_zoom,crosshair,hover,resize,reset'
             p = gridplot([[self.plots[0].figure], [self.plots[1].figure]])
         else:
             raise NotImplementedError
