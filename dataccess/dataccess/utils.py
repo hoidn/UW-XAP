@@ -293,7 +293,7 @@ def global_save_and_show(save_path):
     Save current matplotlib plot to file and then show it.
     """
     if config.plotting_mode == 'notebook':
-        import plotting  as plt
+        from mpl_plotly  import plt
     else:
         import matplotlib.pyplot as plt
     dirname = os.path.dirname(save_path)
