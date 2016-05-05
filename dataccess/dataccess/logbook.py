@@ -30,6 +30,10 @@ import database
 import config
 from output import rprint
 
+# TODO: logbook doesn't properly sync when labels are changed
+# TODO: run range queries fail if the requested range is a subset
+# of an existing dataset.
+
 # Format specification for column headers in logbook. Column descriptions:
 # runs: range of run numbers in the format 'integer' or 'integer-integer'.
 #   Used by: all.

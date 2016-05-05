@@ -30,7 +30,7 @@ else:
     import matplotlib.pyplot as plt
 
 # default powder peak width, in degrees
-DEFAULT_PEAK_WIDTH = 2.5
+DEFAULT_PEAK_WIDTH = 1.8
 DEFAULT_SMOOTHING = 5.
 
 # hbar c in eV * Angstrom
@@ -599,7 +599,7 @@ def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_p
     rprint( "normalized progression ", normalized_progression)
     if maxpeaks != 'all':
         intensity_reference = progression[:, 0]
-        goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles) - 1, maxpeaks)])
+        goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles), maxpeaks)])
     else:
         goodpeaks = range(len(powder_angles))
     def plotting(ax):
@@ -742,7 +742,7 @@ def get_peak_and_background_signal_from_imarray(imarray, detid, compound_list, s
     return np.sum(peaks_imarray_subtracted), np.sum(bg)
 
 @utils.eager_persist_to_file("cache/xrd.get_peak_and_background_signal/")
-def get_peak_and_background_signal_from_dataref(dataset, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH, event_data_getter = None):
+def get_peak_and_background_signal_from_dataref(dataset, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH, event_data_getter = None, **kwargs):
     """
     Evaluates signal and background levels for an array, or for the mean
     of all events in a run group label.
@@ -933,14 +933,34 @@ class XRD:
         plot_patterns(ax, self.normalized_patterns, self.labels,
             label_angles = self.powder_angles, **kwargs)
 
-    def plot_progression(self, ax = None, maxpeaks = 6, **kwargs):
+    def plot_progression(self, ax = None, maxpeaks = 6, show = False, **kwargs):
         if ax is None:
             fig, ax = plt.subplots()
         plot_peak_progression(self.powder_angles, self.label_fluxes, self.progression,
-            self.normalized_progression, self.labels, maxpeaks = maxpeaks, ax = ax)
+            self.normalized_progression, self.labels, maxpeaks = maxpeaks, ax = ax,
+            show = show)
 
     def get_patterns(self):
         return self.patterns
+
+def plot_progressions(detid, dataset_groups, **kwargs):
+    """
+    Plot heating progression curves for each of one or more groups of datasets.
+
+    detid : str
+        Detector ID
+    dataset_group : list of lists of strings
+        List of the lists of datasets to process.
+
+    kwargs are passed to XRD and plot_progression
+    """
+    fig, ax = plt.subplots()
+    for ds_list in dataset_groups:
+        xrd = XRD(detid_list, data_identifiers, plot_progression = True, **kwargs)
+        xrd.plot_progression(ax = ax, **kwargs)
+    # TODO: use utils.global_save_and_show. What filename convention?
+    #utils.global_save_and_show('xrd_plot/' + '_'.join(detid_list) + '_'.join(labels) + '.png')
+    plt.show()
 
 def main(detid_list, data_identifiers, mode = 'labels', plot = True, plot_progression = False, maxpeaks = 6, **kwargs):
     if mode == 'array':

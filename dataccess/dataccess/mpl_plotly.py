@@ -13,15 +13,20 @@ class Figure:
     """Class containing the equivalent of a matplotlib Axis."""
     def __init__(self):
         self.lines = []
-        self.xaxis = {}
+        self.xaxis = {'exponentformat': 'power'}
         self.yaxis = {}
 
     def plot(self, x, y, label = None, color = None):
+        scatter_kwargs = dict(x = x, y = y, name = label,
+                mode = 'lines', line = dict(color = color))
         if label is None:
-            showlegend = False
+            scatter_kwargs['showlegend'] = False
+            scatter_kwargs['hoverinfo'] = 'none'
+            
         else:
-            showlegend = True
-        self.lines.append(go.Scatter(x = x, y = y, name = label, showlegend = showlegend, mode = 'lines', line = dict(color = color)))
+            scatter_kwargs['showlegend'] = True
+        self.lines.append(
+            go.Scatter(**scatter_kwargs))
 
     def set_xlabel(self, xlabel):
         self.xaxis['title'] = xlabel
@@ -47,8 +52,7 @@ class Plt:
         self.figures = []
     
     def clear(self):
-        self.mode = None
-        self.figures = []
+        self.__init__()
 
     def subplots(self, *args, **kwargs):
         self.mode = 'plotly'
