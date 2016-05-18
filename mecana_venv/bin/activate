@@ -46,9 +46,11 @@ _OLD_VIRTUAL_PATH="$PATH"
 PATH="$VIRTUAL_ENV/bin:$PATH"
 export PATH
 
-#export PYTHONPATH="/reg/g/psdm/sw/releases/ana-current/arch/x86_64-rhel7-gcc48-opt/python/pyextra/:mecana2/lib/python2.7/site-packages/"
-#export PYTHONPATH="mecana2/lib/python2.7/site-packages/:/reg/g/psdm/sw/releases/ana-current/arch/x86_64-rhel7-gcc48-opt/python/pyextra/"
-export PYTHONPATH="mecana2/lib/python2.7/site-packages/"
+# Clear python path set by SLAC's custom site.py. Without this step we would have:
+# PYTHONPATH = /reg/g/psdm/sw/releases/ana-current/arch/x86_64-rhel7-gcc48-opt/python:/reg/g/psdm/sw/releases/ana-current/arch/x86_64-rhel7-gcc48-opt/python/pyextra
+# This would put system packages upstream from our virtualenv's in python's module
+# search order.
+export PYTHONPATH=""
 
 # unset PYTHONHOME if set
 # this will fail if PYTHONHOME is set to the empty string (which is bad anyway)

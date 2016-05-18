@@ -1,4 +1,7 @@
-#!/reg/neh/home2/ohoidn/venv_test/mecana2/bin/python
+#!/usr/bin/env python2.7
+
+import os; activate_this=os.path.join(os.path.dirname(os.path.realpath(__file__)), 'activate_this.py'); exec(compile(open(activate_this).read(), activate_this, 'exec'), dict(__file__=activate_this)); del os, activate_this
+
 # EASY-INSTALL-ENTRY-SCRIPT: 'ipdb==0.9.0','console_scripts','ipdb'
 __requires__ = 'ipdb==0.9.0'
 import sys
