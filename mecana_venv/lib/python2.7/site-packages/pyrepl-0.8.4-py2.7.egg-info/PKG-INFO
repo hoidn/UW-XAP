@@ -1,0 +1,18 @@
+Metadata-Version: 1.0
+Name: pyrepl
+Version: 0.8.4
+Summary: A library for building flexible command line interfaces
+Home-page: http://bitbucket.org/pypy/pyrepl/
+Author: Ronny Pfannschmidt
+Author-email: ronny.pfannschmidt@gmx.de
+License: MIT X11 style
+Description: pyrepl is a Python library, inspired by readline, for building flexible
+        command line interfaces, featuring:
+         * sane multi-line editing
+         * history, with incremental search
+         * completion, including displaying of available options
+         * a fairly large subset of the readline emacs-mode keybindings
+         * a liberal, Python-style, license
+         * a new python top-level.
+Platform: unix
+Platform: linux

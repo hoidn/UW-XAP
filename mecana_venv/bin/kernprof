@@ -1,0 +1,10 @@
+#!/reg/neh/home2/ohoidn/venv_test/mecana2/bin/python
+# EASY-INSTALL-ENTRY-SCRIPT: 'line-profiler==1.0','console_scripts','kernprof'
+__requires__ = 'line-profiler==1.0'
+import sys
+from pkg_resources import load_entry_point
+
+if __name__ == '__main__':
+    sys.exit(
+        load_entry_point('line-profiler==1.0', 'console_scripts', 'kernprof')()
+    )

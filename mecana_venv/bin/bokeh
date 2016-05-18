@@ -1,0 +1,7 @@
+#!/reg/neh/home2/ohoidn/venv_test/mecana2/bin/python
+
+import sys
+
+from bokeh.command.bootstrap import main
+
+main(sys.argv)

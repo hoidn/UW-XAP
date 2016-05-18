@@ -1,0 +1,10 @@
+#!/reg/neh/home2/ohoidn/venv_test/mecana2/bin/python
+# EASY-INSTALL-ENTRY-SCRIPT: 'ipdb==0.9.0','console_scripts','ipdb'
+__requires__ = 'ipdb==0.9.0'
+import sys
+from pkg_resources import load_entry_point
+
+if __name__ == '__main__':
+    sys.exit(
+        load_entry_point('ipdb==0.9.0', 'console_scripts', 'ipdb')()
+    )
