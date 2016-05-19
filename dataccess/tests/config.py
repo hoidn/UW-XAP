@@ -108,9 +108,19 @@ nonarea =\
         'FEEGasDetEnergy')
     }
 
-powder_angles = {'Fe3O4': [27.2, 32.1, 33.47, 38.9, 48.1, 51.3, 56.2], 'MgO': [0, 33.47, 38.9],
+powder_angles = {'Fe3O4': [27.2, 32.1, 33.47, 38.9, 48.1, 51.3, 56.2], 'MgO': [33.47, 38.9, 56.0],
     'Graphite': [24.0, 30.2, 38.4, 41.6]}
 #powder_angles = {'Fe3O4': [42.2, 50.5, 61.7, 74.4, 78.2]}
+
+def beam_intensity_diagnostic(label):
+    """
+    Return average beam energy in a dataset, evaluated based on Si spectrometer spectrum.
+    """
+    gmd_scale_factor = 1.
+    # based on equating GMD output to si integral for run 880
+    si_integral_to_meV = 7.1923263553224339e-08
+    from dataccess import mec
+    return gmd_scale_factor * si_integral_to_meV * mec.si_spectrometer_integral(label)
 
 def si_is_saturated(label, start = 400, end = 800):
     from dataccess import data_access as data
@@ -187,11 +197,11 @@ def goodratio_upper(imarr, **kwargs):
     filt = make_si_filter(0, 1e8, 0.8e7, 1e9, **kwargs)
     return filt(imarr)
 
-def sum_si(imarr):
+def sum_si(imarr, **kwargs):
     baseline = np.percentile(imarr, 1)
     return np.sum(imarr - baseline)
 
-def identity(imarr):
+def identity(imarr, **kwargs):
     return imarr
 
 def flux(beam_energy, label = None, size = None, **kwargs):

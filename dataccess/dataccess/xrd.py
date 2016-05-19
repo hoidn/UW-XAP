@@ -23,11 +23,7 @@ from output import rprint
 
 # TODO: major refactoring needed to better support merging powder patterns
 
-# Select console- or jupyter-based plotting
-if config.plotting_mode == 'notebook':
-    from mpl_plotly import plt
-else:
-    import matplotlib.pyplot as plt
+from config import plt
 
 # default powder peak width, in degrees
 DEFAULT_PEAK_WIDTH = 1.5
@@ -828,6 +824,7 @@ def peak_progression(datasets, compound_name, normalization = None,
 
 
 
+@utils.eager_persist_to_file('cache/xrd/process_one_detid')
 def process_one_detid(detid, data_identifiers, labels, mode = 'label',
     peak_progression_compound = None,
     plot = True, bgsub = False, fiducial_ellipses = None, compound_list = [],

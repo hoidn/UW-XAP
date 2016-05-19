@@ -1,8 +1,8 @@
 
 import os
 import config
+from config import plt
 import numpy as np
-import matplotlib.pyplot as plt
 from dataccess import utils
 
 import playback
@@ -11,6 +11,7 @@ from output import rprint
 def npsum(arr, **kwargs):
     return np.sum(arr)
 
+# TODO: handle separate == True with derived dataset labels
 def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plot = True, nbins = 100, filtered = False, separate = False):
     """
     Evaluate the function event_data_getter (defined in config.py) on all events

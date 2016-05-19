@@ -13,3 +13,5 @@ logfile_path = None
 suppress_root_print = True
 
 plotting_mode = 'console'
+
+import matplotlib.pyplot as plt
