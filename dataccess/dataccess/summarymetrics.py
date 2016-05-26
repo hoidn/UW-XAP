@@ -1,12 +1,19 @@
 
 import os
 import config
-from config import plt
 import numpy as np
-from dataccess import utils
+
+import utils
+import query
 
 import playback
 from output import rprint
+
+# TODO: refactor this
+if config.plotting_mode == 'notebook':
+    from dataccess.mpl_plotly import plt
+else:
+    import matplotlib.pyplot as plt
 
 def npsum(arr, **kwargs):
     return np.sum(arr)
@@ -87,5 +94,57 @@ def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plo
         return result
     return depends_on_data_access()
 
-def main(label, detid, funcstr = None, func = None, nbins = 100, filtered = False, **kwargs):
-    get_detector_data_all_events(label, detid, funcstr = funcstr, func = func, nbins = nbins, filtered = filtered, **kwargs)
+def histogram(datasets, detid,  separate = False, event_data_getter = None):
+    """
+    dataset : query.DataSet
+    detid : str
+    event_data_getter : function
+
+    Plot a histogram of the output values of event_data_getter evaluated
+    over all events in dataset.
+    """
+
+    import operator
+    def get_eventdata(dataset):
+        return dataset.evaluate(detid, event_data_getter = event_data_getter)
+
+    def get_flat_event_data(data_result):
+        return data_result.flat_event_data()
+
+    @utils.ifplot
+    def plot_hist(arr1d):
+        plt.hist(arr1d)
+
+    data_results = map(get_eventdata, datasets)
+    if separate:
+        [plot_hist(get_flat_event_data(result)) for result in data_results]
+    else:
+        merged = reduce(operator.add, data_results)
+        plot_hist(get_flat_event_data(merged))
+
+def main(dataset_labels, detid, separate = False, funcstr = None, **kwargs):
+    import query
+    def parse_function_string(function_string, default = None):
+        if function_string is None:
+            return default
+        else:
+            return eval('config.' + function_string)
+    event_data_getter = parse_function_string(funcstr, utils.usum)
+    
+    def get_dataset(label):
+        try:
+            return query.existing_dataset_by_label(label)
+        except KeyError:
+            # TODO: automatically generate a DataSet object for each row
+            # in the logging spreadsheet and insert it into MongoDB
+            raise NotImplementedError("Non-derived dataset labels aren't supported")
+    datasets = map(get_dataset, dataset_labels)
+    @playback.db_insert
+    def do_plot():
+        histogram(datasets, detid, event_data_getter = event_data_getter, separate = separate)
+        plt.show()
+    do_plot()
+    
+
+#def main(label, detid, funcstr = None, func = None, nbins = 100, filtered = False, **kwargs):
+#    get_detector_data_all_events(label, detid, funcstr = funcstr, func = func, nbins = nbins, filtered = filtered, **kwargs)

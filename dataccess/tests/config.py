@@ -247,6 +247,19 @@ def every_other_filter(arr, nevent = None, **kwargs):
     #ipdb.set_trace()
     return bool(nevent % 20)
 
+def onecolor_fluence(imarr, run = None, **kwargs):
+    """
+    Given si spectrometer array for a single shot and a run number, return the
+    incident flux. If the 'focal_size' attribute from the logging spreadsheet is
+    absent for this run, return 0.
+    """
+    from dataccess.mec import background_subtracted_spectrum, si_integral_to_eV
+    from dataccess import logbook
+    si_signal = np.sum(background_subtracted_spectrum(imarr))
+    label = str(run)
+    size = logbook.get_label_attribute(label, 'focal_size')
+    # convert length units from microns to cm
+    return si_integral_to_eV * si_signal / (np.pi * ((size * 0.5 * 1e-4)**2))
    
 # Size in microns of the beam spot at best focus
 best_focus_size = 2.

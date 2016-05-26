@@ -349,6 +349,7 @@ def all_logbook_attributes():
             keys.add(k)
     return list(keys)
 
+@utils.memoize_timeout(timeout = 30)
 def get_label_attribute(label, property):
     """
     Return the value of a label's property.

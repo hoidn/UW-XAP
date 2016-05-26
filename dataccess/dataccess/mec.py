@@ -5,6 +5,9 @@ import data_access
 import utils
 import numpy as np
 
+# based on equating GMD output to si integral for run 880
+si_integral_to_eV = 7.1923263553224339e-11
+
 def background_subtracted_spectrum(imarr, transpose = False):
     from dataccess import xes_process as spec
     if transpose:

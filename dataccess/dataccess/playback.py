@@ -1,7 +1,6 @@
 import dill
 import os
 import hashlib
-import config
 from output import rprint
 
 # TODO: fix this module
@@ -61,6 +60,7 @@ def db_insert(func):
     Decorator that causes the modified function call to be stored instead of
     evaluated.
     """
+    import config
     if not config.playback:
         return func
     else:

@@ -8,7 +8,6 @@ import dill
 import pkg_resources
 from time import time
 import pdb
-import config
 import hashlib
 import itertools
 import playback
@@ -26,8 +25,18 @@ from output import conditional_decorator
 
 PKG_NAME = __name__.split('.')[0]
 
-#class ConfigAttributeError(Exception):
-#    pass
+# from https://gist.github.com/rossdylan/3287138
+# TODO: how about this?:
+# def compose(*funcs): return lambda x: reduce(lambda v, f: f(v), reversed(funcs), x)
+from functools import partial
+def _composed(f, g, *args, **kwargs):
+    return f(g(*args, **kwargs))
+
+def compose(*a):
+    try:
+        return partial(_composed, a[0], compose(*a[1:]))
+    except:
+        return a[0]
 
 def identity(x, **kwargs):
     return x
@@ -135,6 +144,11 @@ def roundrobin(*iterables):
             stopcount += 1
             if stopcount >= len(iterables):
                 break
+
+def mpi_rank():
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    return comm.Get_rank()
 
 def mpimap(func, lst):
     """
@@ -292,6 +306,7 @@ def global_save_and_show(save_path):
     """
     Save current matplotlib plot to file and then show it.
     """
+    import config
     if config.plotting_mode == 'notebook':
         from mpl_plotly  import plt
     else:
@@ -373,7 +388,13 @@ def hash_obj(obj):
         # Functions receive special treatment, such that code changes alter
         # the hash value
         if hasattr(obj, '__call__'):
-            return obj_digest(ast.dump(decompile_func(obj)))
+            try:
+                return obj_digest(ast.dump(decompile_func(obj)))
+            # This covers an exception that happens in meta.decompiler under
+            # certain situations. TODO: replace this workaround with something
+            # better.
+            except IndexError:
+                return obj_digest(dill.dumps(obj))
         else:
             return obj_digest(obj)
 

@@ -56,3 +56,10 @@ def test_hash_obj():
     assert h4 != h5
 
     h6 = utils.hash_obj(np.ones((10, 10)))
+
+    def func2(x):
+        def inner(y):
+            return x + y
+        return inner
+    f = func2(4)
+    h7 = utils.hash_obj(f)

@@ -40,6 +40,9 @@ class DataResult(DataResultBase):
         return self
 
     def flat_event_data(self):
+        """
+        Return a 1d np.ndarray of event data.
+        """
         def extract_event_data(arr2d):
             return arr2d[:, -1]
         return extract_event_data(utils.flatten_dict(self.event_data))

@@ -90,7 +90,8 @@ def call_histogram(args):
     labels = args.labels
     detid = args.detid
     nbins = args.nbins
-    summarymetrics.main(labels, detid, funcstr = args.function, filtered = args.filter, nbins = nbins, separate = args.separate)
+    summarymetrics.main(labels, detid, funcstr = args.function, event_filter_string = args.filter, nbins = nbins, separate = args.separate)
+    #summarymetrics.main(labels, detid, funcstr = args.function, filtered = args.filter, nbins = nbins, separate = args.separate)
 
 def call_datashow(args):
     import datashow

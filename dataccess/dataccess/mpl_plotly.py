@@ -9,7 +9,6 @@ import plotly.offline as py
 import plotly.graph_objs as go
 
 import config
-from dataccess import utils
 
 py.offline.init_notebook_mode()
 
@@ -19,6 +18,7 @@ class PyplotPlot(object):
 
 
 class Figure(object):
+    from dataccess import utils
     u"""Class containing the equivalent of a matplotlib Axis."""
     def __init__(self):
         self.traces = []
@@ -51,7 +51,7 @@ class Figure(object):
         else:
             scatter_kwargs[u'showlegend'] = True
         self.traces.append(
-            go.Scatter(**utils.merge_dicts(scatter_kwargs, kwargs)))
+            go.Scatter(**Figure.utils.merge_dicts(scatter_kwargs, kwargs)))
 
     def hist(self, x, alpha = .75, bins = None, color = None, label = None, **kwargs):
         # TODO: control number of bins
@@ -61,7 +61,7 @@ class Figure(object):
             name = label,
             marker = dict(color = color)
         )
-        self.traces.append(go.Histogram(**utils.merge_dicts(default, kwargs)))
+        self.traces.append(go.Histogram(**Figure.utils.merge_dicts(default, kwargs)))
         self.layout[u'barmode'] = u'overlay'
 
     def set_xlabel(self, xlabel):
@@ -123,6 +123,9 @@ class Plt(object):
 
     def ylabel(self, ylabel):
         self._get_global_plot().set_ylabel(ylabel)
+
+    def xscale(self, scale):
+        self._get_global_plot().set_xscale(scale)
 
     def title(self, title):
         self._get_global_plot().set_title(title)

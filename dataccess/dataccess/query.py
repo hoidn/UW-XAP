@@ -280,6 +280,15 @@ def parse_list_of_strings_to_query(slist, partial = ()):
             return _parse(slist, partial = partial + (next,))
     return _parse([s for s in slist])
 
+def existing_dataset_by_label(label):
+    """
+    Return a DataSet corresponding to either a logbook-specified
+    or derived dataset.
+
+    Raises a KeyError if the dataset isn't found.
+    """
+    return database.mongo_query_object_by_label(label)
+
 def main(query_string_list, event_filter = None, event_filter_detid = None, label = None):
     # TODO: This will eventually be moved into an LK20-specific script that
     # wraps mecana.py.

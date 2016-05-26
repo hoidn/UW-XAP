@@ -23,7 +23,10 @@ from output import rprint
 
 # TODO: major refactoring needed to better support merging powder patterns
 
-from config import plt
+if config.plotting_mode == 'notebook':
+    from dataccess.mpl_plotly import plt
+else:
+    import matplotlib.pyplot as plt
 
 # default powder peak width, in degrees
 DEFAULT_PEAK_WIDTH = 1.5

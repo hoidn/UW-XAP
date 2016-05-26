@@ -46,7 +46,8 @@ def addparser_histogram(subparsers):
     histogram.add_argument('detid', type = str, help = 'Detector ID.')
     histogram.add_argument('labels', nargs = '+', help = 'Labels of one or more datasets to process.')
     histogram.add_argument('--function', '-u', default = None, help = 'Name of function (defined in config.py) to evaluate over all events. Defaults to None.')
-    histogram.add_argument('--filter', '-f', action = 'store_true', help = 'If selected, logbook-specified event filtering will be applied.')
+    histogram.add_argument('--filter', '-f', default = None, help = 'Name of function to perform event filtering')
+    #histogram.add_argument('--filter', '-f', action = 'store_true', help = 'If selected, logbook-specified event filtering will be applied.')
     histogram.add_argument('--separate', '-s', action = 'store_true', help = 'If selected, different labels are added separately (with different color).')
     histogram.add_argument('--nbins', '-n', type = int, default = 100, help = 'Number of bins in the histogram.')
 

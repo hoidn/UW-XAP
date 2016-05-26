@@ -30,8 +30,8 @@ import pdb
 import warnings
 warnings.filterwarnings("ignore",category=DeprecationWarning)
 
-def get_query_dataset(querystring, alias = None, print_enable = True):
-    dataset = query.main(querystring.split(), label = alias)
+def get_query_dataset(querystring, alias = None, print_enable = True, **kwargs):
+    dataset = query.main(querystring.split(), label = alias, **kwargs)
     if utils.isroot() and print_enable:
         print "Runs: ", dataset.runs
     return dataset
