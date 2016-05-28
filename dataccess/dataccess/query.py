@@ -15,6 +15,7 @@ import database
 from recordclass import recordclass
 from output import rprint
 import pdb
+import functools
 
 
 def query_generic(attribute, value_test_func):
@@ -106,48 +107,97 @@ class DataSet(object):
     Public methods:
         -evaluate(): extracts data from a DataSet instance.
     """
-    def __init__(self, query, event_filter = None, event_filter_detid = None,
-            label = None, immediate_insert = True):
-        """
-        query : list
-            A list of Query records.
-        """
+    def __init__(self, runs, event_filter = None, event_filter_detid = None,
+            label = None):
+        assert utils.all_isinstance(runs, int)
         if event_filter and not event_filter_detid:
             raise ValueError("event_filter_detid must be provided if event_filter is not None")
         assert (event_filter is None) or hasattr(event_filter, '__call__')
+        self.event_filter = event_filter
+        self.event_filter_detid = event_filter_detid
+        self.label = label
+        self.runs = runs
+
+        # Store this entire data structure
+        self._store() 
+
+        # Store a dict mapping self.label to the query parameters
+        #self._db_insert() 
+
+    @classmethod
+    def from_query(cls, query, event_filter = None, event_filter_detid = None,
+            label = None):
+        """
+        Construct a DataSet instance from a dataset query.
+        query : list
+            A list of Query records.
+        """
+        def make_label():
+            if label is None:
+                query_strings = [q.label for q in query]
+                if event_filter is not None:
+                    try:
+                        filter_identifier = '-'.join(event_filter.params)
+                    except:
+                        filter_identifier = database.hash(utils.random_float())
+                    try:
+                        filter_label =\
+                            event_filter.label
+                    except AttributeError:
+                        filter_label =\
+                            '-filter-' + event_filter.__name__ + '-' +\
+                            filter_identifier + '-' + str(event_filter_detid)
+                else:
+                    filter_label = ''
+                return  '-'.join(query_strings) + filter_label
+            else:
+                return label
         if not query or len(query) == 0:
             query = [construct_query('label', '.*')]
-        self.query = query
         runsets =\
             [query_generic(q.attribute, q.function)
             for q in query]
-        self.runs = list(reduce(lambda x, y: x & y, runsets))
-        self.runs.sort()
-        self.event_filter = event_filter
-        self.event_filter_detid = event_filter_detid
-        if label is None:
-            query_strings = [q.label for q in query]
-            if event_filter is not None:
-                try:
-                    filter_identifier = '-'.join(event_filter.params)
-                except:
-                    filter_identifier = database.hash(utils.random_float())
-                try:
-                    filter_label =\
-                        event_filter.label
-                except AttributeError:
-                    filter_label =\
-                        '-filter-' + event_filter.__name__ + '-' +\
-                        filter_identifier + '-' + str(event_filter_detid)
+        runs = list(reduce(lambda x, y: x & y, runsets))
+        runs.sort()
+        label = make_label()
+        return cls(runs, event_filter = event_filter,
+            event_filter_detid = event_filter_detid, label = label)
+
+    @classmethod
+    def from_logbook_label_dict(cls, label_dict, label):
+        """
+        Construct a DataSet instance corresponding to a single logging
+        spreadsheet-specified label.
+
+        label_dict : dict of format
+            {runs: tuple of run numbers,
+            attribute_name: attribute value,... etc.}}
+        """
+        if not all(isinstance(r, int) for r in label_dict['runs']):
+            raise ValueError("Elements of label_dict['runs'] must be integers.")
+        return cls(label_dict['runs'], label = label)
+
+    def get_attribute(self, attribute):
+        """
+        Return the value for the given attribute if it exists and is identical
+        for all runs in self.runs.
+        """
+        def merge_values(*args):
+            """
+            If all elements of args have the same value, return that value.
+            Otherwise raise a KeyError.
+            """
+            if len(args) <= 1:
+                return args[0]
+            elif args[0] != args[1]:
+                raise KeyError("Mismatched values")
             else:
-                filter_label = ''
-            self.label = '-'.join(query_strings) + filter_label
-        else:
-            self.label = label
-        # Store this entire data structure
-        self._store() 
-        # Store a dict mapping self.label to the query parameters
-        self._db_insert() 
+                return merge_values(*args[1:])
+
+        def get_attribute_value(run_number):
+            return logbook.get_run_attribute(run_number, attribute)
+
+        return merge_values(*map(get_attribute_value, self.runs))
 
     def _store(self):
         """
@@ -157,7 +207,8 @@ class DataSet(object):
         database.mongo_store_object_by_label(self, self.label)
 
     @utils.eager_persist_to_file('cache/query/DataSet.evaluate')
-    def evaluate(self, detid, event_data_getter = None, insert = True):
+    def evaluate(self, detid, event_data_getter = None):
+    #def evaluate(self, detid, event_data_getter = None, insert = True):
         """
         Extracts data for all runs in self.run, subject to the specified event-by-event
         filtering.
@@ -181,30 +232,30 @@ class DataSet(object):
             data_access.get_data_and_filter(self.label, detid,
             event_data_getter = event_data_getter, event_filter = self.event_filter,
             event_filter_detid = self.event_filter_detid)
-        if insert:
-            self._db_insert(data.mean, data.event_data, detid)
+#        if insert:
+#            self._db_insert(data.mean, data.event_data, detid)
         return data
 
-    # TODO: combine detid, mean_frame, and event_data_dict into a data structure?
-    def _db_insert(self, mean_frame = None, event_data_dict = None, detid = None, event_data_getter = None):
-        """
-        TODO
-        """
-        data_dict =\
-            {q.attribute: q.attribute_value for q in self.query}
-        data_dict['runs'] = tuple(self.runs)
-        if event_data_getter is not None:
-            event_data_getter_name = event_data_getter.__name__
-            label = self.label + event_data_getter_name
-            data_dict['event_data_getter'] = event_data_getter_name
-        else:
-            label = self.label
-        if detid is not None:
-            data_dict['detid'] = detid
-            data_dict['data'] = (mean_frame, event_data_dict)
-            data_dict['event_data_getter'] = database.dumps_b2a(event_data_getter)
-        data_dict['label'] = label
-        database.mongo_insert_derived_dataset(data_dict)
+#    # TODO: combine detid, mean_frame, and event_data_dict into a data structure?
+#    def _db_insert(self, mean_frame = None, event_data_dict = None, detid = None, event_data_getter = None):
+#        """
+#        TODO
+#        """
+#        data_dict =\
+#            {q.attribute: q.attribute_value for q in self.query}
+#        data_dict['runs'] = tuple(self.runs)
+#        if event_data_getter is not None:
+#            event_data_getter_name = event_data_getter.__name__
+#            label = self.label + event_data_getter_name
+#            data_dict['event_data_getter'] = event_data_getter_name
+#        else:
+#            label = self.label
+#        if detid is not None:
+#            data_dict['detid'] = detid
+#            data_dict['data'] = (mean_frame, event_data_dict)
+#            data_dict['event_data_getter'] = database.dumps_b2a(event_data_getter)
+#        data_dict['label'] = label
+#        database.mongo_insert_derived_dataset(data_dict)
 
     def runfilter(self, filter_func):
         """
@@ -224,10 +275,8 @@ class DataSet(object):
         """
         if not isinstance(other, DataSet):
             raise ValueError("Argument other must be of type DataSet")
-        new_ds = DataSet(self.query, self.event_filter, self.event_filter_detid, immediate_insert = False)
         merged_runs = list(set(self.runs) | set(other.runs))
-        new_ds.runs = merged_runs
-        new_ds.label = label
+        new_ds = DataSet(merged_runs, self.event_filter, self.event_filter_detid, label = label)
         return new_ds
 
 
@@ -315,7 +364,7 @@ def main(query_string_list, event_filter = None, event_filter_detid = None, labe
         [materials_ref_match_dict[k] if k in materials_ref_match_dict else k
         for k in query_string_list]
     q = query_list(parse_list_of_strings_to_query(substituted_query_string_list))
-    dataset = DataSet(q, event_filter = event_filter, event_filter_detid = event_filter_detid, label = label)
+    dataset = DataSet.from_query(q, event_filter = event_filter, event_filter_detid = event_filter_detid, label = label)
     if 'delay_min' in locals():
         import xtcav
         def delay_filter(run_number):

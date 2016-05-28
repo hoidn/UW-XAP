@@ -107,7 +107,7 @@ def get_dark_label(label):
     """
     def autofind_dark():
         import query
-        darks = query.DataSet(query.query_list([('material', r".*[dD]ark.*")])).runs
+        darks = query.DataSet.from_query(query.query_list([('material', r".*[dD]ark.*")])).runs
         start_run = np.min(get_dataset_attribute_value(label, 'runs'))
         preceding_darks = filter(lambda x: x < start_run, darks)
         if not preceding_darks:

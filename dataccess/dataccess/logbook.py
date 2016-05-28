@@ -366,6 +366,16 @@ def get_label_attribute(label, property):
     except KeyError:
         raise KeyError("attribute: " + property + " of label: " + label + " not found")
 
+def get_run_attribute(run_number, attribute):
+    """
+    Return the value of an attribute for the given run number.
+    Raise a KeyError if it isn't found.
+
+    run_number : int
+        A run number.
+    """
+    return get_label_attribute(str(run_number), attribute)
+
 def eventmask_params(label):
     handles = ['param1', 'param2', 'param3', 'param4']
     result = []
@@ -403,6 +413,28 @@ def get_all_runlist(label):
                 raise ValueError(label + ': dataset label not found')
             return list(runs)
 
+def label_mapping_to_datasets(mapping):
+    """
+    Returns a list of lists of query.DataSet instances. 
+
+    Each sublist corresponds to one key/label in mapping. For sublist contains:
+        -One DataSet containing all the runs in the label.
+        -One dataset for each run number corresponding to the label.
+
+    As a side effect, all these DataSet instances are inserted into MongoDB. 
+    """
+    # TODO: modify query.existing_dataset_by_label so that it parses run range
+    # specifiers of the form 'a-b' and a,b,c.
+    import query
+    def make_single_run_dataset(label, run_number):
+        return query.DataSet.from_logbook_label_dict(mapping[label], str(run_number))
+
+    def make_datasets_one_label(label):
+        return [query.DataSet.from_logbook_label_dict(mapping[label], label)] +\
+                [make_single_run_dataset(label, run) for run in mapping[label]['runs']]
+
+    return map(make_datasets_one_label, mapping)
+
 def spreadsheet_mapping(url):
     sheet_headers_bodies = get_logbook_data(url)
     mapping_list =\
@@ -412,9 +444,21 @@ def spreadsheet_mapping(url):
 
 
 def main(url = config.url):
+    
+    # TODO: correct the output of spreadsheet_mapping so that this isn't necessary.
+    def correct_format(sub_dictionary):
+        if 'runs' in sub_dictionary:
+            if all(isinstance(r, int) for r in sub_dictionary['runs']):
+                return True
+        return False
+
+    def filter_mapping(d):
+        return {k: v for k, v in d.iteritems() if isinstance(v, dict) and correct_format(v)}
+
     while True:
         topic = config.expname
         mapping = spreadsheet_mapping(url)
         rprint( mapping)
         database.mongo_insert_logbook_dict(mapping)
-        time.sleep(1)
+        label_mapping_to_datasets(filter_mapping(spreadsheet_mapping(url)))
+        time.sleep(3)

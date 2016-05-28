@@ -132,19 +132,13 @@ def main(dataset_labels, detid, separate = False, funcstr = None, **kwargs):
     event_data_getter = parse_function_string(funcstr, utils.usum)
     
     def get_dataset(label):
-        try:
-            return query.existing_dataset_by_label(label)
-        except KeyError:
-            # TODO: automatically generate a DataSet object for each row
-            # in the logging spreadsheet and insert it into MongoDB
-            raise NotImplementedError("Non-derived dataset labels aren't supported")
+        return query.existing_dataset_by_label(label)
     datasets = map(get_dataset, dataset_labels)
     @playback.db_insert
     def do_plot():
         histogram(datasets, detid, event_data_getter = event_data_getter, separate = separate)
         plt.show()
     do_plot()
-    
 
 #def main(label, detid, funcstr = None, func = None, nbins = 100, filtered = False, **kwargs):
 #    get_detector_data_all_events(label, detid, funcstr = funcstr, func = func, nbins = nbins, filtered = filtered, **kwargs)

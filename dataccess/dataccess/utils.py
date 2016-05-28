@@ -38,6 +38,12 @@ def compose(*a):
     except:
         return a[0]
 
+def all_isinstance(iterable, obj_type):
+    """
+    Return True if all elements of iterable are of type obj_type.
+    """
+    return all(isinstance(r, obj_type) for r in iterable)
+
 def identity(x, **kwargs):
     return x
 
