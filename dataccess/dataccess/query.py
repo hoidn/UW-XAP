@@ -71,8 +71,11 @@ def construct_query(attribute, param1, param2 = None):
     """
     # TODO: Validate data type of param1 and param2 and raise exception if it's wrong.
     def match_string():
-        bash_special = r"|&;<>()$`\"' \t\n!"
+        #bash_special = r"|&;<>()$`\"' \t\n!"
+        bash_special = "|&;<>()$`\"' \t\n!"
         pat = param1.encode('string-escape')
+        # TODO: decide how we want to handle potentially problematic strings
+        #pat_bashsafe = pat
         pat_bashsafe = filter(lambda c: c not in bash_special, pat)
         label = '-'.join(map(str, [attribute, pat_bashsafe]))
         def match(cell_value):
@@ -101,9 +104,9 @@ class DataSet(object):
     """
     A class representing a set of events corresponding to the intersection of
     (1) a run query and (2) events for which event_filter returns True.
-
+    
     An empty run query matches all runs in the logging spreadsheet.
-
+    
     Public methods:
         -evaluate(): extracts data from a DataSet instance.
     """
@@ -197,7 +200,10 @@ class DataSet(object):
         def get_attribute_value(run_number):
             return logbook.get_run_attribute(run_number, attribute)
 
-        return merge_values(*map(get_attribute_value, self.runs))
+        if attribute == 'runs':
+            return self.runs
+        else:
+            return merge_values(*map(get_attribute_value, self.runs))
 
     def _store(self):
         """
@@ -229,9 +235,8 @@ class DataSet(object):
         runs = self.runs
         labels = map(str, runs)
         data =\
-            data_access.get_data_and_filter(self.label, detid,
-            event_data_getter = event_data_getter, event_filter = self.event_filter,
-            event_filter_detid = self.event_filter_detid)
+            data_access.eval_dataset_and_filter(self.label, detid,
+            event_data_getter = event_data_getter)
 #        if insert:
 #            self._db_insert(data.mean, data.event_data, detid)
         return data
@@ -337,6 +342,10 @@ def existing_dataset_by_label(label):
     Raises a KeyError if the dataset isn't found.
     """
     return database.mongo_query_object_by_label(label)
+
+def get_attribute_value_by_label(label, attribute):
+    ds = existing_dataset_by_label(label)
+    return ds.get_attribute(attribute)
 
 def main(query_string_list, event_filter = None, event_filter_detid = None, label = None):
     # TODO: This will eventually be moved into an LK20-specific script that

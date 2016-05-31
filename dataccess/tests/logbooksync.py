@@ -1,0 +1,1 @@
+/reg/neh/home/ohoidn/venv_test/mecana2/bin/logbooksync.py

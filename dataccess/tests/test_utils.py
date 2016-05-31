@@ -63,3 +63,6 @@ def test_hash_obj():
         return inner
     f = func2(4)
     h7 = utils.hash_obj(f)
+
+def test_all_isinstance():
+    assert utils.all_isinstance(range(10), int)

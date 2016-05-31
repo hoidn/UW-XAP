@@ -32,6 +32,8 @@ class Figure(object):
         else: color =  None
         if 'label' in kwargs: label = kwargs['label']; del kwargs['label']
         else: label =  None
+        if 'mode' in kwargs: mode = kwargs['mode']; del kwargs['mode']
+        else: mode = 'lines'
         u"""
         Add a curve to the figure.
         kwargs are passed through to the argument dictionary for go.Scatter.
@@ -43,8 +45,8 @@ class Figure(object):
         else:
             raise ValueError(u"Plot accepts one or two positional arguments")
         scatter_kwargs = dict(x = x, y = y, name = label,
-                mode = u'lines', line = dict(color = color))
-        if label is None:
+                line = dict(color = color), mode = mode)
+        if label is None and mode == 'lines':
             scatter_kwargs[u'showlegend'] = False
             scatter_kwargs[u'hoverinfo'] = u'none'
             
@@ -63,6 +65,10 @@ class Figure(object):
         )
         self.traces.append(go.Histogram(**Figure.utils.merge_dicts(default, kwargs)))
         self.layout[u'barmode'] = u'overlay'
+
+    def scatter(self, *args, **kwargs):
+        kwargs['mode'] = 'markers'
+        self.plot(*args, **kwargs)
 
     def set_xlabel(self, xlabel):
         self.xaxis[u'title'] = xlabel
@@ -117,6 +123,9 @@ class Plt(object):
 
     def hist(self, *args, **kwargs):
         self._get_global_plot().hist(*args, **kwargs)
+
+    def scatter(self, *args, **kwargs):
+        self._get_global_plot().scatter(*args, **kwargs)
 
     def xlabel(self, xlabel):
         self._get_global_plot().set_xlabel(xlabel)

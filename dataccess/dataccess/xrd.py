@@ -76,8 +76,7 @@ def CSPAD_pieces(arr):
 
 
 
-def data_extractor(dataset, apply_mask = True, event_data_getter = None,
-    event_filter = None, **kwargs):
+def data_extractor(dataset, apply_mask = True, event_data_getter = None, **kwargs):
     """
     # TODO: update this
     Returns CSPAD image data in the correct format for all other functions in
@@ -98,8 +97,6 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
         if detid is provided, mask the ret
     """
     from dataccess import data_access as data
-    if event_filter is not None and dataset.ref_type != 'label':
-        raise ValueError("dataset type does not allow data filtering")
     # TODO: improve the handling of different data type references
     # Transpose (relative to the shape of the array returned by psana is
     # necessary due to choice of geometry definition in this module.
@@ -117,8 +114,8 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None,
         imarray, event_data =  np.genfromtxt(dataset.dataref).T, None
 
     elif dataset.ref_type == 'label':
-        imarray, event_data = data.get_data_and_filter(dataset.dataref, dataset.detid,
-            event_data_getter = event_data_getter, event_filter = event_filter)
+        imarray, event_data = data.eval_dataset_and_filter(dataset.dataref, dataset.detid,
+            event_data_getter = event_data_getter)
         imarray = imarray.T
 
     else:

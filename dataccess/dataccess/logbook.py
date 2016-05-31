@@ -185,7 +185,7 @@ def parse_run(run_string):
         except:
             raise ValueError("Invalid run range format: ", run_string)
     if not run_string:
-        return (None, None)
+        return ()
     else:
         run_string = run_string.strip()
         split_ranges = run_string.split(',')
@@ -427,11 +427,37 @@ def label_mapping_to_datasets(mapping):
     # specifiers of the form 'a-b' and a,b,c.
     import query
     def make_single_run_dataset(label, run_number):
-        return query.DataSet.from_logbook_label_dict(mapping[label], str(run_number))
+        """
+        Return a function that takes a `mode` parameter (either 'runs' or 'background')
+        and returns a dataset.
+        """
+        def new_dataset(mode = 'runs'):
+            import copy
+            new = copy.deepcopy(mapping[label])
+            new['runs'] = tuple([run_number])
+            if mode == 'background':
+                new['background'] = ()
+            return query.DataSet.from_logbook_label_dict(new, str(run_number))
+        return new_dataset
 
     def make_datasets_one_label(label):
-        return [query.DataSet.from_logbook_label_dict(mapping[label], label)] +\
-                [make_single_run_dataset(label, run) for run in mapping[label]['runs']]
+#        if label == 'evaltest':
+#            pdb.set_trace()
+        run_datasets = [query.DataSet.from_logbook_label_dict(mapping[label], label)] +\
+                [make_single_run_dataset(label, run)('runs') for run in mapping[label]['runs']]
+        # If background subtraction runs were specified in the logbook these need
+        # to be added as well
+        if 'background' in mapping[label]:
+            try:
+                extra_datasets =\
+                    [make_single_run_dataset(label, run)('background')
+                    for run
+                    in parse_run(mapping[label]['background'])]
+            except ValueError:
+                extra_datasets = []
+            return extra_datasets + run_datasets
+        else:
+            return run_datasets
 
     return map(make_datasets_one_label, mapping)
 

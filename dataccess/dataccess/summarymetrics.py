@@ -2,6 +2,7 @@
 import os
 import config
 import numpy as np
+import pdb
 
 import utils
 import query
@@ -18,90 +19,38 @@ else:
 def npsum(arr, **kwargs):
     return np.sum(arr)
 
-# TODO: handle separate == True with derived dataset labels
-def get_detector_data_all_events(labels, detid, funcstr = None, func = None, plot = True, nbins = 100, filtered = False, separate = False):
-    """
-    Evaluate the function event_data_getter (defined in config.py) on all events
-    in the dataset and generate a histogram of resulting values.
-    """
-    @playback.db_insert
-    @utils.ifplot
-    def plot(arr, label = '', **kwargs):
-        try:
-            args = data.eventmask_params(label)
-        except:
-            args = ['()']
-        label = (label + "; filter params: %s" % ','.join(map(str, args))) 
-        arr = filter(lambda x: not np.isnan(x), arr)
-        plt.hist(arr, bins = nbins, alpha = 0.5, label = label, **kwargs)
-    @playback.db_insert
-    @utils.ifplot
-    def finalize_plot():
-        plt.xlabel('output of ' + event_data_getter.__name__)
-        plt.ylabel('number of events')
-        plt.title('Detector: ' + detid)
-        plt.legend()
-        plt.savefig(merged_path + '.png')
-    @playback.db_insert
-    @utils.ifplot
-    def show():
+@utils.ifplot
+def plot_hist(arr1d, xlabel = '', ylabel = '', label = '', title = '', show = True):
+    plt.hist(arr1d, label = label)
+    if xlabel:
+        plt.xlabel(ylabel)
+    if ylabel:
+        plt.ylabel(ylabel)
+    if title:
+        plt.title(title)
+    if show:
         plt.show()
-    if func is not None:
-        event_data_getter = func
-    else:
-        if funcstr is None:
-            event_data_getter = npsum
-        else:
-            event_data_getter = eval('config.' + funcstr)
-    basepath = 'histograms/' + detid
-    merged_path = (basepath +  '_' + '_'.join(labels))[:100]
-    dirname = os.path.dirname(basepath)
-    if dirname and (not os.path.exists(dirname)):
-        os.system('mkdir -p ' + os.path.dirname(basepath))
-    event_data_dicts = []
-    def depends_on_data_access():
-        from dataccess import data_access as data
-        if not filtered:
-            for label in labels:
-                try:
-                    event_data_dicts.append(data.get_label_data(label, detid, event_data_getter = event_data_getter)[1])
-                except ValueError:# no events found in one or more runs in label
-                    pass
-        else:
-            for label in labels:
-                try:
-                    event_data_dicts.append(data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1])
-                except ValueError:# no events found in one or more runs in label
-                    rprint( label, ": no events found")
-                    pass
-        merged = utils.merge_dicts(*event_data_dicts)
-        if plot:
-            if separate:
-                for d, label in zip(event_data_dicts, labels):
-                    event_data_list = data.event_data_dict_to_list(d)
-                    plot(event_data_list, label =  label)
-            else:
-                event_data_list = data.event_data_dict_to_list(merged)
-                plot(event_data_list, label = label)
-            finalize_plot()
-            show()
-        result = np.array(data.event_data_dict_to_list(merged))
-        #print "RESULT IS", event_data
-        # header kwarg is passed to np.savetxt
-        for d, label in zip(event_data_dicts, labels):
-            utils.save_0d_event_data(basepath + '_' + label + '.dat', d, header = "Run\tevent\tvalue")
-        utils.save_0d_event_data(merged_path + '.dat', d, header = "Run\tevent\tvalue")
-        return result
-    return depends_on_data_access()
 
-def histogram(datasets, detid,  separate = False, event_data_getter = None):
+@utils.ifplot
+def plot_scatter(x, y, xlabel = '', ylabel = '', title = '', show = True):
+    plt.scatter(x, y)
+    if xlabel:
+        plt.xlabel(xlabel)
+    if ylabel:
+        plt.ylabel(ylabel)
+    if title:
+        plt.title(title)
+    if show:
+        plt.show()
+
+def histogram(datasets, detid,  separate = False, event_data_getter = None, show = True):
     """
+    Plot a histogram of the output values of event_data_getter evaluated
+    over all events in dataset.
+
     dataset : query.DataSet
     detid : str
     event_data_getter : function
-
-    Plot a histogram of the output values of event_data_getter evaluated
-    over all events in dataset.
     """
 
     import operator
@@ -111,25 +60,84 @@ def histogram(datasets, detid,  separate = False, event_data_getter = None):
     def get_flat_event_data(data_result):
         return data_result.flat_event_data()
 
-    @utils.ifplot
-    def plot_hist(arr1d):
-        plt.hist(arr1d)
 
     data_results = map(get_eventdata, datasets)
     if separate:
-        [plot_hist(get_flat_event_data(result)) for result in data_results]
+        labels = [ds.label for ds in datasets]
+        [plot_hist(get_flat_event_data(result), label = label, show = False)
+            for result, label in zip(data_results, labels)]
+        if show:
+            plt.show()
     else:
         merged = reduce(operator.add, data_results)
         plot_hist(get_flat_event_data(merged))
 
-def main(dataset_labels, detid, separate = False, funcstr = None, **kwargs):
-    import query
-    def parse_function_string(function_string, default = None):
-        if function_string is None:
-            return default
+
+def detrend(x, y):
+    """
+    Do a linear regression, subtract the fit, and return the result.
+    """
+    from scipy import stats
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x,y)
+    return x, y - (slope * x + intercept)
+
+def get_normalized(arr1d):
+    """
+    Subtract the mean, divide by stdev, and return the result.
+    """
+    return (arr1d - np.mean(arr1d)) / np.std(arr1d)
+
+def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = False, show = True):
+    """
+    Generate a scatter plot of values returned by eventgetter1 and eventgetter2
+    for all events in dataset. Returns two 1d np.ndarrays.
+
+    dataset_identifier : query.DataSet instance or a string equal to the label of an existing
+        dataset.
+    detid_function_1, detid_function_2 : tuples
+        Of format (detector id, function) -> (str, function), denoting a pair of detector
+        ID and function with which to evaluate event data.
+    """
+    def get_DataSet_instance(ds):
+        if isinstance(ds, query.DataSet):
+            return ds
         else:
-            return eval('config.' + function_string)
-    event_data_getter = parse_function_string(funcstr, utils.usum)
+            return query.existing_dataset_by_label(ds)
+
+    detid1, eventgetter1 = detid_function_1
+    detid2, eventgetter2 = detid_function_2
+    dataset = get_DataSet_instance(dataset_identifier)
+
+    def get_event_values(event_data_getter, detid):
+        raw = dataset.evaluate(detid, event_data_getter = event_data_getter).flat_event_data()
+        if normalize:
+            return get_normalized(raw)
+        return raw
+
+    def make_label(event_data_getter, detid):
+        return "Function: %s; detector: %s" % (event_data_getter.__name__, detid)
+
+    data1, data2 = map(get_event_values, [eventgetter1, eventgetter2], [detid1, detid2])
+    xlabel, ylabel = map(make_label, [eventgetter1, eventgetter2], [detid1, detid2])
+    plot_scatter(data1, data2, xlabel = xlabel, ylabel = ylabel, title = dataset.label, show = show)
+    return data1, data2
+    
+
+def main(dataset_labels, detid, separate = False, func = None, **kwargs):
+    """
+    TODO
+    """
+    def parse_function_string(function, default = None):
+        """
+        Function may be either a function or a string that evaluates to one.
+        """
+        if function is None:
+            return default
+        elif isinstance(function, str):
+            return eval('config.' + function)
+        else:
+            return function
+    event_data_getter = parse_function_string(func, utils.usum)
     
     def get_dataset(label):
         return query.existing_dataset_by_label(label)
@@ -140,5 +148,3 @@ def main(dataset_labels, detid, separate = False, funcstr = None, **kwargs):
         plt.show()
     do_plot()
 
-#def main(label, detid, funcstr = None, func = None, nbins = 100, filtered = False, **kwargs):
-#    get_detector_data_all_events(label, detid, funcstr = funcstr, func = func, nbins = nbins, filtered = filtered, **kwargs)

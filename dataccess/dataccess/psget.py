@@ -61,7 +61,7 @@ class DataResult(DataResultBase):
     def __add__(self, other):
         return DataResult(
             self.mean + other.mean,
-            utils.merge_dicts(self.event_data_dict, other.event_data_dict))
+            utils.merge_dicts(self.event_data, other.event_data))
 
 def idxgen(ds):
     from mpi4py import MPI
@@ -275,7 +275,7 @@ def get_event_data_nonarea(runNum, detid, **kwargs):
             det_values.append(np.mean([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()]))
             #print "appending: ", str([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()])
     for nevent, evt in evtgen:
-        if config.testing and nevent % 25 != 0:
+        if config.testing and nevent % 10 != 0:
             continue
         if config.nonarea[detid].type == 'Lusi.IpmFexV1':
             eval_lusi(evt)
@@ -346,7 +346,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
     last = time()
     last_nevent = 0
     for nevent, evt in evtgen:
-        if config.testing and nevent % 25 != 0:
+        if config.testing and nevent % 10 != 0:
             continue
         if event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))

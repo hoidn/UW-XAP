@@ -90,7 +90,7 @@ def mean_from_label(detid, transpose = False):
     contains more than 1 run an exception is raised.
     """
     def data_getter(label):
-        arr = data.get_data_and_filter(label, detid)[0]
+        arr = data.eval_dataset_and_filter(label, detid)[0]
         arr = arr.astype('float64')
         if transpose:
             return arr.T
@@ -121,7 +121,7 @@ def events_from_label(detid, event_indices = None,
             assert len(result) > 0
             return result, map(lambda key, event_index: str(key) + '_' + str(event_index), len(result) * [k], good_indices)
 
-        d = data.get_data_and_filter(label, detid, event_data_getter = event_data_getter)[1]
+        d = data.eval_dataset_and_filter(label, detid, event_data_getter = event_data_getter)[1]
         if event_indices:
             if len(d) > 1:
                 raise ValueError("Invalid dataset label: %s. Label must refer to exactly one run." % label)
@@ -445,7 +445,7 @@ def get_plotinfo_one_label(detid, label, get_spectrum_partial,
                 for n in event_indices]
     # Get a single averaged spectrum for the dataset label
     else:
-        mean_arr = data.get_data_and_filter(label, detid)[0]
+        mean_arr = data.eval_dataset_and_filter(label, detid)[0]
         spectrumList = [spectrum_extractor(mean_arr)]
         return spectrumList, [label]
         
