@@ -10,6 +10,7 @@ from dataccess import query
 from dataccess import utils
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 from dataccess import logbook
 from itertools import *
@@ -25,6 +26,8 @@ import pdb
 
 #from plotly.offline import init_notebook_mode, iplot_mpl
 #init_notebook_mode()
+
+# TODO: housekeeping
 
 # Disable deprecation warnings
 import warnings
@@ -44,7 +47,6 @@ def run_xrd(query_labels, optionstring = '', bsub = False, queue = 'psfehq'):
     labelstring = ' '.join(query_labels)
     print prefix_sc, labelstring, optionstring
     if bsub:
-        import os
         os.system('bsub -n 8 -a mympi -q %s -o batch_logs/%%J.log mecana.py -n xrd quad2 -l %s %s' % \
                   (queue, labelstring, optionstring))
     else:
@@ -52,20 +54,20 @@ def run_xrd(query_labels, optionstring = '', bsub = False, queue = 'psfehq'):
         from dataccess import xrd
         ipython.magic("run %s %s %s" % (prefix_sc, labelstring, optionstring))
         
-def plot_xrd(datasets, compound_list, normalization = 'peak', plot_progression = False, bgsub = False, plot_patterns = False):
+def plot_xrd(datasets, compound_list, detectors = ['quad2'], normalization = 'peak', plot_progression = False, bgsub = False, plot_patterns = False):
     def get_label(ds):
         return ds.label
     if plot_progression and not plot_patterns:
-        x = xrd.XRD(['quad2'], map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
+        x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
             plot_progression = True, plot_peakfits = False)
         x.plot_progression(show = True)
     elif plot_patterns and not plot_progression:
-        x = xrd.XRD(['quad2'], map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
+        x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
             plot_progression = False, plot_peakfits = True)
         x.plot_patterns()
         xrd.plt.show()
     else: # plot both
-        x = xrd.XRD(['quad2'], map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
+        x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
             plot_progression = False, plot_peakfits = True)
         x.plot_patterns()
         x.plot_progression(show = True)
@@ -172,5 +174,72 @@ def get_progressions(dataset):
     return filter(lambda runlist: len(runlist) > 1, partition_runs(dataset))
 
 def batch_preprocess(run_number):
-    import os
     os.system(r'bsub -n 1 -q psfehq -o batch_logs/%J.log ' + 'mecana.py -n datashow quad2 ' + str(run_number))
+
+def bashrun(cmd):
+    import subprocess
+    return subprocess.check_output(cmd, shell=True)
+
+def batch_submit(cmd, ncores = 6, queue = 'psfehq'):
+    return bashrun(r'bsub -n {0} -q {1} -o batch_logs/%J.log mpirun '.format(ncores, queue) + cmd)
+
+def ipcluster_submit(name, ncores = 6, queue = 'psfehq'):
+    """Launch an ipcluster in MPI mode as a batch job"""
+    return batch_submit(r"ipcluster start --n={0} --profile={1} --ip='*' --engines=MPI".format(ncores, name), ncores = ncores, queue = queue)
+
+def bjobs_count(queue_name):
+    return int(bashrun('bjobs -q %s -u all -p | wc -l' % queue_name))
+
+class Bqueue:
+    sizes = {'psanaq': 960., 'psfehq': 288., 'psnehq': 288.}
+    def __init__(self, name):
+        self.name = name
+        if name == 'psfehq' or name == 'psnehq':
+            self.upstream_q = Bqueue(name[:-1] + 'hiprioq')
+        else:
+            self.upstream_q = None
+        
+    def number_pending(self):
+        if self.upstream_q is not None:
+            return bjobs_count(self.name) + bjobs_count(self.upstream_q.name)
+        else:
+            return bjobs_count(self.name)
+        
+    def key(self):
+        """
+        Sorting key for this class.
+        """
+        return self.number_pending()/Bqueue.sizes[self.name]
+
+def best_queue(usable_queues):
+    """Return the name of the least-subscribed batch queue"""
+    return min(usable_queues, key = lambda q: q.key())
+
+usable_queues = map(Bqueue, ('psanaq', 'psfehq', 'psnehq'))
+
+def preprocess_one(run_number, cores = 1):
+    os.system(r'bsub -a mympi -n {0} -q {1} -o batch_logs/%J.log mecana.py -n datashow quad2 {2}'.format(cores, best_queue(usable_queues), run_number))
+    
+def preprocess_xrd(ds, cores = 1):
+    [preprocess_one(run) for run in ds.runs]
+    os.system(r'bsub -a mympi -n {0} -q {1} -o batch_logs/%J.log mecana.py -n xrd quad2 -l {2} -n peak -b'.format(
+              cores, best_queue(usable_queues), ds.label))
+
+def preprocess_dataset(ds, detid, event_data_getter_name = '', ncores = 1):
+    """
+    ds: DataSet or string
+    """
+    if isinstance(ds, str):
+        ds = query.existing_dataset_by_label(ds)
+    import os
+    if event_data_getter_name:
+        edg_opt = ' -u ' + event_data_getter_name
+    else:
+        edg_opt = ''
+    cmd = r'mecana.py -n histogram {0} {1}'.format(detid, ds.label) + edg_opt
+    batch_submit(cmd, ncores = ncores, queue = best_queue(usable_queues).name)
+
+def get_run_strings(dslist):
+    import operator
+    return map(str, reduce(operator.add, [ds.runs for ds in dslist]))
+

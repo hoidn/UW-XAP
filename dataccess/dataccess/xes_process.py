@@ -19,7 +19,7 @@ import playback
 
 import pdb
 from scipy.ndimage.filters import gaussian_filter as filt
-from output import rprint
+from output import log
 
 # TODO: use the same data extractor as in xrd.py
 
@@ -115,9 +115,9 @@ def events_from_label(detid, event_indices = None,
             result = [rundict[k]
                 for k in event_indices
                 if k in rundict]
-            utils.rprint("searching for events: " + str(event_indices))
+            utils.log("searching for events: " + str(event_indices))
             good_indices = filter(lambda k: k in rundict, event_indices)
-            utils.rprint("found events: " + str(good_indices))
+            utils.log("found events: " + str(good_indices))
             assert len(result) > 0
             return result, map(lambda key, event_index: str(key) + '_' + str(event_index), len(result) * [k], good_indices)
 
@@ -338,9 +338,9 @@ def get_spectrum(data, dark = None, cencol_calibration_data = None, cold_calibra
         x = energies_from_data(cold_calibration_data, cencol, save_path = calib_save_path, eltname = eltname)
     else:
         if energy_ref1_energy_ref2_calibration and not eltname:
-            rprint( "No element identifier provided; skipping energy calibration.")
+            log( "No element identifier provided; skipping energy calibration.")
         elif energy_ref1_energy_ref2_calibration and not cold_calibration_data:
-            rprint( "No file for calibration specified; skipping energy calibration")
+            log( "No file for calibration specified; skipping energy calibration")
         x = np.array(range(len(intensities)))
     if bg_sub:
         smoothed = filt(intensities, 5)

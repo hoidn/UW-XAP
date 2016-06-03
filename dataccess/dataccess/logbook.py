@@ -28,7 +28,7 @@ import utils
 import database
 
 import config
-from output import rprint
+from output import log
 
 # TODO: logbook doesn't properly sync when labels are changed
 # TODO: run range queries fail if the requested range is a subset
@@ -246,13 +246,13 @@ def get_label_mapping_one_sheet(col_titles, data):
                     # Delete possible duplicates
                     local_dict[property_key] = tuple(set(local_dict[property_key]))
                 except ValueError:
-                    rprint( "Malformed run range: ", row[k])
+                    log( "Malformed run range: ", row[k])
             # TODO: make this non-obvious behaviour clear to the user.
             elif property and (property not in local_dict) and row[k]:
                 try:
                     local_dict[property_key] = parser_dispatch[property_key](row[k])
                 except ValueError, e:
-                    rprint( "Malformed attribute: %s" % e)
+                    log( "Malformed attribute: %s" % e)
 
     for i, row in enumerate(data):
         for j, label in enumerated_labels:
@@ -406,7 +406,7 @@ def get_all_runlist(label):
             return list(groups)
         except KeyError:
             # TODO: make sure that the run number exists
-            rprint( "logbook label " + label + ": not found")
+            log( "logbook label " + label + ": not found")
             try:
                 runs = parse_run(label)
             except ValueError:
@@ -484,7 +484,7 @@ def main(url = config.url):
     while True:
         topic = config.expname
         mapping = spreadsheet_mapping(url)
-        rprint( mapping)
+        log( mapping)
         database.mongo_insert_logbook_dict(mapping)
         label_mapping_to_datasets(filter_mapping(spreadsheet_mapping(url)))
         time.sleep(3)

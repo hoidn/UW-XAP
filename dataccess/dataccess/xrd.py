@@ -13,13 +13,41 @@ from collections import namedtuple
 from recordclass import recordclass
 import copy
 import pdb
+import operator
 
 import config
 
 import utils
-import logbook
+import query
 import playback
-from output import rprint
+from output import log
+
+
+XrdDataBase = namedtuple("XrdDataBase", "angles, intensities, imarray")
+class XrdData(XrdDataBase):
+    """
+    TODO
+    """
+    def __new__(cls, angles, intensities, imarray):
+        self = super(XrdData, cls).__new__(cls, angles, intensities, imarray)
+        return self
+
+    def __add__(self, other):
+        angles = np.concatenate((self.angles, other.angles))
+        intensities = np.concatenate((self.intensities, other.intensities))
+        imarray = np.hstack((self.imarray, other.imarray))
+        return XrdData(angles, intensities, imarray)
+
+DatasetBase = recordclass("DatasetBase", ['dataref', 'ref_type', 'detid_list', 'compound_list'])
+class Dataset(DatasetBase):
+    def __new__(cls, dataref, ref_type, detid_list, compound_list):
+        self = super(Dataset, cls).__new__(cls, dataref, ref_type, detid_list, compound_list) 
+        return self
+
+    def get_array(self, detid, **kwargs):
+        return data_extractor(self, detid, **kwargs)
+        
+#Dataset = recordclass('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list', 'array'])
 
 # TODO: major refactoring needed to better support merging powder patterns
 
@@ -38,10 +66,6 @@ HBARC = 1973.
 global verbose
 verbose = True
 
-# TODO: test with arrays as inputs
-# TODO: raise error if transmission and spot size values are not the same for
-# all runs in a dataset.
-Dataset = recordclass('Dataset', ['dataref', 'ref_type', 'detid', 'compound_list', 'array'])
 
 def get_detid_parameters(detid):
     """
@@ -76,7 +100,7 @@ def CSPAD_pieces(arr):
 
 
 
-def data_extractor(dataset, apply_mask = True, event_data_getter = None, **kwargs):
+def data_extractor(dataset, detid, apply_mask = True, event_data_getter = None, **kwargs):
     """
     # TODO: update this
     Returns CSPAD image data in the correct format for all other functions in
@@ -101,34 +125,34 @@ def data_extractor(dataset, apply_mask = True, event_data_getter = None, **kwarg
     # Transpose (relative to the shape of the array returned by psana is
     # necessary due to choice of geometry definition in this module.
     # TODO: improve the handling of different types of data references
-    if dataset.array is not None:
-        imarray, event_data = dataset.array, None
-        # TODO fix the edge case where we want event data
-    elif dataset.ref_type == 'array':
-        # TODO reorganize this
-        if not isinstance(dataset.dataref, np.ndarray):
-            raise ValueError("ref_type inconsistent with type of dataref")
-        imarray, event_data =  dataset.dataref.T, None
+#    if dataset.array is not None:
+#        imarray, event_data = dataset.array, None
+#        # TODO fix the edge case where we want event data
+#    elif dataset.ref_type == 'array':
+#        # TODO reorganize this
+#        if not isinstance(dataset.dataref, np.ndarray):
+#            raise ValueError("ref_type inconsistent with type of dataref")
+#        imarray, event_data =  dataset.dataref.T, None
+#
+#    elif dataset.ref_type == 'path':
+#        imarray, event_data =  np.genfromtxt(dataset.dataref).T, None
 
-    elif dataset.ref_type == 'path':
-        imarray, event_data =  np.genfromtxt(dataset.dataref).T, None
+    #elif dataset.ref_type == 'label':
+    imarray, event_data = data.eval_dataset_and_filter(dataset.dataref, detid,
+        event_data_getter = event_data_getter)
+    imarray = imarray.T
 
-    elif dataset.ref_type == 'label':
-        imarray, event_data = data.eval_dataset_and_filter(dataset.dataref, dataset.detid,
-            event_data_getter = event_data_getter)
-        imarray = imarray.T
-
-    else:
-        raise ValueError("Invalid argument combination. Data source must be specified by detid and either path or label")
+#    else:
+#        raise ValueError("Invalid argument combination. Data source must be specified by detid and either path or label")
     if apply_mask:
-        extra_masks = config.detinfo_map[dataset.detid].extra_masks
+        extra_masks = config.detinfo_map[detid].extra_masks
         combined_mask = utils.combine_masks(imarray, extra_masks, transpose = True)
         imarray *= combined_mask
     min_val =  np.min(imarray)
     if min_val < 0:
-        return np.abs(min_val) + imarray, event_data
+        return np.abs(min_val) + imarray
     else:
-        return imarray, event_data
+        return imarray
 
 def get_x_y(imarray, phi, x0, y0, alpha, r):
     """
@@ -219,7 +243,7 @@ def binData(mi, ma, stepsize, valenza = True):
     Input:  a minimum, a maximum, and a stepsize
     Output:  a list of bins
     """
-    if verbose: rprint( "creating angle bins")
+    if verbose: log( "creating angle bins")
     binangles = list()
     binangles.append(mi)
     i = mi
@@ -243,7 +267,7 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
     """
     if bgsub and not compound_list:
         bgsub = False
-        rprint( "Overriding bg_sub to False due to empty compound_list")
+        log( "Overriding bg_sub to False due to empty compound_list")
         
     @utils.eager_persist_to_file('cache/xrd/process_imarray/expanded_mask')
     def expanded_mask(arr):
@@ -276,7 +300,7 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
     numPix = [0] * (nbins+1)
     intenValue = [0] * (nbins+1)
     
-    if verbose: rprint( "putting data in bins"        )
+    if verbose: log( "putting data in bins"        )
     # find which bin each theta lies in and add it to count
     for j,theta in enumerate(thetas):
         if intens[j] != 0:
@@ -284,23 +308,24 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
             numPix[k]=numPix[k]+1
             intenValue[k]=intenValue[k]+intens[j]
     # form average by dividing total intensity by the number of pixels
-    if verbose: rprint( "adjusting intensity")
+    if verbose: log( "adjusting intensity")
     adjInten = np.nan_to_num((np.array(intenValue)/np.array(numPix)))
     
 #    if np.min(adjInten) < 0:
 #        print "WARNING: Negative values have been suppressed in final powder pattern (may indicate background subtraction with an inadequate data mask)."
 #        adjInten[adjInten < 0.] = 0.
-    return binangles, adjInten, imarray
+    return XrdData(binangles, adjInten, imarray)
 
 # TODO: why does memoization fail?
 #@utils.eager_persist_to_file("cache/xrd.process_dataset/")
 def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = None,
         bgsub = True, **kwargs):
-    imarray, event_data = data_extractor(dataset, **kwargs)
-    binangles, adjInten, imarray = process_imarray(dataset.detid, imarray,
-        fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
-        compound_list = dataset.compound_list, **kwargs)
-    return binangles, adjInten, imarray
+    def process_one_detid(detid):
+        imarray = dataset.get_array(detid)#data_extractor(dataset, **kwargs)
+        return process_imarray(detid, imarray,
+            fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
+            compound_list = dataset.compound_list, **kwargs)
+    return reduce(operator.add, map(process_one_detid, dataset.detid_list))
 
 # Todo: memoize mpimap instead of this function?
 #@utils.eager_persist_to_file("cache/xrd/proc_all_datasets/", rootonly = False)
@@ -512,14 +537,14 @@ def subtract_background_full_frame(imarray, detid, compound_list, smoothing = DE
     result = imarray - bg_smooth
     return result
 
-def get_powder_angles(compound, peak_threshold = 0.02):
+def get_powder_angles(compound, peak_threshold = 0.02, filterfunc = lambda x: True):
     """
     Accessor function for powder data in config.py
 
-    Returns a list of Bragg peak angles.
+    Returns a list of Bragg peak angles, filtered using filterfunc.
     """
     if compound in config.powder_angles:
-        return config.powder_angles[compound]
+        return filter(filterfunc, config.powder_angles[compound])
     else:
         energy = config.photon_energy
         fname = utils.resource_path('data/' + compound + '.csv')
@@ -530,7 +555,7 @@ def get_powder_angles(compound, peak_threshold = 0.02):
         powder_q = powder_q[intensities > np.max(intensities) * peak_threshold]
         powder_angles = 2 * np.arcsin(powder_q * HBARC / (2 * energy))
         powder_angles = powder_angles[~np.isnan(powder_angles)]
-        return list(np.rad2deg(powder_angles))
+        return filter(filterfunc, list(np.rad2deg(powder_angles)))
 
 def make_powder_ring_mask(detid, imarray, compound_list, width = DEFAULT_PEAK_WIDTH):
     """
@@ -586,13 +611,13 @@ def get_normalized_patterns(datasets, patterns, labels, normalization = None, **
         norm_array = get_normalization(datasets, type = normalization, **kwargs)
     else:
         norm_array = [1.] * len(datasets)
-    rprint( "NORM", norm_array)
+    log( "NORM", norm_array)
     def normalize_pattern(pattern, norm):
         return [pattern[0], pattern[1] / norm]
     return [normalize_pattern(p, n) for p, n in zip(patterns, norm_array)]
 
-def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all', ax = None, log = True, show = False):
-    rprint( "normalized progression ", normalized_progression)
+def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all', ax = None, logscale = True, show = False):
+    log( "normalized progression ", normalized_progression)
     if maxpeaks != 'all':
         intensity_reference = progression[:, 0]
         goodpeaks = sorted(np.argsort(intensity_reference)[::-1][:min(len(powder_angles), maxpeaks)])
@@ -601,7 +626,7 @@ def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_p
     def plotting(ax):
         if ax is None:
             f, ax = plt.subplots(1)
-        if log:
+        if logscale:
             ax.set_xscale('log')
         for label, curve in zip(map(str, powder_angles[goodpeaks]), normalized_progression[goodpeaks]):
             ax.plot(label_fluxes, curve, label = label)
@@ -679,9 +704,11 @@ def peak_sizes(x, y, compound_name, peak_width = DEFAULT_PEAK_WIDTH, ax = None, 
             ax.plot(xfit, yfit / normalization, color = 'red')
             ax.plot(xfit, (yfit - (m * xfit + b)) / normalization, color = 'black')
         return amplitude
-
+    def in_range(angle_degrees):
+        return angle_degrees > np.min(x) and angle_degrees < np.max(x)
     sizeList = []
-    powder_angles = np.array(get_powder_angles(compound_name))
+    powder_angles = np.array(get_powder_angles(compound_name, filterfunc = in_range))
+    
     make_interval = lambda angle: [angle - peak_width/2.0, angle + peak_width/2.0]
     make_ranges = lambda angles: map(make_interval, angles)
 
@@ -737,36 +764,39 @@ def get_peak_and_background_signal_from_imarray(imarray, detid, compound_list, s
     peaks_imarray_subtracted = (~powder_mask) * (peaks_imarray - bg)
     return np.sum(peaks_imarray_subtracted), np.sum(bg)
 
-@utils.eager_persist_to_file("cache/xrd.get_peak_and_background_signal/")
-def get_peak_and_background_signal_from_dataref(dataset, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH, event_data_getter = None, **kwargs):
-    """
-    Evaluates signal and background levels for an array, or for the mean
-    of all events in a run group label.
-    --------
-    Accepts the same parameters as data_extractor.
-
-    Returns 
-    --------
-    peak : float
-        integrated signal in powder peaks
-    background : float
-        integrated signal outside of powder peaks
-    """
-    imarray, event_data = data_extractor(dataset)
-    peaksum, bgsum = get_peak_and_background_signal_from_imarray(imarray, dataset.detid, dataset.compound_list,
-        smoothing = smoothing, width = width)
-    return peaksum, bgsum
+## TODO: reimplement this
+#@utils.eager_persist_to_file("cache/xrd.get_peak_and_background_signal/")
+#def get_peak_and_background_signal_from_dataref(dataset, smoothing = DEFAULT_SMOOTHING, width = DEFAULT_PEAK_WIDTH, event_data_getter = None, **kwargs):
+#    """
+#    Evaluates signal and background levels for an array, or for the mean
+#    of all events in a run group label.
+#    --------
+#    Accepts the same parameters as data_extractor.
+#
+#    Returns 
+#    --------
+#    peak : float
+#        integrated signal in powder peaks
+#    background : float
+#        integrated signal outside of powder peaks
+#    """
+#    imarray, event_data = data_extractor(dataset)
+#    peaksum, bgsum = get_peak_and_background_signal_from_imarray(imarray, dataset.detid, dataset.compound_list,
+#        smoothing = smoothing, width = width)
+#    return peaksum, bgsum
 
 #@utils.eager_persist_to_file("cache/xrd.get_normalization/")
 def get_normalization(datasets, type = 'transmission', peak_width = DEFAULT_PEAK_WIDTH, **kwargs):
     labels = np.array(map(lambda x: x.dataref, datasets))
     if type == 'transmission':
         label_transmissions = np.array(map(lambda label:
-            logbook.get_label_attribute(label, 'transmission'), labels))
+            query.get_attribute_value_by_label(label, 'transmission'), labels))
         return label_transmissions
     elif type == 'background':
-        peaksums, bgsums = zip(*[get_peak_and_background_signal_from_dataref(ds, width = peak_width, **kwargs) for ds in datasets])
-        return np.array(bgsums)
+        # TODO: reimplement this
+        raise NotImplementedError
+#        peaksums, bgsums = zip(*[get_peak_and_background_signal_from_dataref(ds, width = peak_width, **kwargs) for ds in datasets])
+#        return np.array(bgsums)
     elif type == 'peak': # Normalize by size of first peak
         def first_peak_intensity(ds):
             angles, intensities, _ = process_dataset(ds, **kwargs)
@@ -780,6 +810,13 @@ def get_normalization(datasets, type = 'transmission', peak_width = DEFAULT_PEAK
             raise ValueError("Function config.%s(<image array>) not found." % type)
 
 
+def get_flux_density(dset):
+    label = dset.dataref
+    beam_energy = config.beam_intensity_diagnostic(label)
+    size = query.get_attribute_value_by_label(label, 'focal_size')
+    # convert length units from microns to cm
+    return beam_energy / (np.pi * ((size * 0.5 * 1e-4)**2))
+
 def peak_progression(datasets, compound_name, normalization = None,
         peak_width = DEFAULT_PEAK_WIDTH, **kwargs):
     """
@@ -790,23 +827,13 @@ def peak_progression(datasets, compound_name, normalization = None,
         normalization = 'transmission'
     if not compound_name:
         raise ValueError("invalid compound; peak intensity progression cannot be computed.")
-    def get_flux_density(dset):
-        label = dset.dataref
-        beam_energy = config.beam_intensity_diagnostic(label)
-        size = logbook.get_label_attribute(label, 'focal_size')
-        # convert length units from microns to cm
-        return beam_energy / (np.pi * ((size * 0.5 * 1e-4)**2))
 
     # sort by increasing beam intensity
     datasets = sorted(datasets, key = get_flux_density)
     labels = np.array(map(lambda x: x.dataref, datasets))
     # TODO: check that all detids are the same
-    detid = datasets[0].detid
     patterns, imarrays = proc_all_datasets(datasets, **kwargs)
     # TODO: fix peak progression calculation for two-detid mode
-    #anglemin, anglemax = patterns[0][0][0], patterns[0][0][-1]
-    peaksums, bgsums = zip(*(get_peak_and_background_signal_from_dataref(ds, width = peak_width) for ds in datasets))
-    bgsums = np.array(bgsums)
     powder_angles = np.array(get_powder_angles(compound_name))
 
     label_flux_densities = map(get_flux_density, datasets)
@@ -825,7 +852,7 @@ def peak_progression(datasets, compound_name, normalization = None,
 
 
 @utils.eager_persist_to_file('cache/xrd/process_one_detid')
-def process_one_detid(detid, data_identifiers, labels, mode = 'label',
+def process_all(detid_list, data_identifiers, labels, mode = 'label',
     peak_progression_compound = None,
     plot = True, bgsub = False, fiducial_ellipses = None, compound_list = [],
     normalization = None, maxpeaks = 6, plot_progression = False,
@@ -848,9 +875,9 @@ def process_one_detid(detid, data_identifiers, labels, mode = 'label',
         compound_list: list of compound identifiers corresponding to crystals
             for which simulated diffraction data is available.
     """
-    input_datasets = [Dataset(dataref, mode, detid, compound_list, None) for dataref in data_identifiers]
-    imarrays, _ = zip(*map(lambda d: data_extractor(d, **kwargs), input_datasets))
-    datasets = [Dataset(dataref, mode, detid, compound_list, imarray) for dataref, imarray in zip(data_identifiers, imarrays)]
+    #input_datasets = [Dataset(dataref, mode, detid_list, compound_list) for dataref in data_identifiers]
+    #imarrays, _ = zip(*map(lambda d: data_extractor(d, **kwargs), input_datasets))
+    datasets = [Dataset(dataref, mode, detid_list, compound_list) for dataref in data_identifiers]
     patterns, imarrays =\
         proc_all_datasets(datasets, fiducial_ellipses = fiducial_ellipses,
         bgsub = bgsub)
@@ -865,6 +892,7 @@ def process_one_detid(detid, data_identifiers, labels, mode = 'label',
         peak_progression_output = ()
     return patterns, imarrays, normalized_patterns, peak_progression_output
 
+    
 class XRD:
     """
     Top-level class for evaluating XRD patterns and plotting the output.
@@ -891,25 +919,23 @@ class XRD:
         if bgsub:
             if not compound_list:
                 bsub = False
-                rprint( "No compounds provided: disabling background subtraction.")
+                log( "No compounds provided: disabling background subtraction.")
         if not peak_progression_compound and compound_list:
             peak_progression_compound = compound_list[0]
         # TODO: don't do peak intensity plot if no scattering angles have been 
         # provided.
 
-        to_merge =\
-            zip(*[process_one_detid(detid, data_identifiers, labels,
+        patterns, imarrays, normalized_patterns, peak_progression_output =\
+            process_all(detid_list, data_identifiers, labels,
             compound_list = compound_list, bgsub = bgsub, mode = mode,
             peak_progression_compound = peak_progression_compound,
             plot_progression = plot_progression, ax = self.ax, **kwargs)
-            for detid in detid_list])
-        patterns, imarrays, normalized_patterns, peak_progression_output =\
-            map(lambda t: utils.merge_lists(*t), to_merge)
-        for label, normalized_pattern, imarray in zip(labels, normalized_patterns, imarrays):
-            path = 'xrd_patterns/' + label + '_' + str(detid)
-            utils.save_data(normalized_pattern[0], list(normalized_pattern[1]), path)
-            # TODO: imarray should not be background-subtracted but it appears that it is.
-            utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray.tolist())
+
+#        for label, normalized_pattern, imarray in zip(labels, normalized_patterns, imarrays):
+#            path = 'xrd_patterns/' + label + '_' + str(detid)
+#            utils.save_data(normalized_pattern[0], list(normalized_pattern[1]), path)
+#            # TODO: imarray should not be background-subtracted but it appears that it is.
+#            utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray.tolist())
         if not peak_progression_compound and compound_list:
             peak_progression_compound = compound_list[0]
 

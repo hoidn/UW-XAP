@@ -9,7 +9,7 @@ import utils
 import argparse
 import time
 import config
-from output import rprint
+from output import log
 
 def call_init(config_source, config_dst):
     """
@@ -118,7 +118,7 @@ def call_query(args):
 
 def call_showderived(args):
     import query
-    rprint( '\n'.join(query.get_derived_datset_labels()))
+    log( '\n'.join(query.get_derived_datset_labels()))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -194,7 +194,7 @@ def main():
     if utils.isroot():
         if config.playback:
             playback.save_db(key)
-            rprint( playback.db)
+            log( playback.db)
             playback.execute()
         #mongo_commit()
     return key

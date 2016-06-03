@@ -21,9 +21,9 @@ def test_conditional_print():
     def stringproc(sio):
         return sio.getvalue().strip()
     def test1():
-        output.rprint("hello")
+        output.log("hello")
     def test2():
-        output.rprint("world")
+        output.log("world")
     config.stdout_to_file = False
     with captured_output() as (out, err):
         test1()

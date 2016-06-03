@@ -16,7 +16,7 @@ from time import time
 from collections import namedtuple
 
 import config
-from output import rprint
+from output import log
 
 
 """
@@ -36,7 +36,6 @@ class DataResult(DataResultBase):
     """
     def __new__(cls, mean, event_data_dict):
         self = super(DataResult, cls).__new__(cls, mean, event_data_dict)
-        #pdb.set_trace()
         return self
 
     def flat_event_data(self):
@@ -63,11 +62,21 @@ class DataResult(DataResultBase):
             self.mean + other.mean,
             utils.merge_dicts(self.event_data, other.event_data))
 
+    def matching_flat_event_data(self, other):
+        """
+        other : DataResult instance
+        Return data of the same type and format as flat_event_data, but exclude
+        events that are not contained in other.
+        """
+        pruned_event_data = utils.prune_dict(self.event_data, other.event_data)
+        return DataResult(None, pruned_event_data).flat_event_data()
+        
+
 def idxgen(ds):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
-    if rank==0: rprint( 'idx mode')
+    if rank==0: log( 'idx mode')
     size = comm.Get_size()
     run = ds.runs().next()
     times = run.times()
@@ -82,7 +91,7 @@ def smdgen(ds):
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    if rank==0: rprint( 'smd mode')
+    if rank==0: log( 'smd mode')
     for nevent,evt in enumerate(ds.events()):
         if nevent%size == rank: yield nevent,evt
 
@@ -146,7 +155,7 @@ event_data_getter = None, event_mask = None, **kwargs):
         nonblank_counts = map(lambda x: x[1], nonblank_counts_enumerated)
         median = np.median(nonblank_counts)
         std = np.std(nonblank_counts)
-        rprint(  'signal levels:', totalcounts)
+        log(  'signal levels:', totalcounts)
         print median, std
         # indices of the events in ascending order of total signal
         outlier_indices =\
@@ -257,9 +266,9 @@ def get_event_data_nonarea(runNum, detid, **kwargs):
         #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     else:
         ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
-    rprint( '')
-    rprint( "PROCESSING RUN: ", runNum)
-    rprint( '')
+    log( '')
+    log( "PROCESSING RUN: ", runNum)
+    log( '')
     evtgen = idxgen(ds)
     #evtgen = smdgen(ds)
     det_values = []
@@ -339,7 +348,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
     #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     det = Detector(config.detinfo_map[detid].device_name, ds.env())
     rank = comm.Get_rank()
-    rprint( "rank is", rank)
+    log( "rank is", rank)
     size = comm.Get_size()
     event_data = {}
     events_processed = 0
@@ -368,7 +377,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
                 now = time()
                 deltat = now - last
                 deltan = nevent - last_nevent
-                rprint( 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size)
+                log( 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size)
                 last = now
                 last_nevent = nevent
     try:
@@ -378,14 +387,14 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         signalsum_final /= events_processed
         if event_data_getter:
             event_data = comm.allgather(event_data)
-        rprint( "rank is: ", rank)
+        log( "rank is: ", rank)
         if rank == 0:
-            rprint( "processed ", events_processed, "events")
+            log( "processed ", events_processed, "events")
         if event_data:
             #print event_data
             #event_data = reduce(lambda x, y: x + y, event_data)
-            rprint( 'before merge')
-            rprint( event_data)
+            log( 'before merge')
+            log( event_data)
             event_data = utils.merge_dicts(*event_data)
         return signalsum_final, event_data, events_processed
     except UnboundLocalError:
@@ -428,7 +437,7 @@ def get_signal_many_parallel(runList, detid, event_data_getter = None,
                 run_data.append(mapfunc_smd(run))
             except ValueError, e:
                 exceptions.append(e)
-                rprint( "WARNING: ", e)
+                log( "WARNING: ", e)
         if not run_data:
             if not exceptions:
                 msg = 'No runs found'
@@ -436,7 +445,7 @@ def get_signal_many_parallel(runList, detid, event_data_getter = None,
                 msg = '. '.join(map(str, exceptions))
             raise ValueError(msg)
         elif exceptions:
-            rprint( "WARNING: INVALID RUNS WILL BE EXCLUDED")
+            log( "WARNING: INVALID RUNS WILL BE EXCLUDED")
     else:
         MAXNODES = 14
         pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))

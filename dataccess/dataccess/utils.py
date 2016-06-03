@@ -15,7 +15,7 @@ import random
 import operator
 from output import isroot
 from output import ifroot
-from output import rprint
+from output import log
 from output import conditional_decorator
 #from datetime import import datetime
 #from atomicwrites import atomic_write
@@ -132,6 +132,20 @@ def merge_dicts(*args):
         final.update(d)
     return final
 
+def prune_dict(dict1, dict2):
+    """
+    Return a new dict based on dict1 with all keys not found in dict2 removed
+    recursively; i.e. this function is intended to operate on two trees of nested
+    dictionaries with similar structure.
+    """
+    if not isinstance(dict1, dict) or not isinstance(dict2, dict):
+        return dict1
+    return {k: prune_dict(dict1[k], dict2[k])
+        for k in dict1
+        if k in dict2}
+def dicts_take_intersecting_keys(d1, d2):
+    return prune_dict(d1, d2), prune_dict(d2, d1)
+
 def roundrobin(*iterables):
     """Merges iterables in an interleaved fashion.
 
@@ -191,7 +205,7 @@ def ifplot(func):
     def inner(*args, **kwargs):
         import config
         if config.noplot:
-            rprint( "PLOTTING DISABLED, EXITING." )
+            log( "PLOTTING DISABLED, EXITING." )
         else:
             return func(*args, **kwargs)
     return inner
@@ -296,8 +310,8 @@ def save_image_and_show(save_path, imarr, title = 'Image', rmin = None, rmax = N
         rmax = ave + 5 * rms
     @ifplot
     def show():
-        rprint( "rmin", rmin)
-        rprint( "rmax", rmax)
+        log( "rmin", rmin)
+        log( "rmax", rmax)
         import pyimgalgos.GlobalGraphics as gg
         gg.plotImageLarge(imarr, amp_range=(rmin, rmax), title = title, origin = 'lower')
         if show_plot:
@@ -618,7 +632,7 @@ def eager_persist_to_file(file_name, excluded = None, rootonly = True):
                             cache[key] = cPickle.load(f)
                     except EOFError:
                         os.remove(full_name)
-                        rprint( "corrupt cache file deleted")
+                        log( "corrupt cache file deleted")
                         raise ValueError("Corrupt file")
                     #print "cache found"
                 except (IOError, ValueError):
@@ -648,7 +662,7 @@ def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
     base_mask = ma.make_mask(np.ones(np.shape(imarray)))
     base_mask[imarray == 0.] = False
     if not mask_paths:
-        rprint( "No additional masks provided")
+        log( "No additional masks provided")
         return base_mask
     else:
         # Data arrays must be transposed here for the same reason that they
@@ -657,7 +671,7 @@ def combine_masks(imarray, mask_paths, verbose = False, transpose = False):
             masks = map(lambda path: np.load(path).T, mask_paths)
         else:
             masks = map(lambda path: np.load(path), mask_paths)
-        rprint( "Applying mask(s): ", mask_paths)
+        log( "Applying mask(s): ", mask_paths)
         return base_mask & reduce(lambda x, y: x & y, masks)
 
 

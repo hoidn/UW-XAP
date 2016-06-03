@@ -1,7 +1,7 @@
 import dill
 import os
 import hashlib
-from output import rprint
+from output import log
 
 # TODO: fix this module
 
@@ -46,7 +46,7 @@ def save_db(key):
         os.system('mkdir -p %s' % db_dir)
     with open(db_dir + fname, 'w') as f:
         dill.dump(db, f)
-    rprint( "saved db")
+    log( "saved db")
 
 def execute():
     """

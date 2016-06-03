@@ -13,7 +13,7 @@ import summarymetrics
 import data_access
 import database
 from recordclass import recordclass
-from output import rprint
+from output import log
 import pdb
 import functools
 
@@ -121,6 +121,15 @@ class DataSet(object):
         self.label = label
         self.runs = runs
 
+        # Handle the case where a dataset with the same label, but different
+        # data, exists
+        try:
+            other = existing_dataset_by_label(self.label)
+            if other != self:
+                raise ValueError("Dataset conflicts with an existing one that has the same label.")
+        except KeyError:
+            pass
+
         # Store this entire data structure
         self._store() 
 
@@ -209,7 +218,7 @@ class DataSet(object):
         """
         Store this object to MongoDB.
         """
-        rprint( "Storing DataSet. Runs: %s" % str(self.runs))
+        log( "Storing DataSet. Runs: %s" % str(self.runs))
         database.mongo_store_object_by_label(self, self.label)
 
     @utils.eager_persist_to_file('cache/query/DataSet.evaluate')
@@ -235,7 +244,7 @@ class DataSet(object):
         runs = self.runs
         labels = map(str, runs)
         data =\
-            data_access.eval_dataset_and_filter(self.label, detid,
+            data_access.eval_dataset_and_filter(self, detid,
             event_data_getter = event_data_getter)
 #        if insert:
 #            self._db_insert(data.mean, data.event_data, detid)
@@ -283,6 +292,14 @@ class DataSet(object):
         merged_runs = list(set(self.runs) | set(other.runs))
         new_ds = DataSet(merged_runs, self.event_filter, self.event_filter_detid, label = label)
         return new_ds
+
+    def __eq__(self, other):
+        return self.runs == other.runs and\
+                utils.hash_obj(self.event_filter) == utils.hash_obj(other.event_filter) and\
+                self.event_filter_detid == other.event_filter_detid
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 def query_list(attribute_param_tuples):
@@ -379,5 +396,5 @@ def main(query_string_list, event_filter = None, event_filter_detid = None, labe
         def delay_filter(run_number):
             return float(delay_min) < xtcav.get_delay(run_number) <= float(delay_max)
         dataset.runfilter(delay_filter)
-    rprint(dataset.label)
+    log(dataset.label)
     return dataset

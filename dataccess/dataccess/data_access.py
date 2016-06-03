@@ -17,7 +17,7 @@ import logbook
 import database
 import config
 import query
-from output import rprint
+from output import log
 
 # TODO: make logbook data not required for labels that can be parsed as run
 # ranges.
@@ -128,7 +128,7 @@ def get_dark_dataset(dataset_identifier):
     except KeyError:
         darklabel = autofind_dark()
     dark_dataset = query.existing_dataset_by_label(darklabel)
-    rprint( "using dark subtraction run: ", darklabel)
+    log( "using dark subtraction run: ", darklabel)
     return dark_dataset
 
 @utils.eager_persist_to_file('cache/data_access/eval_dataset_and_filter/')
@@ -140,19 +140,19 @@ def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None)
     def get_filtered_unsubtracted():
         # dataset.event_filter is a function that takes a np array and returns a boolean
         if dataset.event_filter:
-            mask_result = eval_dataset(dataset, datset.event_filter_detid,
+            mask_result = eval_dataset(dataset, dataset.event_filter_detid,
                     event_data_getter = dataset.event_filter)
             # unpack elements of a DataResult instance
             _, event_mask = mask_result
             sum_true = sum(mask_result.flat_event_data())
-            rprint( "Event mask True entries: ", sum_true, "Total number of events: ", result.nevents())
+            log( "Event mask True entries: ", sum_true, "Total number of events: ", mask_result.nevents())
             return eval_dataset(dataset, detid,
                 event_data_getter = event_data_getter, event_mask = event_mask)
         else:
             if utils.isroot():
-                rprint( "!!!!!!!!!!!!!!!!!!")
-                rprint( "Dataset %s: No event filter provided." % dataset.label)
-                rprint( "!!!!!!!!!!!!!!!!!!")
+                log( "!!!!!!!!!!!!!!!!!!")
+                log( "Dataset %s: No event filter provided." % dataset.label)
+                log( "!!!!!!!!!!!!!!!!!!")
             return eval_dataset(dataset, detid,
                 event_data_getter = event_data_getter)
     unsubtracted = get_filtered_unsubtracted()
@@ -162,7 +162,7 @@ def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None)
         return unsubtracted.bgsubtract(bg_result.mean)
     except KeyError:
         if utils.isroot():
-            rprint( "No background label found")
+            log( "No background label found")
         return unsubtracted
 
 

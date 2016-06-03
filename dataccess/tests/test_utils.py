@@ -2,7 +2,7 @@ import numpy as np
 from dataccess import utils
 from dataccess import output
 import ipdb
-from dataccess.output import rprint
+from dataccess.output import log
 import os
 
 def test_merge_lists():
@@ -21,12 +21,12 @@ def test_stdout_to_file():
         os.system('rm tpath')
     @output.stdout_to_file(path = None)
     def hello():
-        rprint( 'hello')
+        log( 'hello')
     @output.stdout_to_file(path = 'tpath')
     def world():
-        rprint( 'world')
+        log( 'world')
     def foo():
-        rprint( 'foo')
+        log( 'foo')
     hello()
     world()
     foo()
@@ -66,3 +66,8 @@ def test_hash_obj():
 
 def test_all_isinstance():
     assert utils.all_isinstance(range(10), int)
+
+def test_dicts_take_intersecting_keys():
+    assert utils.dicts_take_intersecting_keys({}, {}) == ({}, {})
+    assert utils.dicts_take_intersecting_keys({1: {2: 3}}, {1: {2: 6, 4: 5}}) ==\
+            ({1: {2: 3}}, {1: {2: 6}})

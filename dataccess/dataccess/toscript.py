@@ -3,7 +3,7 @@ import re
 import os
 import inspect
 import time
-from output import rprint
+from output import log
 # relative path of autoscripts directory
 AUTOSCRIPT_DIR = 'autoscripts/'
 
@@ -54,7 +54,7 @@ def makescript(sourcefile, target_command, cache_path, mode = 'interactive'):
         sourcelist = [line[4:] for line in inspect.getsource(f).split('\n')
             if (line and '@' not in line)]
         f_code = '\n'.join(sourcelist)
-        rprint( f_code)
+        log( f_code)
         with open(sourcefile, 'r') as sourcef:
             file_code = sourcef.readlines()
             #print file_code
@@ -72,7 +72,7 @@ def makescript(sourcefile, target_command, cache_path, mode = 'interactive'):
                 funcall_string = name + '(' + argstring + ')'
             with open(autoscript_name, 'w') as script:
                 script.write(filtered_file_code + '\n' + funcall_string)
-            rprint( target_command % autoscript_name)
+            log( target_command % autoscript_name)
             return target_command % autoscript_name
 #            time.sleep(1)
 #            os.system(target_command % autoscript_name)

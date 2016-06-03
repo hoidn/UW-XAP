@@ -5,6 +5,9 @@ Functions for controlling logging and other output.
 from __future__ import print_function
 import os
 import config
+import logging
+
+logging.basicConfig(filename = config.logfile_path, level = logging.DEBUG)
 
 class conditional_decorator(object):
     """
@@ -59,12 +62,13 @@ def stdout_to_file(path = None):
         return new_func
     return decorator
 
-@conditional_decorator(stdout_to_file(path = config.logfile_path), config.stdout_to_file)
+#@conditional_decorator(stdout_to_file(path = config.logfile_path), config.stdout_to_file)
 @conditional_decorator(ifroot, config.suppress_root_print)
-def rprint(*args):
+def log(*args):
     def newargs():
         if config.stdout_to_file:
             return ('PID ', os.getpid(), ': ') + args
         else:
             return args
-    print(*newargs())
+    logging.info(' '.join(map(str, args)))
+    #print(*newargs())

@@ -1,4 +1,3 @@
-
 import os
 import config
 import numpy as np
@@ -8,7 +7,7 @@ import utils
 import query
 
 import playback
-from output import rprint
+from output import log
 
 # TODO: refactor this
 if config.plotting_mode == 'notebook':
@@ -32,8 +31,11 @@ def plot_hist(arr1d, xlabel = '', ylabel = '', label = '', title = '', show = Tr
         plt.show()
 
 @utils.ifplot
-def plot_scatter(x, y, xlabel = '', ylabel = '', title = '', show = True):
-    plt.scatter(x, y)
+def plot_scatter(x, y, xlabel = '', ylabel = '', title = '', show = True, **kwargs):
+    """
+    kwargs are passed through to plt.scatter.
+    """
+    plt.scatter(x, y, **kwargs)
     if xlabel:
         plt.xlabel(xlabel)
     if ylabel:
@@ -87,7 +89,8 @@ def get_normalized(arr1d):
     """
     return (arr1d - np.mean(arr1d)) / np.std(arr1d)
 
-def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = False, show = True):
+def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = False,
+        show = True, **kwargs):
     """
     Generate a scatter plot of values returned by eventgetter1 and eventgetter2
     for all events in dataset. Returns two 1d np.ndarrays.
@@ -97,6 +100,8 @@ def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = 
     detid_function_1, detid_function_2 : tuples
         Of format (detector id, function) -> (str, function), denoting a pair of detector
         ID and function with which to evaluate event data.
+    
+    kwargs are passed through to plt.scatter (if show == True)
     """
     def get_DataSet_instance(ds):
         if isinstance(ds, query.DataSet):
@@ -108,18 +113,32 @@ def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = 
     detid2, eventgetter2 = detid_function_2
     dataset = get_DataSet_instance(dataset_identifier)
 
-    def get_event_values(event_data_getter, detid):
-        raw = dataset.evaluate(detid, event_data_getter = event_data_getter).flat_event_data()
-        if normalize:
-            return get_normalized(raw)
-        return raw
+    def get_datarun(event_data_getter, detid):
+        return dataset.evaluate(detid, event_data_getter = event_data_getter)
 
     def make_label(event_data_getter, detid):
         return "Function: %s; detector: %s" % (event_data_getter.__name__, detid)
 
-    data1, data2 = map(get_event_values, [eventgetter1, eventgetter2], [detid1, detid2])
+    def delete_mismatching(dr1, dr2):
+        """
+        Return DataRun instances containing only the intersection of events
+        in dr1 and dr2.
+        """
+        if dr1.nevents() != dr2.nevents():
+            log("Warning: missing events will be dropped.")
+        return dr1.matching_flat_event_data(dr2), dr2.matching_flat_event_data(dr1)
+
+    def get_event_values(datarun):
+        raw = datarun.flat_event_data()
+        if normalize:
+            return get_normalized(raw)
+        return raw
+
+    data1, data2 = delete_mismatching(
+            *map(get_datarun, [eventgetter1, eventgetter2], [detid1, detid2]))
     xlabel, ylabel = map(make_label, [eventgetter1, eventgetter2], [detid1, detid2])
-    plot_scatter(data1, data2, xlabel = xlabel, ylabel = ylabel, title = dataset.label, show = show)
+    plot_scatter(data1, data2, xlabel = xlabel, ylabel = ylabel,
+            show = show, **kwargs)
     return data1, data2
     
 
