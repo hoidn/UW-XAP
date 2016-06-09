@@ -1,0 +1,3 @@
+[submodule "dataccess/dataccess/mpl_plotly"]
+	path = dataccess/dataccess/mpl_plotly
+	url = https://github.com/hoidn/mpl_plotly
