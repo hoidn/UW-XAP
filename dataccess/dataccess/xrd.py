@@ -417,7 +417,10 @@ def interp_2d_nearest_neighbor(imarray, detid, smoothing = DEFAULT_SMOOTHING):
     z = imarray.flatten()
 
     z_good = np.where(z != 0)[0]
-    resampled = griddata(np.array([x[z_good], y[z_good]]).T, z[z_good], (gridx, gridy), method = 'nearest')
+    if len(z_good) > 0:
+        resampled = griddata(np.array([x[z_good], y[z_good]]).T, z[z_good], (gridx, gridy), method = 'nearest')
+    else:
+        resampled = imarray
     smoothed = gaussian_filter(resampled, smoothing)
     return smoothed, resampled
 
@@ -445,13 +448,16 @@ def CTinterpolation(imarray, detid, smoothing = 10):
         # flattened values of all pixels
         z = imarray.flatten()
         z_good = np.where(z != 0)[0]
-        x, y = gridx.flatten(), gridy.flatten()
-        xgood, ygood = x[z_good], y[z_good]
+        if len(z_good) == 0:
+            return np.zeros_like(imarray)
+        else:
+            x, y = gridx.flatten(), gridy.flatten()
+            xgood, ygood = x[z_good], y[z_good]
 
-        points = np.vstack((xgood, ygood)).T
-        values = z[z_good]
-        interpolator = ct(points, values)
-        return interpolator(x, y).reshape(imarray.shape)
+            points = np.vstack((xgood, ygood)).T
+            values = z[z_good]
+            interpolator = ct(points, values)
+            return interpolator(x, y).reshape(imarray.shape)
 
     # Input to the CT interpolation is a smoothed NN interpolation
     # This pre-interpolation step, combined with a sufficiently large value of
@@ -468,6 +474,7 @@ def CTinterpolation(imarray, detid, smoothing = 10):
 def subtract_background(imarray, detid, order = 5, resize_function = trim_array, mutate = True):
     resized = resize_function(imarray)
     size = min(resized.shape)
+    
     background = CTinterpolation(imarray, detid, order = order, resize_function = resize_function)
     if mutate:
         if resize_function == pad_array:

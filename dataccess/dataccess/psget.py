@@ -234,14 +234,14 @@ def get_area_detector_subregion(quad, det, evt, detid):
         ped.shape = (4, 8, 185, 388)
         pedq = ped[quad,:]
 # TODO: should we keep chip-level correction disabled?
-#        try:
-#            chip_correction = config.chip_level_correction
-#        except AttributeError, e:
-#            raise utils.ConfigAttributeError(str(e))
-#        if chip_correction:
-#            for chip_pedestal, chip_nda in zip(pedq, ndaq):
-#                offset = np.percentile(chip_nda, 45) - np.mean(chip_pedestal)
-#                chip_pedestal += offset
+        try:
+            chip_correction = config.chip_level_correction
+        except AttributeError, e:
+            raise utils.ConfigAttributeError(str(e))
+        if chip_correction:
+            for chip_pedestal, chip_nda in zip(pedq, ndaq):
+                offset = np.percentile(chip_nda, 45) - np.mean(chip_pedestal)
+                chip_pedestal += offset
         #print_ndarr(ndaq, 'nda[%d,:]'%quad)
 
         # reconstruct image for quad
@@ -364,14 +364,17 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
             except AttributeError:
                 continue
             if increment is not None:
+                # TODO: modify the non-smd version of this function so that mutation
+                # of increment by event_data_getter carries through in the same way
+                # (or better yet, refactor so that this current code is reused).
+                if event_data_getter:
+                    event_data[nevent] = event_data_getter(increment, run = runNum,
+                        nevent = nevent)
                 try:
                     signalsum += increment
                 except UnboundLocalError:
                     signalsum = np.zeros_like(increment).astype('float')
                     signalsum += increment
-                if event_data_getter:
-                    #event_data.append(event_data_getter(increment))
-                    event_data[nevent] = event_data_getter(increment, run = runNum, nevent = nevent)
                 events_processed += 1
             if nevent % 100 == 0:
                 now = time()

@@ -4,7 +4,6 @@ import sys
 import argparse
 import numpy as np
 import math
-import matplotlib.pyplot as plt
 import matplotlib as mp
 import os
 import pandas as pd
@@ -20,6 +19,12 @@ import playback
 import pdb
 from scipy.ndimage.filters import gaussian_filter as filt
 from output import log
+
+import config
+if config.plotting_mode == 'notebook':
+    from dataccess.mpl_plotly import plt
+else:
+    import matplotlib.pyplot as plt
 
 # TODO: use the same data extractor as in xrd.py
 
@@ -361,7 +366,9 @@ def plot_spectra(spectrumList, labels, scale_ev, eltname = ''):
     elist = spectrumList[0][0]
     max_intensity = np.max(map(lambda x: x[1], spectrumList))
     plt.plot(elist, spectrumList[0][1], label = labels[0])
-    plt.axhline(y=0, color = "black")
+    # TODO: fix this
+    #plt.plot([0, 0], [0, max_intensity], color = 'black')
+    #plt.axhline(y=0, color = "black")
     #plt.title(eltname + " XES")
 
     #add vertical lines to identify peaks within observed range
@@ -374,7 +381,8 @@ def plot_spectra(spectrumList, labels, scale_ev, eltname = ''):
                 plt.plot( [emission_dict()[eltname][line], emission_dict()[eltname][line]],
                     [(-0.05)*max_intensity, (txtheight[line])*max_intensity],
                     color = "gray")
-                plt.text(emission_dict()[eltname][line]+txtshift[line], (txtheight[line])*max_intensity, lineidforplot[line], size="large")
+                # TODO: implement text annotations in mpl_plotly.
+                #plt.text(emission_dict()[eltname][line]+txtshift[line], (txtheight[line])*max_intensity, lineidforplot[line], size="large")
 
     colorlist = 4 * ["orange", "green", "purple", "red", "brown", "black"]
     ncolors = len(colorlist)
@@ -384,11 +392,12 @@ def plot_spectra(spectrumList, labels, scale_ev, eltname = ''):
 
     plt.legend()
     if scale_ev:
-        plt.xlabel("Energy (eV)", size="large")
+        plt.xlabel("Energy (eV)")#, size="large")
     else:
-        plt.xlabel("pixel index", size="large")
-    plt.ylabel("Counts", size="large")
-    plt.ylim((0, 1.15 * max_intensity))
+        plt.xlabel("pixel index")#, size="large")
+    plt.ylabel("Counts")#, size="large")
+    # TODO: implement this for mpl_plotly
+    # plt.ylim((0, 1.15 * max_intensity))
     if eltname:
         name = 'plots_xes/' + '_'.join(labels) + '_' + eltname
     else:
@@ -452,7 +461,7 @@ def get_plotinfo_one_label(detid, label, get_spectrum_partial,
     return spectrumList, labels
 
 
-def main(detid, data_identifiers, event_indices = None, number_events = None,
+def spectrum(detid, data_identifiers, event_indices = None, number_events = None,
         cold_calibration_label = None,
         pxwidth = 3, calib_load_path = None, calib_save_path = None,
         dark_label = None, energy_ref1_energy_ref2_calibration = True,

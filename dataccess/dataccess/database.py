@@ -17,7 +17,7 @@ mecana's modules, for storing logging spreadsheet data, for caching mecana's
 outputs, and for inserting and accessing derived datasets.
 """
 
-MONGO_HOST = 'pslogin01'
+MONGO_HOST = 'pslogin02'
 MONGO_PORT = 4040
 if config.testing:
     collection_prefix = config.expname + 'testing'

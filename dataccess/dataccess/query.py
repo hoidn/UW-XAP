@@ -16,6 +16,7 @@ from recordclass import recordclass
 from output import log
 import pdb
 import functools
+from copy import deepcopy
 
 
 def query_generic(attribute, value_test_func):
@@ -188,6 +189,12 @@ class DataSet(object):
         if not all(isinstance(r, int) for r in label_dict['runs']):
             raise ValueError("Elements of label_dict['runs'] must be integers.")
         return cls(label_dict['runs'], label = label)
+
+#    @classmethod
+#    def from_dataset(cls, dataset, event_filter, event_filter_detid):
+#        """
+#        Construct a new DataSet instance from the current one
+#        new = copy
 
     def get_attribute(self, attribute):
         """
@@ -369,12 +376,12 @@ def main(query_string_list, event_filter = None, event_filter_detid = None, labe
     # wraps mecana.py.
     # LK20-specific: allow filtering based range of values of the 'delay' attribute,
     # which is evaluated using xtcav.py
+    if not label:
+        label = '_'.join(query_string_list)
     if 'delay' in query_string_list:
         delay_index = query_string_list.index('delay')
         delay_min, delay_max = query_string_list[delay_index + 1], query_string_list[delay_index + 2]
         query_string_list = query_string_list[:delay_index] + query_string_list[delay_index + 3:]
-    if not label:
-        label = '_'.join(query_string_list)
     materials_ref_match_dict = {
         "Fe3O4": r"Fe.*O(?!.*HEF)",
         "Fe3O4HEF": r"Fe.*O.*HEF",

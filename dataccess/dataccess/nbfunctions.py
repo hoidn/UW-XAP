@@ -211,21 +211,31 @@ class Bqueue:
         """
         return self.number_pending()/Bqueue.sizes[self.name]
 
-def best_queue(usable_queues):
+usable_queues = map(Bqueue, config.queues)
+
+def best_queue():
     """Return the name of the least-subscribed batch queue"""
     return min(usable_queues, key = lambda q: q.key())
 
-usable_queues = map(Bqueue, ('psanaq', 'psfehq', 'psnehq'))
 
-def preprocess_one(run_number, cores = 1):
-    os.system(r'bsub -a mympi -n {0} -q {1} -o batch_logs/%J.log mecana.py -n datashow quad2 {2}'.format(cores, best_queue(usable_queues), run_number))
+def preprocess_run(run_number, cores = 1, detid = 'quad2'):
+    cmd = r'bsub -n {0} -o batch_logs/%J.log -q {1} mpirun mecana.py -n datashow {2} {3}'.format(cores, best_queue().name, detid, run_number)
+
+    #cmd = r'bsub -a mympi -n {0} -q {1} -o batch_logs/%J.log mecana.py -n datashow {2} {3}'.format(cores, best_queue(), detid, run_number)
+    print 'submitting: %s' % cmd
+    os.system(cmd)
+
+def preprocess_dataset(dataset, detid, cores = 1):
+    [preprocess_run(run, cores = cores, detid = detid)
+        for run
+        in dataset.runs]
     
 def preprocess_xrd(ds, cores = 1):
-    [preprocess_one(run) for run in ds.runs]
+    [preprocess_run(run) for run in ds.runs]
     os.system(r'bsub -a mympi -n {0} -q {1} -o batch_logs/%J.log mecana.py -n xrd quad2 -l {2} -n peak -b'.format(
-              cores, best_queue(usable_queues), ds.label))
+              cores, best_queue(), ds.label))
 
-def preprocess_dataset(ds, detid, event_data_getter_name = '', ncores = 1):
+def preprocess_histogram(ds, detid, event_data_getter_name = '', ncores = 1):
     """
     ds: DataSet or string
     """
@@ -237,7 +247,7 @@ def preprocess_dataset(ds, detid, event_data_getter_name = '', ncores = 1):
     else:
         edg_opt = ''
     cmd = r'mecana.py -n histogram {0} {1}'.format(detid, ds.label) + edg_opt
-    batch_submit(cmd, ncores = ncores, queue = best_queue(usable_queues).name)
+    batch_submit(cmd, ncores = ncores, queue = best_queue().name)
 
 def get_run_strings(dslist):
     import operator

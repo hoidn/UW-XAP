@@ -14,4 +14,7 @@ suppress_root_print = True
 
 plotting_mode = 'console'
 
+# Available batch queues
+queues = ('psanaq', 'psfehq', 'psnehq')
+
 import matplotlib.pyplot as plt

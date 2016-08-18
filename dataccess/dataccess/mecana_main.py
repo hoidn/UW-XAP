@@ -48,7 +48,7 @@ def call_xes(args):
     else:
         number_events = None
     # plot summed spectra
-    xes_process.main(args.detid, labels, event_indices = args.events,
+    xes_process.spectrum(args.detid, labels, event_indices = args.events,
         cold_calibration_label = cold_calibration_label, pxwidth = pxwidth,
         calib_save_path = calibration_save_path, calib_load_path =
             calibration_load_path, dark_label = dark_label,
