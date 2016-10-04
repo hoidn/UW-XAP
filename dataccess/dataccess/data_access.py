@@ -19,6 +19,9 @@ import config
 import query
 from output import log
 
+from joblib import Memory
+memory = Memory(cachedir='cache/data_access/', verbose=0)
+
 # TODO: make logbook data not required for labels that can be parsed as run
 # ranges.
 
@@ -36,22 +39,6 @@ def get_dataset_attribute_map(label):
     except ValueError:
         return database.mongo_get_all_derived_datasets()[label]
 
-#def get_dataset_attribute_value(label, attribute):
-#    """
-#    Get the value of an attribute belonging to a dataset label. The dataset
-#    may be one defined in the logging spreadsheet, or it may be a derived
-#    dataset.
-#    """
-#    try:
-#        value = logbook.get_label_attribute(label, attribute)
-#        if isinstance(value, list):
-#            value = tuple(value)
-#        return value
-#    except (KeyError, ValueError, AttributeError), e:
-#        try:
-#            return database.get_derived_dataset_attribute(label, attribute)
-#        except KeyError, e2:
-#            raise KeyError("logbook.get_label_attribute(): %s\ndatabase.get_dataset_attribute_value(): %s" % (e, e2))
 
 def get_all_runs(exppath = config.exppath):
     """
@@ -75,9 +62,9 @@ def get_dataset(dataset_identifier):
     else:
         return dataset_identifier
 
-#@utils.eager_persist_to_file('cache/data_access/get_label_data/')
+#@memory.cache
 def eval_dataset(dataset_identifier, detid, event_data_getter = None, event_mask = None,
-        **kwargs):
+        dark_frame = None, **kwargs):
     """
     dataset_identifier : string or query.DataSet
         The dataset for which to get data. If this parameter is a string, it
@@ -104,7 +91,7 @@ def eval_dataset(dataset_identifier, detid, event_data_getter = None, event_mask
     return psget.get_signal_many_parallel(
         runList, detid, event_data_getter = event_data_getter,
         event_mask = event_mask, subregion_index = subregion_index,
-        **kwargs)
+        dark_frame =  dark_frame, **kwargs)
         #print "event data is: ", event_data
 
 def get_dark_dataset(dataset_identifier):
@@ -131,39 +118,49 @@ def get_dark_dataset(dataset_identifier):
     log( "using dark subtraction run: ", darklabel)
     return dark_dataset
 
-@utils.eager_persist_to_file('cache/data_access/eval_dataset_and_filter/')
-def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None):
+#@memory.cache
+@utils.eager_persist_to_file('cache/dataccess/epr')
+def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
+        darksub = True):
     """
     # TODO: update this. Make it clear that this function is the public interface.
     """
     dataset = get_dataset(dataset_identifier)
-    def get_filtered_unsubtracted():
-        # dataset.event_filter is a function that takes a np array and returns a boolean
-        if dataset.event_filter:
-            mask_result = eval_dataset(dataset, dataset.event_filter_detid,
-                    event_data_getter = dataset.event_filter)
-            # unpack elements of a DataResult instance
-            _, event_mask = mask_result
-            sum_true = sum(mask_result.flat_event_data())
-            log( "Event mask True entries: ", sum_true, "Total number of events: ", mask_result.nevents())
-            return eval_dataset(dataset, detid,
-                event_data_getter = event_data_getter, event_mask = event_mask)
+
+    def get_darkframe(detid):
+        if darksub:
+            try:
+                dark_dataset = get_dark_dataset(dataset)
+                bg_result =  eval_dataset(dark_dataset, detid)
+                return bg_result.mean
+                #return unsubtracted.bgsubtract(bg_result.mean)
+            except KeyError:
+                if utils.isroot():
+                    log( "No background label found")
+                return None
         else:
-            if utils.isroot():
-                log( "!!!!!!!!!!!!!!!!!!")
-                log( "Dataset %s: No event filter provided." % dataset.label)
-                log( "!!!!!!!!!!!!!!!!!!")
-            return eval_dataset(dataset, detid,
-                event_data_getter = event_data_getter)
-    unsubtracted = get_filtered_unsubtracted()
-    try:
-        dark_dataset = get_dark_dataset(dataset)
-        bg_result =  eval_dataset(dark_dataset, detid)
-        return unsubtracted.bgsubtract(bg_result.mean)
-    except KeyError:
+            return None
+
+    # dataset.event_filter is a function that takes a np array and returns a boolean
+    if dataset.event_filter:
+        mask_result = eval_dataset(dataset, dataset.event_filter_detid,
+                event_data_getter = dataset.event_filter,
+                dark_frame = get_darkframe(dataset.event_filter_detid))
+        # unpack elements of a DataResult instance
+        _, event_mask = mask_result
+        sum_true = sum(mask_result.flat_event_data())
+        log( "Event mask True entries: ", sum_true, "Total number of events: ", mask_result.nevents())
+        return eval_dataset(dataset, detid,
+            event_data_getter = event_data_getter, event_mask = event_mask,
+            dark_frame = get_darkframe(detid))
+    else:
         if utils.isroot():
-            log( "No background label found")
-        return unsubtracted
+            log( "!!!!!!!!!!!!!!!!!!")
+            log( "Dataset %s: No event filter provided." % dataset.label)
+            log( "!!!!!!!!!!!!!!!!!!")
+        return eval_dataset(dataset, detid,
+            event_data_getter = event_data_getter,
+            dark_frame = get_darkframe(detid))
 
 
 #def flux_constructor(label):

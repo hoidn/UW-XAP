@@ -17,8 +17,8 @@ def test_filter():
         return (not nevent % 2)
 
     # TODO: update this
-    ds1 = data_access.eval_dataset_and_filter('206', 'si', event_filter = filter1, event_filter_detid = 'si', event_data_getter = data_getter)
-    ds2 = data_access.eval_dataset_and_filter('206', 'si', event_filter = filter2, event_filter_detid = 'si', event_data_getter = data_getter)
+    ds1 = data_access.eval_dataset_and_filter('206', 'si', event_data_getter = data_getter)
+    ds2 = data_access.eval_dataset_and_filter('206', 'si',  event_data_getter = data_getter)
 
     ds3 = data_access.eval_dataset_and_filter('206', 'si', event_data_getter = data_getter)
     assert ds1.nevents() + ds2.nevents() == ds3.nevents()

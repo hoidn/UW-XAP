@@ -267,7 +267,8 @@ best_focus_size = 2.
 def sum_window(smin, smax):
     return lambda arr: smin < np.sum(arr) < smax
 
-testing = True
+testing = False
 # TODO: fix playback mode
 playback = False
 stdout_to_file = False
+chip_level_correction = False

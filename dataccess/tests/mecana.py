@@ -1,1 +1,1 @@
-/reg/neh/home2/ohoidn/venv_test/mecana2/bin/mecana.py
+/reg/neh/home/ohoidn/venv_test/mecana2/bin/mecana.py

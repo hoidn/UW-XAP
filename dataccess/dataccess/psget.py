@@ -127,9 +127,9 @@ from pathos.multiprocessing import ProcessingPool
 XTC_DIR = '/reg/d/psdm/' + config.exppath + '/xtc/'
 
 
-@utils.eager_persist_to_file("cache/get_signal_one_run/")
+#@utils.eager_persist_to_file('cache/psget/gsor')
 def get_signal_one_run(runNum, detid = 1, sigma_max = 1000.0,
-event_data_getter = None, event_mask = None, **kwargs):
+    event_data_getter = None, event_mask = None, **kwargs):
     # TODO: remove sigma_max discrimination
     if detid in config.nonarea:
         return get_signal_one_run_nonarea(runNum, detid,
@@ -237,7 +237,11 @@ def get_area_detector_subregion(quad, det, evt, detid):
         try:
             chip_correction = config.chip_level_correction
         except AttributeError, e:
-            raise utils.ConfigAttributeError(str(e))
+            log (str(e))
+            raise
+               
+#        except AttributeError, e:
+#            raise utils.ConfigAttributeError(str(e))
         if chip_correction:
             for chip_pedestal, chip_nda in zip(pedq, ndaq):
                 offset = np.percentile(chip_nda, 45) - np.mean(chip_pedestal)
@@ -252,11 +256,14 @@ def get_area_detector_subregion(quad, det, evt, detid):
         return new
     else:
         if 'Cspad' in config.detinfo_map[detid].device_name:
-            return det.image(evt)
+            increment = det.image(evt)
         else:
-            return det.raw(evt)
-
-@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_event_data_nonarea')
+            increment = det.raw(evt)
+        if increment is not None:
+            return increment.astype('float')
+        else:
+            return increment
+#@utils.eager_persist_to_file('cache/psget/gedn')
 def get_event_data_nonarea(runNum, detid, **kwargs):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
@@ -294,7 +301,7 @@ def get_event_data_nonarea(runNum, detid, **kwargs):
             raise ValueError("Not a valid non-area detector")
     return reduce(lambda x, y: x + y, comm.allgather(det_values))
 
-#@utils.eager_persist_to_file('cache/avg_bgsubtract_hdf/get_signal_one_run_nonarea')
+#@memory.cache
 def get_signal_one_run_nonarea(runNum, detid,
         event_data_getter = None, event_mask = None, **kwargs):
     def event_valid(nevent):
@@ -326,9 +333,10 @@ def get_signal_one_run_nonarea(runNum, detid,
 
 
 # TODO: more testing and refactor all of this!
-@utils.eager_persist_to_file("cache/get_signal_one_run_smd_area/")
+#@utils.eager_persist_to_file('cache/psget/gsorsa')
 def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
-        event_data_getter = None, event_mask = None, **kwargs):
+        event_data_getter = None, event_mask = None, frame_processor = None,
+        dark_frame = None, **kwargs):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     def event_valid(nevent):
@@ -360,8 +368,18 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         if event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             try:
-                increment = get_area_detector_subregion(subregion_index, det, evt, detid, **kwargs)
+                increment = get_area_detector_subregion(subregion_index, det, evt,
+                    detid, **kwargs)
+                if dark_frame is not None:
+#                    print 'dark: ', dark_frame
+#                    print 'increment: ', increment
+                    increment -= dark_frame#.astype('uint16')
+                    #print "subtracting dark frame"
+                if frame_processor is not None:
+                    increment = frame_processor(increment)
+                    print "processing frame"
             except AttributeError:
+                #raise
                 continue
             if increment is not None:
                 # TODO: modify the non-smd version of this function so that mutation
@@ -404,7 +422,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum) + ": " + str(events_processed))
 
 
-#@utils.eager_persist_to_file("cache/get_signal_one_run_smd/")
+#@memory.cache
 def get_signal_one_run_smd(runNum, detid, subregion_index = -1,
         event_data_getter = None, event_mask = None, **kwargs):
     if detid in config.nonarea:
@@ -416,7 +434,8 @@ def get_signal_one_run_smd(runNum, detid, subregion_index = -1,
 
 
 
-@utils.eager_persist_to_file("cache/get_signal_many_parallel/")
+#@memory.cache
+@utils.eager_persist_to_file('cache/psget/gsmp')
 def get_signal_many_parallel(runList, detid, event_data_getter = None,
     event_mask = None, **kwargs):
     """
@@ -436,11 +455,11 @@ def get_signal_many_parallel(runList, detid, event_data_getter = None,
         run_data = []
         exceptions = []
         for run in runList:
-            try:
-                run_data.append(mapfunc_smd(run))
-            except ValueError, e:
-                exceptions.append(e)
-                log( "WARNING: ", e)
+            #try:
+            run_data.append(mapfunc_smd(run))
+#            except ValueError, e:
+#                exceptions.append(e)
+#                log( "WARNING: ", e)
         if not run_data:
             if not exceptions:
                 msg = 'No runs found'
