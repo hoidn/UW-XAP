@@ -121,7 +121,7 @@ def get_dark_dataset(dataset_identifier):
 #@memory.cache
 @utils.eager_persist_to_file('cache/dataccess/epr')
 def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
-        darksub = True):
+        darksub = True, frame_processor = None):
     """
     # TODO: update this. Make it clear that this function is the public interface.
     """
@@ -152,7 +152,8 @@ def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
         log( "Event mask True entries: ", sum_true, "Total number of events: ", mask_result.nevents())
         return eval_dataset(dataset, detid,
             event_data_getter = event_data_getter, event_mask = event_mask,
-            dark_frame = get_darkframe(detid))
+            dark_frame = get_darkframe(detid), frame_processor =
+            frame_processor)
     else:
         if utils.isroot():
             log( "!!!!!!!!!!!!!!!!!!")
@@ -160,7 +161,8 @@ def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
             log( "!!!!!!!!!!!!!!!!!!")
         return eval_dataset(dataset, detid,
             event_data_getter = event_data_getter,
-            dark_frame = get_darkframe(detid))
+            dark_frame = get_darkframe(detid), frame_processor =
+            frame_processor)
 
 
 #def flux_constructor(label):

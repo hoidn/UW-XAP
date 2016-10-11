@@ -24,21 +24,6 @@ def test_get_label_data():
     filtered = data.eval_dataset(d_filtered.label, 'si')
     return unfiltered, filtered
 
-#def test_get_dataset_attribute_value():
-#    query.existing_dataset_by_label('label-evaltest-transmission-0.1').get_attribute('transmission') ==\
-#        0.1
-## TODO: fix regex handling (i.e. the below test case again)
-#    query.existing_dataset_by_label('label-e.*est-transmission-0.1').get_attribute('transmission') ==\
-#        0.1
-#    query.existing_dataset_by_label('evaltest').get_attribute('transmission') ==\
-#        0.1
-#    query.existing_dataset_by_label('fe3o4lab1').get_attribute('runs') ==\
-#        (608, 609, 610, 611, 612, 613, 614, 615, 616, 617, 618, 619, 607)
-#    query.existing_dataset_by_label('620').get_attribute('runs') ==\
-#        (620,)
-## TODO: fix this as well
-#    query.existing_dataset_by_label('205-206').get_attribute('runs') ==\
-#        (205, 206)
 
 def test_get_dark_data():
     time.sleep(4)

@@ -13,7 +13,12 @@ def consolidate_peaks(nda, winds = None, mask = None, thr_low = 10, thr_high = 1
         to its center of mass position in the output array. 
         """
         value = pk['amp_total'] - pk['npix'] * pk['bkgd']
-        output[pk['row_cgrav']][pk['col_cgrav']] = value
+        i, j = pk['row_cgrav'], pk['col_cgrav']
+        def peak_valid():
+            n, m = np.shape(nda)
+            return (n > i >= 0 and m > j >= 0)
+        if peak_valid():
+            output[i][j] = value
 
     from ImgAlgos.PyAlgos import PyAlgos
     if mask is not None:

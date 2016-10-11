@@ -45,4 +45,22 @@ def test_main_3():
     ds2 = query.main('material Fe3O4'.split())
     ds3 = ds.union(ds2, 'foo')
     assert len(ds3.runs) == len(ds.runs) + len(ds2.runs)
-    
+
+
+def test_evaluate():
+    from dataccess import utils
+    from dataccess import query
+    from dataccess import peakfinder
+    import numpy as np
+    def filt2(arr, thr_low = 5, thr_high = 50):
+	base = np.median(arr)
+	return peakfinder.consolidate_peaks(arr, thr_low = base + thr_low,
+	    thr_high = base + thr_high)
+    def filt3(arr, thr_low = 5, thr_high = 50):
+	base = np.median(arr)
+	return peakfinder.consolidate_peaks(arr, thr_low = base + thr_low,
+	    thr_high = base + thr_high)
+    r567 = query.DataSet([567], label = 'r567')
+    q1 = r567.evaluate('quad2', frame_processor = filt2)
+    q2 = r567.evaluate('quad2', frame_processor = filt3)
+    assert utils.hash_obj(q1) != utils.hash_obj(q2)

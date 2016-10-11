@@ -223,6 +223,9 @@ def get_area_detector_subregion(quad, det, evt, detid):
 
         nda = det.raw(evt)
         ped = det.pedestals(evt)
+        # documentation: https://confluence.slac.stanford.edu/display/
+        # PSDM/Common+mode+correction+algorithms
+        cm = det.common_mode_correction(evt, nda - ped, [5, 50])
 
         #print 'Consumed time = %7.3f sec' % (time()-t0_sec)
         #print_ndarr(nda, 'raw')
@@ -230,6 +233,9 @@ def get_area_detector_subregion(quad, det, evt, detid):
         # get intensity array for quad, shape=(8, 185, 388)
         nda.shape = (4, 8, 185, 388)
         ndaq = nda[quad,:]
+
+        cm.shape = nda.shape
+        cmq = cm[quad,:]
         
         ped.shape = (4, 8, 185, 388)
         pedq = ped[quad,:]
@@ -251,8 +257,11 @@ def get_area_detector_subregion(quad, det, evt, detid):
         # reconstruct image for quad
         img = img_from_pixel_arrays(iX, iY, W=ndaq)
         bg = img_from_pixel_arrays(iX, iY, W=pedq)
+        #pdb.set_trace()
+        common = img_from_pixel_arrays(iX, iY, W=cmq)
+
         new = np.empty_like(img)
-        new[:] = (img - bg)
+        new[:] = (img - (bg - common))
         return new
     else:
         if 'Cspad' in config.detinfo_map[detid].device_name:
@@ -377,7 +386,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
                     #print "subtracting dark frame"
                 if frame_processor is not None:
                     increment = frame_processor(increment)
-                    print "processing frame"
+                    log( "processing frame")
             except AttributeError:
                 #raise
                 continue

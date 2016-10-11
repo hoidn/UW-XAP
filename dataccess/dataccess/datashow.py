@@ -25,7 +25,7 @@ def identity(imarr):
     return imarr
 
 
-def one_plot(dataset, detid, path = None, masked = False, rmin = None, rmax = None, run = None, plot = True, show = True, fiducials = []):
+def one_plot(dataset, detid, path = None, masked = False, rmin = None, rmax = None, run = None, plot = True, show = True, fiducials = [], darksub = True):
     import utils
     def put_fiducials(imarray):
         try:
@@ -39,7 +39,7 @@ def one_plot(dataset, detid, path = None, masked = False, rmin = None, rmax = No
                 0., new)
         return new
     if run is None:
-        imarray, _ = data_access.eval_dataset_and_filter(dataset, detid)
+        imarray, _ = data_access.eval_dataset_and_filter(dataset, detid, darksub = darksub)
         imarray = imarray.T
         if masked:
             imarray = apply_default_masks(imarray, detid)
@@ -66,7 +66,6 @@ def show(datasets, detid, fiducials = [], **kwargs):
     result =\
         [one_plot(dataset, detid, show = True, fiducials = fiducials, **kwargs)
         for dataset in datasets]
-    #plt.show()
     return result
 
 def main(dataref_list, detid, fiducials = [], **kwargs):
