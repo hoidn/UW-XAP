@@ -222,6 +222,10 @@ def get_area_detector_subregion(quad, det, evt, detid):
         t0_sec = time()
 
         nda = det.raw(evt)
+        if nda is None:
+            msg = "get_area_detector_subregion: det.raw() returned None"
+            log (msg)
+            raise AttributeError(msg)
         ped = det.pedestals(evt)
         # documentation: https://confluence.slac.stanford.edu/display/
         # PSDM/Common+mode+correction+algorithms
@@ -385,9 +389,10 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
                     increment -= dark_frame#.astype('uint16')
                     #print "subtracting dark frame"
                 if frame_processor is not None:
+                    np.save('increment%d.npy' % nevent, increment)
                     increment = frame_processor(increment)
                     log( "processing frame")
-            except AttributeError:
+            except (AttributeError, TypeError) as e:
                 #raise
                 continue
             if increment is not None:

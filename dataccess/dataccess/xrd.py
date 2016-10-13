@@ -58,7 +58,7 @@ else:
 
 # default powder peak width, in degrees
 DEFAULT_PEAK_WIDTH = 1.5
-DEFAULT_SMOOTHING = 5.
+DEFAULT_SMOOTHING = 0.
 
 # hbar c in eV * Angstrom
 HBARC = 1973. 
@@ -139,7 +139,7 @@ def data_extractor(dataset, detid, apply_mask = True, event_data_getter = None, 
 
     #elif dataset.ref_type == 'label':
     imarray, event_data = data.eval_dataset_and_filter(dataset.dataref, detid,
-        event_data_getter = event_data_getter)
+        event_data_getter = event_data_getter, **kwargs)
     imarray = imarray.T
 
 #    else:
@@ -321,7 +321,7 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
 def process_dataset(dataset, nbins = 1000, verbose = True, fiducial_ellipses = None,
         bgsub = True, **kwargs):
     def process_one_detid(detid):
-        imarray = dataset.get_array(detid)#data_extractor(dataset, **kwargs)
+        imarray = dataset.get_array(detid, **kwargs)#data_extractor(dataset, **kwargs)
         return process_imarray(detid, imarray,
             fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
             compound_list = dataset.compound_list, **kwargs)
@@ -598,7 +598,8 @@ def plot_patterns(ax, normalized_patterns, labels, label_angles = None, show = F
         f, ax = plt.subplots(1)
     combined = map(lambda x, y: x + [y], normalized_patterns, labels)
     for angles, intensities, label in combined:
-        ax.plot(angles, intensities, label = label)
+	dthet = (np.max(angles) - np.min(angles))/len(angles)
+        ax.plot(angles, gaussian_filter(intensities, 0.05/dthet), label = label)
     if label_angles is not None and len(label_angles) > 0:
         for ang in filter(lambda a: np.min(angles) < a < np.max(angles), label_angles):
             ax.plot([ang, ang], [np.min(intensities), np.max(intensities)], color = 'black')
@@ -623,7 +624,8 @@ def get_normalized_patterns(datasets, patterns, labels, normalization = None, **
         return [pattern[0], pattern[1] / norm]
     return [normalize_pattern(p, n) for p, n in zip(patterns, norm_array)]
 
-def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all', ax = None, logscale = True, show = False):
+def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_progression, labels, maxpeaks = 'all', ax = None, logscale = True, show = False, inner_normalization = True, **kwargs):
+    output = []
     log( "normalized progression ", normalized_progression)
     if maxpeaks != 'all':
         intensity_reference = progression[:, 0]
@@ -635,8 +637,14 @@ def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_p
             f, ax = plt.subplots(1)
         if logscale:
             ax.set_xscale('log')
-        for label, curve in zip(map(str, powder_angles[goodpeaks]), normalized_progression[goodpeaks]):
-            ax.plot(label_fluxes, curve, label = label)
+	if inner_normalization:
+	    for label, curve in zip(map(str, powder_angles[goodpeaks]), normalized_progression[goodpeaks]):
+		ax.plot(label_fluxes, curve, label = label)
+		output.append(curve)
+	else:
+	    for label, curve in zip(map(str, powder_angles[goodpeaks]), progression[goodpeaks]):
+		ax.plot(label_fluxes, curve, label = label)
+		output.append(curve)
         plt.legend()
         ax.set_xlabel('Flux density (J/cm^2)')
         ax.set_ylabel('Relative Bragg peak intensity')
@@ -644,6 +652,7 @@ def plot_peak_progression(powder_angles, label_fluxes, progression, normalized_p
         if show:
             plt.show()
     plotting(ax)
+    return output
 
 #def plot_peak_progression2(powder_angles, label_fluxes, progression, normalized_progression):
 #    print "normalized progression ", normalized_progression
@@ -887,7 +896,7 @@ def process_all(detid_list, data_identifiers, labels, mode = 'label',
     datasets = [Dataset(dataref, mode, detid_list, compound_list) for dataref in data_identifiers]
     patterns, imarrays =\
         proc_all_datasets(datasets, fiducial_ellipses = fiducial_ellipses,
-        bgsub = bgsub)
+        bgsub = bgsub, **kwargs)
     normalized_patterns =\
         get_normalized_patterns(datasets, patterns, data_identifiers,
         normalization = normalization, bgsub = bgsub, **kwargs)
@@ -906,7 +915,8 @@ class XRD:
     """
     def __init__(self, detid_list, data_identifiers, ax = None, bgsub = False, mode = 'label',
         peak_progression_compound = None, compound_list = [], 
-        plot_progression = False, plot_peakfits = False, **kwargs):
+        plot_progression = False, plot_peakfits = False, show_image = True, **kwargs):
+        #pdb.set_trace()
 
         if plot_peakfits and not ax:
             _, self.ax = plt.subplots()
@@ -943,6 +953,9 @@ class XRD:
 #            utils.save_data(normalized_pattern[0], list(normalized_pattern[1]), path)
 #            # TODO: imarray should not be background-subtracted but it appears that it is.
 #            utils.save_image('xrd_detector_images/' + label + '_' + str(detid) + 'masked_summed.png', imarray.tolist())
+	if show_image:
+	    for im, lab in zip(imarrays, labels):
+		utils.show_image(im, title = lab)
         if not peak_progression_compound and compound_list:
             peak_progression_compound = compound_list[0]
 
@@ -966,9 +979,9 @@ class XRD:
     def plot_progression(self, ax = None, maxpeaks = 6, show = False, **kwargs):
         if ax is None:
             fig, ax = plt.subplots()
-        plot_peak_progression(self.powder_angles, self.label_fluxes, self.progression,
+        return plot_peak_progression(self.powder_angles, self.label_fluxes, self.progression,
             self.normalized_progression, self.labels, maxpeaks = maxpeaks, ax = ax,
-            show = show)
+            show = show, **kwargs)
 
     def get_patterns(self):
         return self.patterns
@@ -984,13 +997,15 @@ def plot_progressions(detid, dataset_groups, **kwargs):
 
     kwargs are passed to XRD and plot_progression
     """
+    output = []
     fig, ax = plt.subplots()
     for ds_list in dataset_groups:
         xrd = XRD(detid_list, data_identifiers, plot_progression = True, **kwargs)
-        xrd.plot_progression(ax = ax, **kwargs)
+        output.append[xrd.plot_progression(ax = ax, **kwargs)]
     # TODO: use utils.global_save_and_show. What filename convention?
     #utils.global_save_and_show('xrd_plot/' + '_'.join(detid_list) + '_'.join(labels) + '.png')
     plt.show()
+    return output
 
 def main(detid_list, data_identifiers, mode = 'labels', plot = True, plot_progression = False, maxpeaks = 6, **kwargs):
     if mode == 'array':

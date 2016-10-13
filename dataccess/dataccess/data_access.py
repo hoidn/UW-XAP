@@ -121,7 +121,7 @@ def get_dark_dataset(dataset_identifier):
 #@memory.cache
 @utils.eager_persist_to_file('cache/dataccess/epr')
 def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
-        darksub = True, frame_processor = None):
+        darksub = True, frame_processor = None, **kwargs):
     """
     # TODO: update this. Make it clear that this function is the public interface.
     """
