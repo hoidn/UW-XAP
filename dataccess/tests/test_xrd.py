@@ -61,3 +61,12 @@ config.noplot = True
 def test_xrd_process_imarray():
     arr = np.zeros((819, 819))
     xrd.process_imarray('quad2', arr, compound_list = ['MgO'], pre_integration_smoothing = 0.)
+
+
+def test_peak_sizes():
+    def my_200_array(arr, bgsub = False, **kwargs):
+        dss = xrd.Dataset(arr, 'array', ['quad2'], ['MgO'])
+        angles, intensities, _ = xrd.process_dataset(dss, bgsub = bgsub)
+        return xrd.peak_sizes(angles, intensities, dss.compound_list[0])
+    tarr = np.ones((819, 819))
+    assert np.all(np.isclose(my_200_array(tarr),  [  0.,          0.,         66.7233081]))

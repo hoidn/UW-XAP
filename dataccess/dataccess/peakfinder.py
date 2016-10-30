@@ -1,3 +1,4 @@
+import pdb
 import numpy as np
 
 peak_attrs = ['seg', 'row', 'col', 'npix', 'amp_max', 'amp_total', 'row_cgrav', 'col_cgrav', 'raw_sigma', 'col_sigma', 'row_min', 'row_max', 'col_min', 'col_max', 'bkgd', 'noise', 'son']
@@ -6,13 +7,14 @@ def make_peak_dict(lst):
     return {k: v for k, v in zip(peak_attrs, lst)}
 
 def consolidate_peaks(nda, winds = None, mask = None, thr_low = 10, thr_high = 150, radius = 5, dr = 1.):
+    #pdb.set_trace()
     output = np.zeros_like(nda)
     def add_peak(pk):
         """
-        Add the total value of a peak (corrected for its background level)
-        to its center of mass position in the output array. 
+        Add the total value of a peak to its center of mass position in the
+        output array. 
         """
-        value = pk['amp_total'] - pk['npix'] * pk['bkgd']
+        value = pk['amp_total']# - pk['npix'] * pk['bkgd']
         i, j = pk['row_cgrav'], pk['col_cgrav']
         def peak_valid():
             n, m = np.shape(nda)

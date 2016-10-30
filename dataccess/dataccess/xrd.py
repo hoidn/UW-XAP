@@ -128,18 +128,17 @@ def data_extractor(dataset, detid, apply_mask = True, event_data_getter = None, 
 #    if dataset.array is not None:
 #        imarray, event_data = dataset.array, None
 #        # TODO fix the edge case where we want event data
-#    elif dataset.ref_type == 'array':
-#        # TODO reorganize this
-#        if not isinstance(dataset.dataref, np.ndarray):
-#            raise ValueError("ref_type inconsistent with type of dataref")
-#        imarray, event_data =  dataset.dataref.T, None
 #
 #    elif dataset.ref_type == 'path':
 #        imarray, event_data =  np.genfromtxt(dataset.dataref).T, None
 
     #elif dataset.ref_type == 'label':
-    imarray, event_data = data.eval_dataset_and_filter(dataset.dataref, detid,
-        event_data_getter = event_data_getter, **kwargs)
+    if dataset.ref_type == 'array':
+        imarray, event_data =  dataset.dataref, None
+
+    else:# Assume this is a DataSet instance
+        imarray, event_data = data.eval_dataset_and_filter(dataset.dataref, detid,
+            event_data_getter = event_data_getter, **kwargs)
     imarray = imarray.T
 
 #    else:
@@ -257,7 +256,7 @@ def binData(mi, ma, stepsize, valenza = True):
 #@utils.eager_persist_to_file("cache/xrd.process_imarray/")
 def process_imarray(detid, imarray, nbins = 1000, verbose = True,
         fiducial_ellipses = None, bgsub = True, compound_list = [],
-        pre_integration_smoothing = 1,
+        pre_integration_smoothing = 0,
         **kwargs):
     """
     Given a detector ID and assembeled CSPAD image data array, compute the
@@ -312,7 +311,7 @@ def process_imarray(detid, imarray, nbins = 1000, verbose = True,
     adjInten = np.nan_to_num((np.array(intenValue)/np.array(numPix)))
     
 #    if np.min(adjInten) < 0:
-#        print "WARNING: Negative values have been suppressed in final powder pattern (may indicate background subtraction with an inadequate data mask)."
+#        log( "WARNING: Negative values have been suppressed in final powder pattern (may indicate background subtraction with an inadequate data mask).")
 #        adjInten[adjInten < 0.] = 0.
     return XrdData(binangles, adjInten, imarray)
 
@@ -621,6 +620,7 @@ def get_normalized_patterns(datasets, patterns, labels, normalization = None, **
         norm_array = [1.] * len(datasets)
     log( "NORM", norm_array)
     def normalize_pattern(pattern, norm):
+        # TODO: fix this!
         return [pattern[0], pattern[1] / norm]
     return [normalize_pattern(p, n) for p, n in zip(patterns, norm_array)]
 
@@ -714,6 +714,10 @@ def peak_sizes(x, y, compound_name, peak_width = DEFAULT_PEAK_WIDTH, ax = None, 
         amp_approx = np.sum(y[i] - np.min(y[i])) * dx
         center = (peakmin + peakmax) / 2.
         best_values, xfit, yfit = peak_size_gaussian_fit(x[i], y[i], amp = amp_approx, cen = center, wid = 0.2)
+        # The fit values are sometimes inverted, for some reason
+        if best_values['amp'] < 0 and best_values['wid'] < 0:
+            best_values['amp'] = -best_values['amp']
+            best_values['wid'] = -best_values['wid']
         amplitude = best_values['amp']
         m, b = best_values['slope'], best_values['intercept']
         if ax and normalization:

@@ -92,8 +92,17 @@ def acquire_oauth2_credentials(secrets_file):
     
     auth_code = raw_input('Enter the authentication code: ')
     
+    return flow
+
+def input_oath2_credentials(flow, auth_code):
     credentials = flow.step2_exchange(auth_code)
     return credentials
+
+# TODO: test
+def save_oath2_credentials(flow, auth_code, path):
+    credentials = input_oath2_credentials(flow, auth_code)
+    with open(path, 'w') as f:
+        f.write(credentials.to_json())
 
 # utility functions
 def prefix_add(*args):

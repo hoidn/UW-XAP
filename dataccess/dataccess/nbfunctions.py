@@ -53,14 +53,16 @@ def run_xrd(query_labels, optionstring = '', bsub = False, queue = 'psfehq'):
         #%px %run mecana.py -n xrd quad2 -l $labelstring $optionstring
         from dataccess import xrd
         ipython.magic("run %s %s %s" % (prefix_sc, labelstring, optionstring))
-
+# TODO: caching prevents the plotting of peak fits on repeated calls
 def plot_xrd(datasets, compound_list, detectors = ['quad2'], normalization = 'peak', plot_progression = False, bgsub = False, plot_patterns = False, show = True, **kwargs):
     def get_label(ds):
         return ds.label
     if plot_progression and not plot_patterns:
         x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
             plot_progression = True, plot_peakfits = False, **kwargs)
-        return x.plot_progression(show = True, **kwargs)
+        #return x.plot_progression(show = show, **kwargs)
+        x.plot_progression(show = show, **kwargs)
+        return x
     elif plot_patterns and not plot_progression:
         x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
             plot_progression = False, plot_peakfits = True, **kwargs)
@@ -71,7 +73,9 @@ def plot_xrd(datasets, compound_list, detectors = ['quad2'], normalization = 'pe
         x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
             plot_progression = False, plot_peakfits = True, **kwargs)
         x.plot_patterns()
-        return x.plot_progression(show = show, **kwargs)
+        #return x.plot_progression(show = show, **kwargs)
+        x.plot_progression(show = show, **kwargs)
+        return x
 
 def make_summary_table():
     from IPython.display import HTML, display

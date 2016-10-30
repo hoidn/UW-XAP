@@ -390,9 +390,10 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
                     #print "subtracting dark frame"
                 if frame_processor is not None:
                     np.save('increment%d.npy' % nevent, increment)
-                    increment = frame_processor(increment)
+                    increment = frame_processor(increment, detid = detid)
                     log( "processing frame")
             except (AttributeError, TypeError) as e:
+                print e
                 #raise
                 continue
             if increment is not None:

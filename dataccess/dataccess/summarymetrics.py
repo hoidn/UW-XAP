@@ -90,7 +90,7 @@ def get_normalized(arr1d):
     return (arr1d - np.mean(arr1d)) / np.std(arr1d)
 
 def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = False,
-        show = True, **kwargs):
+        show = True, frame_processor = None, **kwargs):
     """
     Generate a scatter plot of values returned by eventgetter1 and eventgetter2
     for all events in dataset. Returns two 1d np.ndarrays.
@@ -114,7 +114,8 @@ def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = 
     dataset = get_DataSet_instance(dataset_identifier)
 
     def get_datarun(event_data_getter, detid):
-        return dataset.evaluate(detid, event_data_getter = event_data_getter)
+        return dataset.evaluate(detid, event_data_getter = event_data_getter,
+                frame_processor = frame_processor)
 
     def make_label(event_data_getter, detid):
         return "Function: %s; detector: %s" % (event_data_getter.__name__, detid)
