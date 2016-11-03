@@ -58,23 +58,21 @@ def plot_xrd(datasets, compound_list, detectors = ['quad2'], normalization = 'pe
     def get_label(ds):
         return ds.label
     if plot_progression and not plot_patterns:
-        x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
-            plot_progression = True, plot_peakfits = False, **kwargs)
+        x = xrd.XRD(detectors, datasets,  compound_list = compound_list, bgsub = bgsub, 
+            plot_peakfits = False,  **kwargs)
         #return x.plot_progression(show = show, **kwargs)
-        x.plot_progression(show = show, **kwargs)
+        x.plot_progression(show = show, normalization = normalization, **kwargs)
         return x
     elif plot_patterns and not plot_progression:
-        x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
-            plot_progression = False, plot_peakfits = True, **kwargs)
-        x.plot_patterns()
+        x = xrd.XRD(detectors, datasets,  compound_list = compound_list, bgsub = bgsub, **kwargs)
+        x.plot_patterns(normalization = normalization, show = show, **kwargs)
 	if show:
 	    xrd.plt.show()
     else: # plot both
-        x = xrd.XRD(detectors, map(get_label, datasets),  compound_list = compound_list, bgsub = bgsub, normalization = normalization,\
-            plot_progression = False, plot_peakfits = True, **kwargs)
-        x.plot_patterns()
+        x = xrd.XRD(detectors, datasets, compound_list = compound_list, bgsub = bgsub, **kwargs)
+        x.plot_patterns(normalization = normalization, show = show, **kwargs)
         #return x.plot_progression(show = show, **kwargs)
-        x.plot_progression(show = show, **kwargs)
+        x.plot_progression(normalization = normalization, show = show, **kwargs)
         return x
 
 def make_summary_table():

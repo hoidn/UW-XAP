@@ -1,9 +1,9 @@
-import pytest
-import os
+#import pytest
 from dataccess import xrd
 import numpy as np
 from dataccess import utils
-from dataccess import database
+from dataccess import query
+from dataccess import geometry
 import config
 
 config.noplot = True
@@ -60,13 +60,31 @@ config.noplot = True
 
 def test_xrd_process_imarray():
     arr = np.zeros((819, 819))
-    xrd.process_imarray('quad2', arr, compound_list = ['MgO'], pre_integration_smoothing = 0.)
+    geometry.process_imarray('quad2', arr, compound_list = ['MgO'], pre_integration_smoothing = 0.)
 
+
+#def test_peak_sizes():
+#    def my_200_array(arr, bgsub = False, **kwargs):
+#        dss = xrd.Dataset(arr, 'array', ['quad2'], ['MgO'])
+#        angles, intensities, _ = xrd.process_dataset(dss, bgsub = bgsub)
+#        return xrd.peak_sizes(angles, intensities, dss.compound_list[0])
+#    tarr = np.ones((819, 819))
+#    assert np.all(np.isclose(my_200_array(tarr),  [  0.,          0.,         66.7233081]))
+
+
+def my_200_array(arr, bgsub = False, **kwargs):
+    dss = xrd.Pattern.from_dataset(arr, 'quad2', ['MgO'], label  = 'test')
+    return dss.peak_sizes()
+
+def get_query_dataset(querystring, alias = None, print_enable = True, **kwargs):
+    dataset = query.main(querystring.split(), label = alias, **kwargs)
+    if utils.isroot() and print_enable:
+        print "Runs: ", dataset.runs
+    return dataset
 
 def test_peak_sizes():
-    def my_200_array(arr, bgsub = False, **kwargs):
-        dss = xrd.Dataset(arr, 'array', ['quad2'], ['MgO'])
-        angles, intensities, _ = xrd.process_dataset(dss, bgsub = bgsub)
-        return xrd.peak_sizes(angles, intensities, dss.compound_list[0])
-    tarr = np.ones((819, 819))
-    assert np.all(np.isclose(my_200_array(tarr),  [  0.,          0.,         66.7233081]))
+    d1 = get_query_dataset('runs 906 906')
+    arr = d1.evaluate('quad2').mean
+    assert np.isclose(np.mean(arr), -68.242721825892659)
+    peakarr = my_200_array(arr)
+    assert np.isclose(peakarr, np.array([  1.10760626,  24.60676483,   0.85673761])).all()

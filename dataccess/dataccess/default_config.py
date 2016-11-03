@@ -17,4 +17,7 @@ plotting_mode = 'console'
 # Available batch queues
 queues = ('psanaq', 'psfehq', 'psnehq')
 
+# default powder peak width, in degrees
+peak_width = 1.5
+
 import matplotlib.pyplot as plt
