@@ -90,7 +90,7 @@ def get_normalized(arr1d):
     return (arr1d - np.mean(arr1d)) / np.std(arr1d)
 
 def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = False,
-        show = True, frame_processor = None, **kwargs):
+        plot = True, show = True, frame_processor = None, **kwargs):
     """
     Generate a scatter plot of values returned by eventgetter1 and eventgetter2
     for all events in dataset. Returns two 1d np.ndarrays.
@@ -138,8 +138,9 @@ def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = 
     data1, data2 = delete_mismatching(
             *map(get_datarun, [eventgetter1, eventgetter2], [detid1, detid2]))
     xlabel, ylabel = map(make_label, [eventgetter1, eventgetter2], [detid1, detid2])
-    plot_scatter(data1, data2, xlabel = xlabel, ylabel = ylabel,
-            show = show, **kwargs)
+    if plot:
+        plot_scatter(data1, data2, xlabel = xlabel, ylabel = ylabel,
+                show = show, **kwargs)
     return data1, data2
     
 

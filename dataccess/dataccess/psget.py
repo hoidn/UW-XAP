@@ -127,7 +127,7 @@ from pathos.multiprocessing import ProcessingPool
 XTC_DIR = '/reg/d/psdm/' + config.exppath + '/xtc/'
 
 
-#@utils.eager_persist_to_file('cache/psget/gsor')
+@utils.eager_persist_to_file('cache/psget/gsor')
 def get_signal_one_run(runNum, detid = 1, sigma_max = 1000.0,
     event_data_getter = None, event_mask = None, **kwargs):
     # TODO: remove sigma_max discrimination

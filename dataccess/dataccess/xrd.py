@@ -27,21 +27,6 @@ def _all_equal(lst):
         return True
     return False
 
-def _peak_size_gaussian_fit(x, y, amp = 5, cen = 5, wid = 2):
-    from lmfit import Model
-    def gaussian(x, amp, cen, wid):
-        "1-d gaussian: gaussian(x, amp, cen, wid)"
-        return (amp/(np.sqrt(2*np.pi)*wid)) * np.exp(-(x-cen)**2 /(2*wid**2))
-
-    def line(x, slope, intercept):
-        "line"
-        return slope * x + intercept
-
-    mod = Model(gaussian) + Model(line)
-    pars  = mod.make_params( amp=amp, cen=cen, wid=wid, slope=0, intercept=1)
-
-    result = mod.fit(y, pars, x=x)
-    return result.best_values, x, result.best_fit
 
 def _patterns_compound(patterns):
     compound_list = [pattern.get_compound() for pattern in patterns]
@@ -49,41 +34,8 @@ def _patterns_compound(patterns):
         raise ValueError("pattern compounds missing, or mismatching")
     return compound_list.pop()
 
-
-    
-def plot_peak_progression(patterns, maxpeaks = 'all', ax = None, logscale = True,
-        normalization = None, show = False, inner_normalization = True, **kwargs):
-
-    powder_angles, pattern_fluxes, progression, normalized_progression =\
-            peak_progression(patterns, normalization = normalization)
-
-    output = []
-    # TODO: reimplement selection of most intense peaks
-    def plotting(ax):
-        if ax is None:
-            f, ax = plt.subplots(1)
-        if logscale:
-            ax.set_xscale('log')
-	if inner_normalization:
-	    for label, curve in zip(map(str, powder_angles), normalized_progression):
-		ax.plot(pattern_fluxes, curve, label = label)
-		output.append(curve)
-	else:
-	    for label, curve in zip(map(str, powder_angles), progression):
-		ax.plot(pattern_fluxes, curve, label = label)
-		output.append(curve)
-        plt.legend()
-        ax.set_xlabel('Flux density (J/cm^2)')
-        ax.set_ylabel('Relative Bragg peak intensity')
-        #ax.set_xlim((min(pattern_fluxes), max(pattern_fluxes)))
-        if show:
-            plt.show()
-    plotting(ax)
-    return output
-
-
 def peak_progression(patterns, normalization = None,
-        peak_width = config.peak_width, **kwargs):
+        peak_width = config.peak_width, fixed_params = [], **kwargs):
     """
     Note: this function may only be called if the elements of labels are
     google spreadsheet dataset labels, rather than paths to data files.
@@ -110,24 +62,59 @@ def peak_progression(patterns, normalization = None,
     # indices: label, peak
     peaksize_array = np.array([pat.peak_sizes() for pat in patterns])
     normalized_peaksize_array = peaksize_array / get_normalization(patterns,
-        peak_width = peak_width, type = normalization, **kwargs)[:, np.newaxis]
+        peak_width = peak_width, type = normalization, fixed_params = fixed_params,
+        **kwargs)[:, np.newaxis]
 
     # indices: peak, label
     heating_progression = normalized_peaksize_array.T
     normalized_heating_progression = heating_progression / heating_progression[:, 0][:, np.newaxis]
     return powder_angles, label_flux_densities, heating_progression, normalized_heating_progression
 
+def plot_peak_progression(patterns, maxpeaks = 'all', ax = None, logscale = True,
+        normalization = None, show = False, inner_normalization = True, fixed_params = [],
+        **kwargs):
+
+    powder_angles, pattern_fluxes, progression, normalized_progression =\
+            peak_progression(patterns, normalization = normalization,
+            fixed_params = fixed_params )
+
+    output = []
+    # TODO: reimplement selection of most intense peaks
+    def plotting(ax):
+        if ax is None:
+            f, ax = plt.subplots(1)
+        if logscale:
+            ax.set_xscale('log')
+	if inner_normalization:
+	    for label, curve in zip(map(str, powder_angles), normalized_progression):
+		ax.plot(pattern_fluxes, curve, label = label)
+		output.append(curve)
+	else:
+	    for label, curve in zip(map(str, powder_angles), progression):
+		ax.plot(pattern_fluxes, curve, label = label)
+		output.append(curve)
+        plt.legend()
+        ax.set_xlabel('Flux density (J/cm^2)')
+        ax.set_ylabel('Relative Bragg peak intensity')
+        #ax.set_xlim((min(pattern_fluxes), max(pattern_fluxes)))
+        if show:
+            plt.show()
+    plotting(ax)
+    return output
 
 # TODO: why does memoization fail?
 #@utils.eager_persist_to_file("cache/xrd.process_dataset/")
 def process_dataset(dataset, nbins = 1000, fiducial_ellipses = None,
         bgsub = True, **kwargs):
-    def process_one_detid(detid):
-        imarray = dataset.get_array(detid)#data_extractor(dataset, **kwargs)
-        return geometry.process_imarray(detid, imarray,
-            fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
-            compound_list = dataset.compound_list, **kwargs)
-    return reduce(operator.add, map(process_one_detid, dataset.detid_list))
+    pat = Pattern(dataset, nbins = nbins, fiducial_ellipses = fiducial_ellipses,
+            bgsub = bgsub, **kwargs)
+#    def process_one_detid(detid):
+#        imarray = dataset.get_array(detid)#data_extractor(dataset, **kwargs)
+#        return geometry.process_imarray(detid, imarray,
+#            fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
+#            compound_list = dataset.compound_list, **kwargs)
+    return pat.angles, pat.intensities
+    # return reduce(operator.add, map(process_one_detid, dataset.detid_list))
 
 def main(detid_list, data_identifiers, mode = 'labels', plot = True, plot_progression = False, maxpeaks = 6, **kwargs):
     """
@@ -155,9 +142,10 @@ def main(detid_list, data_identifiers, mode = 'labels', plot = True, plot_progre
         xrd = XRD(detid_list, data_identifiers, plot_progression = plot_progression, **kwargs)
 
     @utils.ifplot
-    def doplot():
+    def doplot(fixed_params = []):
         if plot_progression:
-            xrd.plot_progression(ax = ax2, maxpeaks = maxpeaks)
+            xrd.plot_progression(ax = ax2, maxpeaks = maxpeaks,
+                    fixed_params = fixed_params)
         xrd.plot_patterns(ax = ax1)
         utils.global_save_and_show('xrd_plot/' + '_'.join(detid_list) + '_'.join(labels) + '.png')
     if plot:
@@ -187,21 +175,6 @@ class XRDset:
 
 
     def get_array(self, event_data_getter = None):
-        """
-        # TODO: update this
-        Returns CSPAD image data in the correct format for all other functions in
-        this module given a data path, run group label, or raw array. Optionally
-        masks out pixels using mask files specified in config.extra_masks.
-
-        Parameters
-        ---------
-        path : str
-            path to an ASCII datafile
-        label : str
-            run group label specified from the logbook
-        arr : numpy.ndarray
-            2d array of CSPAD data
-        """
         from dataccess import data_access as data
 
         #elif dataset.ref_type == 'label':
@@ -248,11 +221,124 @@ class RealMask:
                 return True
         return False
 
+class Peak:
+    """
+    Class representing a single powder peak.
+    """
+    def __init__(self, angle, param_values, fixed_params, peak_width = config.peak_width):
+        default_dict = {'amp': 4, 'cen': angle, 'wid': .2}
+        self.angle = angle
+        self.param_values = {k: param_values.get(k, default_dict[k]) for k in default_dict.keys()}
+        self.fixed_params = {k: (k in fixed_params) for k in default_dict.keys()}
+        if set(param_values.keys()) != set(fixed_params):
+            raise ValueError("Cannot constrain parameters without providing starting values.")
+        self.peak_width = peak_width
+
+    def _peak_size_gaussian_fit(self, x, y):
+        from lmfit import Model
+        def gaussian(x, amp, cen, wid):
+            "1-d gaussian: gaussian(x, amp, cen, wid)"
+            return (amp/(np.sqrt(2*np.pi)*wid)) * np.exp(-(x-cen)**2 /(2*wid**2))
+        def line(x, slope, intercept):
+            "line"
+            return slope * x + intercept
+        mod = Model(gaussian) + Model(line)
+        pars  = mod.make_params( amp=self.param_values['amp'], cen=self.param_values['cen'],
+                wid=self.param_values['wid'], slope=0, intercept=1)
+        for name, p in pars.iteritems():
+            if p.name in self.fixed_params and self.fixed_params[p.name]:
+                p.set(vary = False)
+        i = self.crop_indices(x, self.peak_width)
+        result = mod.fit(y[i], pars, x=x[i])
+        best_values = result.best_values
+        # The fit values are sometimes inverted, for some reason
+        if best_values['amp'] < 0 and best_values['wid'] < 0:
+            best_values['amp'] = -best_values['amp']
+            best_values['wid'] = -best_values['wid']
+        self._post_fit_update_params(best_values)
+        return best_values, x[i], result.best_fit
+
+    def _post_fit_update_params(self, best_values):
+        for p in self.param_values:
+            self.param_values[p] = best_values[p]
+
+    def peak_fit(self, x, y, peak_width = config.peak_width, **kwargs):
+        """
+        Given a powder pattern x, y, returns a list of tuples of the form (m,
+        b, amplitude, xfit, yfit), where:
+            m: linear coeffient of background fit
+            b: offset of background fit
+            amplitude: amplitude of fit's gaussian component
+            xfit : np.ndarray. x-values of the fit range
+            yfit : np.ndarray. fit evaluated on the array xfit
+        """
+        x, y = np.array(x), np.array(y)
+        from collections import namedtuple
+        FitResult = namedtuple('Fit', ['m', 'b', 'amplitude', 'xfit', 'yfit', 'values'])
+        best_values, xfit, yfit = self._peak_size_gaussian_fit(x, y) 
+        amplitude = best_values['amp']
+        m, b = best_values['slope'], best_values['intercept']
+        return FitResult(m, b, amplitude, xfit.copy(), yfit.copy(), best_values)
+
+    def crop_indices(self, x, width):
+        """ Return powder pattern indices centered around the given angle """
+        peakmin = self.angle - self.peak_width/2.
+        peakmax = self.angle + self.peak_width/2.
+        return np.where(np.logical_and(x >=peakmin, x <= peakmax))[0]
+
+
+class PeakParams:
+    """
+    Store a set powder peaks, each consisting of an angle value and of
+    peak-fitting parameters.
+
+    Methods:
+        fit_peaks : return fit parameters for all peaks, using a guassian +
+        linear background model.
+    """
+    def __init__(self, angles, starting_values = None, fixed_params = None):
+        """
+        starting_values : list of dicts of form {str -> float}
+            Starting values (or, for constrained parameters, final values) for
+            one or more of the fit parameters 'wid', 'cen', and 'amp' for the
+            gaussian components of peak fits. The default mapping is: {'amp':
+            5, 'cen': 5, 'wid': 2}.
+        fixed_params : list of tuples of strings
+            Specifies which parameters to fix using the values specified in
+            starting_values.
+        """
+        peaks = []
+        if starting_values is None:
+            starting_values = [{} for _ in angles]
+        if fixed_params is None:
+            fixed_params = [[] for _ in angles]
+        for angle, d, fixed in zip(angles, starting_values, fixed_params):
+            peaks.append(Peak(angle, d, fixed))
+#        for angle in angles:
+#            peaks.append(Peak(angle, starting_values, fixed_params))
+
+        self.peaks = peaks
+
+    def fit_peaks(self, x, y, peak_width = config.peak_width, **kwargs):
+        def in_range(angle_degrees):
+            return angle_degrees > np.min(x) and angle_degrees < np.max(x)
+        valid_peaks = filter(lambda peak: (peak.angle - peak_width/2. >= np.min(x)) and
+                        (peak.angle + peak_width/2. <= np.max(x)),
+                    self.peaks)
+        return [peak.peak_fit(x, y, peak_width = peak_width, **kwargs) for peak in valid_peaks]
+
+    def __add__(self, other):
+        import copy
+        new = copy.deepcopy(self)
+        new.peaks = new.peaks + copy.deepcopy(other.peaks)
+        return new
+
 
 class Pattern:
     def __init__(self, xrdset, peak_width = config.peak_width,
-            nbins = 1000, fiducial_ellipses = None, bgsub = True,
-            pre_integration_smoothing = 0, **kwargs):
+            nbins = 1000, fiducial_ellipses = None, bgsub = False,
+            pre_integration_smoothing = 0, starting_values = None,
+            fixed_params = None, **kwargs):
         """
         Initialize an instance using a single dataset.
         
@@ -268,6 +354,13 @@ class Pattern:
                         pre_integration_smoothing = pre_integration_smoothing)
         self.anglemask = RealMask((np.min(self.angles), np.max(self.angles)))
         self.label = xrdset.label
+        self.peak_angles = np.array(geometry.get_powder_angles(self.get_compound(),
+            filterfunc = lambda ang: self.anglemask.includes(ang)))
+        self.peaks = PeakParams(self.peak_angles, starting_values = starting_values,
+                fixed_params = fixed_params)
+
+    def get_pattern(self):
+        return self.angle, self.intensities
 
     @classmethod
     def from_dataset(cls, dataset, detid, compound_list, label = None, **kwargs):
@@ -306,6 +399,9 @@ class Pattern:
         self.angles = self.angles + other.angles
         self.intensities = self.intensities + other.intensities
         self.anglemask = self.anglemask + other.anglemask
+        self.peak_angles = np.concatenate((self.peak_angles, other.peak_angles))
+        self.peaks = self.peaks + other.peaks
+        self.image = np.hstack((self.image, other.image))
         return self
 
     def normalize(self, normalization):
@@ -333,93 +429,52 @@ class Pattern:
         ax.set_ylabel('Integrated intensity')
         return ax
 
+    def fit_peaks(self, peak_width = config.peak_width):
+        return self.peaks.fit_peaks(self.angles, self.intensities, peak_width = peak_width)
+
     @utils.ifplot
     def plot_peakfits(self, ax = None, show = False, normalization = 1.,
             peak_width = config.peak_width):
         if ax is None:
             ax = self._new_ax()
-        for m, b, amplitude, xfit, yfit in self.peak_fits(peak_width = peak_width):
-            ax.plot(xfit, yfit / normalization, color = 'red')
-            ax.plot(xfit, (yfit - (m * xfit + b)) / normalization, color = 'black')
+        for fit in self.fit_peaks():
+            ax.plot(fit.xfit, fit.yfit / normalization, color = 'red')
+            ax.plot(fit.xfit, (fit.yfit - (fit.m * fit.xfit + fit.b)) / normalization, color = 'black')
         if show:
             plt.show()
         return ax
 
-    @playback.db_insert
-    @utils.ifplot
+#    @playback.db_insert
+#    @utils.ifplot
     def plot(self, ax = None, label = None, show = False, normalization = None,
-            peak_width = config.peak_width):
+            peak_width = config.peak_width, fixed_params = [], legend = False):
+        pdb.set_trace()
         if ax is None:
             ax = self._new_ax()
         if normalization:
-            scale = get_normalization([ self ], type = normalization, ax = ax)[0]
+            scale = get_normalization([ self ], type = normalization,
+                    fixed_params = fixed_params)[0]
         else:
             scale = 1.
         if label is None:
             label = self.label
         dthet = (np.max(self.angles) - np.min(self.angles))/len(self.angles)
         ax.plot(self.angles, gaussian_filter(self.intensities, 0.05/dthet)/scale, label = label)
-        label_angles = np.array(geometry.get_powder_angles(self.get_compound(),
-            filterfunc = lambda ang: self.anglemask.includes(ang)))
-        if label_angles is not None:
-            for ang in label_angles:
-                ax.plot([ang, ang], [np.min(self.intensities)/scale, np.max(self.intensities)/scale], color = 'black')
-        #pdb.set_trace()
         if normalization == 'peak':
             self.plot_peakfits(ax = ax, show = False, peak_width = peak_width,
                     normalization = scale)
-        plt.legend()
+        if legend:
+            plt.legend()
         if show:
             plt.show()
-        return ax
+        return ax, scale
 
-    def peak_fits(self, peak_width = config.peak_width, **kwargs):
-        """
-        Returns a list of tuples of the form (m, b, amplitude, xfit, yfit), where:
-            m: linear coeffient of background fit
-            b: offset of background fit
-            amplitude: amplitude of fit's gaussian component
-            xfit : np.ndarray. x-values of the fit range
-            yfit : np.ndarray. fit evaluated on the array xfit
-        """
-        x, y = map(np.array, [self.angles, self.intensities])
-        def fit_one_peak(peakmin, peakmax):
-            dx = np.mean(np.abs(np.diff(x)))
-            i = np.where(np.logical_and(x >=peakmin, x <= peakmax))[0]
-            amp_approx = np.sum(y[i] - np.min(y[i])) * dx
-            center = (peakmin + peakmax) / 2.
-            best_values, xfit, yfit = _peak_size_gaussian_fit(x[i], y[i], amp = amp_approx, cen = center, wid = 0.2)
-            # The fit values are sometimes inverted, for some reason
-            if best_values['amp'] < 0 and best_values['wid'] < 0:
-                best_values['amp'] = -best_values['amp']
-                best_values['wid'] = -best_values['wid']
-            amplitude = best_values['amp']
-            m, b = best_values['slope'], best_values['intercept']
-            return m, b, amplitude, xfit.copy(), yfit.copy()
-
-        def in_range(angle_degrees):
-            return angle_degrees > np.min(x) and angle_degrees < np.max(x)
-        fitlist = []
-        powder_angles = np.array(geometry.get_powder_angles(self.get_compound(), filterfunc = in_range))
-        
-        make_interval = lambda angle: [angle - peak_width/2.0, angle + peak_width/2.0]
-        make_ranges = lambda angles: map(make_interval, angles)
-
-        # ranges over which to integrate the powder patterns
-        peak_ranges = make_ranges(powder_angles)
-
-        for peakmin, peakmax in peak_ranges:
-            peakIndices = np.where(np.logical_and(x >= peakmin, x <= peakmax))[0]
-            if len(peakIndices) == 0:
-                raise ValueError("Peak angle %s: outside data range.")
-            fitlist += [fit_one_peak(peakmin, peakmax)]
-        return fitlist
-
-    def peak_sizes(self, peak_width = config.peak_width, ax = None, **kwargs):
-        peak_fits = self.peak_fits(peak_width = peak_width)
+    def peak_sizes(self, peak_width = config.peak_width, fixed_params = [],
+            **kwargs):
+        peak_fits = self.peaks.fit_peaks(self.angles, self.intensities, peak_width = peak_width, fixed_params = fixed_params)
         amplitudes = []
-        for m, b, amplitude, xfit, yfit in peak_fits:
-            amplitudes.append(amplitude)
+        for fit in peak_fits:
+            amplitudes.append(fit.amplitude)
         return np.array(amplitudes)
 
 
@@ -443,8 +498,11 @@ class XRD:
     """
     def __init__(self, detid_list, data_identifiers, ax = None, bgsub = False, mode = 'label',
         peak_progression_compound = None, compound_list = [], mask = True,
-        plot_progression = False, plot_peakfits = False, show_image = True,
-        event_data_getter = None, frame_processor = None, **kwargs):
+        plot_progression = False, plot_peakfits = False,
+        event_data_getter = None, frame_processor = None, starting_values = None,
+        fixed_params = None, **kwargs):
+
+        self.fixed_params = fixed_params
 
         if bgsub:
             if not compound_list:
@@ -456,51 +514,60 @@ class XRD:
                 dataset = XRDset(dataref, detid, compound_list, mask = mask,
                         event_data_getter = event_data_getter, frame_processor = frame_processor,
                         **kwargs)
-                return Pattern(dataset, bgsub = bgsub)
-            #pdb.set_trace()
+                return Pattern(dataset, bgsub = bgsub, starting_values = starting_values,
+                        fixed_params = fixed_params)
             return reduce(operator.add, map(one_detid, detid_list))
 
-        #pdb.set_trace()
         self.patterns = map(pattern_one_dataref, data_identifiers)
 
-        if plot_peakfits and not ax:
-            _, self.ax = plt.subplots()
-        elif not ax:
+        if not ax:
             self.ax = None
         else:
             self.ax = ax
+
+        for pat in self.patterns:
+            pat.fit_peaks()
+
         
     def show_images(self):
-        imarrays = [pat.images for pat in self.patterns]
+        imarrays = [pat.image for pat in self.patterns]
         labels = [pat.label for pat in self.patterns]
         for im, lab in zip(imarrays, labels):
             utils.show_image(im, title = lab)
 
     def normalize(self, mode):
-        # TODO
         raise NotImplementedError
 
-    def plot_patterns(self, ax = None, normalization = None, **kwargs):
+    def plot_patterns(self, ax = None, normalization = None, show_image = False,
+            plot_peakfits = False, **kwargs):
         if ax is None and self.ax is not None:
             ax = self.ax
-        else:
-            ax = None
+        elif not ax:
+            _, ax = plt.subplots()
         for pat in self.patterns:
-            pat.plot(ax = ax, normalization = normalization)
+            ax, scale = pat.plot(ax = ax, normalization = normalization,
+                    fixed_params = self.fixed_params)
+        if pat.peak_angles is not None:
+            for ang in pat.peak_angles:
+                ax.plot([ang, ang], [np.min(pat.intensities)/scale, np.max(pat.intensities)/scale],
+                        color = 'black')
+        plt.legend()
+        if show_image:
+            self.show_images()
 
     def plot_progression(self, ax = None, maxpeaks = 6, normalization = None,
-            show = False, **kwargs):
+            show = False, fixed_params = [],
+            **kwargs):
         if ax is None and self.ax is not None:
             ax = self.ax
         else:
             _, ax = plt.subplots()
         return plot_peak_progression(self.patterns, normalization = normalization, ax = ax,
-            show = show, **kwargs)
-    
+            show = show, fixed_params = fixed_params, **kwargs)
+
 #@utils.eager_persist_to_file("cache/xrd.get_normalization/")
 def get_normalization(patterns, type = 'transmission', peak_width = config.peak_width,
-        ax = None, **kwargs):
-    #pdb.set_trace()
+        fixed_params = [], **kwargs):
     def get_max(pattern):
         # TODO: data types
         angles, intensities = map(lambda x: np.array(x), [pattern.angles, pattern.intensities])
@@ -514,7 +581,7 @@ def get_normalization(patterns, type = 'transmission', peak_width = config.peak_
         # TODO: reimplement this
         raise NotImplementedError
     elif type == 'peak': # Normalize by size of first peak
-        return np.array([pat.peak_sizes(ax = ax)[0] for pat in patterns])
+        return np.array([pat.peak_sizes(fixed_params = fixed_params)[1] for pat in patterns])
     else: # Interpret type as the name of a function in config.py
         try:
             return np.array([eval('config.%s' % type)(pat.label) for pat in patterns])
