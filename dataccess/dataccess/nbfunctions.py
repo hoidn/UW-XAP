@@ -67,18 +67,13 @@ def mean_params(xrdset):
         return np.mean([[p[key] for p in pattern] for pattern in params], axis = 0)
     return {k: get_mean(k) for k in keys} 
 
-def set_param(progression, param, value, peak_index):
-    for p in progression.patterns:
-        peaks = p.peaks.peaks
-        peaks[peak_index].param_values[param] = value
-        peaks[peak_index].fixed_params[param] = True
 
 def print_xrd_param(xrdset, param):
     for p in xrdset.patterns:
         peaks = p.peaks.peaks
         print [pk.param_values[param] for pk in peaks]
 
-def eval_xrd(datasets, compound_list, x = None, detectors = ['quad2'], normalization = 'peak', bgsub = False, set_parameters = {}, **kwargs):
+def eval_xrd(datasets, compound_list, x = None, detectors = ['quad2'], normalization = 'peak', bgsub = False, iter_parameters = {}, globally_fixed_params = [], **kwargs):
     """
     set_parameters: {param name: [list of peak indices]}
 
@@ -88,30 +83,30 @@ def eval_xrd(datasets, compound_list, x = None, detectors = ['quad2'], normaliza
     all peaks from the first iteration.
     """
     x = xrd.XRD(detectors, datasets,  compound_list = compound_list, bgsub = bgsub, **kwargs)
-    for param, indices in set_parameters.iteritems():
+            #fixed_params = globally_fixed_params, **kwargs)
+    for param, indices in iter_parameters.iteritems():
         values = mean_params(x)[param]
         for i in indices:
-            set_param(x, param, values[i], i)
+            x.set_model_param(param, values[i], i)
     return x
 
 
-def plot_xrd(datasets, compound_list, set_parameters = {}, plot_progression = False,
+def plot_xrd(datasets, compound_list, iter_parameters = {}, plot_progression = False,
         plot_patterns = False, normalization = 'peak', show = True, **kwargs):
-    x = eval_xrd(datasets, compound_list, set_parameters = set_parameters, **kwargs)
+    x = eval_xrd(datasets, compound_list, iter_parameters = iter_parameters, **kwargs)
     def get_label(ds):
         return ds.label
     if plot_progression and not plot_patterns:
         x.plot_progression(show = show, normalization = normalization, **kwargs)
-        return x
     elif plot_patterns and not plot_progression:
         x.plot_patterns(normalization = normalization, show = show, **kwargs)
     else: # plot both
         x.plot_patterns(normalization = normalization, show = show, **kwargs)
         #return x.plot_progression(show = show, **kwargs)
         x.plot_progression(normalization = normalization, show = show, **kwargs)
-        return x
     if show:
         xrd.plt.show()
+    return x
 
 def make_summary_table():
     from IPython.display import HTML, display
@@ -293,4 +288,3 @@ def preprocess_histogram(ds, detid, event_data_getter_name = '', ncores = 1):
 def get_run_strings(dslist):
     import operator
     return map(str, reduce(operator.add, [ds.runs for ds in dslist]))
-

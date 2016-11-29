@@ -22,7 +22,7 @@ def si_imarr_sum(imarr, **kwargs):
 #TODO: should have an mec-specific config file
 # TODO: Add a generic function for the integral of a detector in xes_process.py
 @utils.eager_persist_to_file('cache/mec/si_spectrometer_integral')
-def si_spectrometer_integral(label):
+def si_spectrometer_integral(label, **kwargs):
     # Dark frame-subtracted si spectrometer data
     mean_frame, event_data = data_access.eval_dataset_and_filter(label, 'si', event_data_getter = si_imarr_sum)
     return utils.dict_leaf_mean(event_data)

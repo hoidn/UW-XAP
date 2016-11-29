@@ -121,7 +121,7 @@ def get_dark_dataset(dataset_identifier):
 #@memory.cache
 @utils.eager_persist_to_file('cache/dataccess/epr')
 def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
-        darksub = True, frame_processor = None, **kwargs):
+        darksub = True, frame_processor = None, event_mask = None, **kwargs):
     """
     # TODO: update this. Make it clear that this function is the public interface.
     """
@@ -142,7 +142,12 @@ def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
             return None
 
     # dataset.event_filter is a function that takes a np array and returns a boolean
-    if dataset.event_filter:
+    if event_mask is not None:
+        return eval_dataset(dataset, detid,
+            event_data_getter = event_data_getter,
+            dark_frame = get_darkframe(detid), frame_processor =
+            frame_processor, event_mask = event_mask)
+    elif dataset.event_filter:
         mask_result = eval_dataset(dataset, dataset.event_filter_detid,
                 event_data_getter = dataset.event_filter,
                 dark_frame = get_darkframe(dataset.event_filter_detid))

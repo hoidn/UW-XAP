@@ -62,14 +62,14 @@ class DataResult(DataResultBase):
             self.mean + other.mean,
             utils.merge_dicts(self.event_data, other.event_data))
 
-    def matching_flat_event_data(self, other):
+    def intersection(self, other):
         """
         other : DataResult instance
         Return data of the same type and format as flat_event_data, but exclude
         events that are not contained in other.
         """
         pruned_event_data = utils.prune_dict(self.event_data, other.event_data)
-        return DataResult(None, pruned_event_data).flat_event_data()
+        return DataResult(None, pruned_event_data)
         
 
 def idxgen(ds):
@@ -353,7 +353,7 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     def event_valid(nevent):
-        if event_mask:
+        if event_mask is not None:
             run_mask = event_mask[runNum]
             if nevent in run_mask:
                 return run_mask[nevent]

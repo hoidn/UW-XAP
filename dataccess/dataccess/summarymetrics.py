@@ -89,6 +89,56 @@ def get_normalized(arr1d):
     """
     return (arr1d - np.mean(arr1d)) / np.std(arr1d)
 
+class ScatterData(object):
+    """
+    Class containing matching data from two different functions (array ->
+    float) evaluated over the same data set, with events missing for either
+    function's data source excluded from both elements of the dataset pair.
+    """
+    def __init__(self, dr1, dr2):
+        self.row1, self.row2, self.data_result1, self.data_result2 =\
+                dr1.flat_event_data(), dr2.flat_event_data(), dr1, dr2
+        
+    def __getitem__(self, k):
+        lst = [self.row1, self.row2]
+        return lst[k]
+
+    def make_mask_dictionary(self, filter_func):
+        """
+        Return an event mask of a format that can be fed back as the
+        filter_mask kwarg for DataSet.evaluate().
+
+        filter_func must be a function of two arguments. It will be evaluated
+        for all value pairs in self.data_result1 and self.data_result2.
+        """
+        mask = {}
+        event_data_dict = self.data_result1.event_data
+        for run in event_data_dict:
+            run_mask = {}
+            for nevent in event_data_dict[run]:
+                a, b = event_data_dict[run][nevent], self.data_result2.event_data[run][nevent]
+                run_mask[nevent] = filter_func(a, b)
+            mask[run] = run_mask
+        return mask
+
+    # TODO docstring
+    def iter_event_value_pairs(self):
+        event_data_dict = self.data_result1.event_data
+        for run in event_data_dict:
+            for nevent in event_data_dict[run]:
+                a, b = event_data_dict[run][nevent], self.data_result2.event_data[run][nevent]
+                yield run, nevent, a, b
+
+    def apply_mask_dictionary(self, event_mask):
+        row1 = []
+        row2 = []
+        for run, nevent, a, b in self.iter_event_value_pairs():
+            if event_mask[run][nevent]:
+                row1.append(a)
+                row2.append(b)
+        return np.array(row1), np.array(row2)
+
+
 def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = False,
         plot = True, show = True, frame_processor = None, **kwargs):
     """
@@ -127,7 +177,8 @@ def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = 
         """
         if dr1.nevents() != dr2.nevents():
             log("Warning: missing events will be dropped.")
-        return dr1.matching_flat_event_data(dr2), dr2.matching_flat_event_data(dr1)
+        return dr1.intersection(dr2), dr2.intersection(dr1)
+        #return dr1.intersection(dr2).flat_event_data(), dr2.intersection(dr1).flat_event_data()
 
     def get_event_values(datarun):
         raw = datarun.flat_event_data()
@@ -137,11 +188,12 @@ def scatter(dataset_identifier, detid_function_1, detid_function_2, normalize = 
 
     data1, data2 = delete_mismatching(
             *map(get_datarun, [eventgetter1, eventgetter2], [detid1, detid2]))
+    scatter_data = ScatterData(data1, data2)
     xlabel, ylabel = map(make_label, [eventgetter1, eventgetter2], [detid1, detid2])
     if plot:
-        plot_scatter(data1, data2, xlabel = xlabel, ylabel = ylabel,
+        plot_scatter(scatter_data.row1, scatter_data.row2, xlabel = xlabel, ylabel = ylabel,
                 show = show, **kwargs)
-    return data1, data2
+    return scatter_data
     
 
 def main(dataset_labels, detid, separate = False, func = None, **kwargs):

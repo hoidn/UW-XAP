@@ -5,7 +5,7 @@ import pdb
 
 import data_access
 import query
-import xrd
+import geometry
 
 import config
 
@@ -25,21 +25,23 @@ def identity(imarr):
     return imarr
 
 
-def one_plot(dataset, detid, path = None, masked = False, rmin = None, rmax = None, run = None, plot = True, show = True, fiducials = [], darksub = True):
+def one_plot(dataset, detid, path = None, masked = False, rmin = None, rmax = None, run = None,
+        plot = True, show = True, fiducials = [], darksub = True, frame_processor = None):
     import utils
     def put_fiducials(imarray):
         try:
-            (phi, x0, y0, alpha, r) = xrd.get_detid_parameters(detid)
+            (phi, x0, y0, alpha, r) = geometry.get_detid_parameters(detid)
         except KeyError:
             raise KeyError("%s: geometry configuration parameter phi not found.")
-        betas, rho = xrd.get_beta_rho(imarray, phi, x0, y0, alpha, r)
+        betas, rho = geometry.get_beta_rho(imarray, phi, x0, y0, alpha, r)
         new = imarray.copy()
         for angle in fiducials:
             new = np.where(np.logical_and(betas < angle + .1, betas > angle - .1),
                 0., new)
         return new
     if run is None:
-        imarray, _ = data_access.eval_dataset_and_filter(dataset, detid, darksub = darksub)
+        imarray, _ = data_access.eval_dataset_and_filter(dataset, detid, darksub = darksub,
+                frame_processor = frame_processor)
         imarray = imarray.T
         if masked:
             imarray = apply_default_masks(imarray, detid)
@@ -52,7 +54,8 @@ def one_plot(dataset, detid, path = None, masked = False, rmin = None, rmax = No
         if plot:
             utils.save_image_and_show(path, annotated, title = dataset.label + '_' + detid, rmin = rmin, rmax = rmax, show_plot = show)
     else:
-        imarray, framesdict = data_access.eval_dataset(dataset, detid, event_data_getter = identity)
+        imarray, framesdict = data_access.eval_dataset(dataset, detid,
+                event_data_getter = identity, frame_processor = frame_processor)
         imarray = imarray.T
         frames = framesdict.values()[0].values()
         if not path:

@@ -12,7 +12,7 @@ logfile_path = None
 # If False, only print stdout from the rank 0 mode when running with MPI
 suppress_root_print = True
 
-plotting_mode = 'console'
+plotting_mode = 'notebook'
 
 # Available batch queues
 queues = ('psanaq', 'psfehq', 'psnehq')

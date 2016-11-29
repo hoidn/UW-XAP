@@ -108,13 +108,7 @@ def process_dataset(dataset, nbins = 1000, fiducial_ellipses = None,
         bgsub = True, **kwargs):
     pat = Pattern(dataset, nbins = nbins, fiducial_ellipses = fiducial_ellipses,
             bgsub = bgsub, **kwargs)
-#    def process_one_detid(detid):
-#        imarray = dataset.get_array(detid)#data_extractor(dataset, **kwargs)
-#        return geometry.process_imarray(detid, imarray,
-#            fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
-#            compound_list = dataset.compound_list, **kwargs)
     return pat.angles, pat.intensities
-    # return reduce(operator.add, map(process_one_detid, dataset.detid_list))
 
 def main(detid_list, data_identifiers, mode = 'labels', plot = True, plot_progression = False, maxpeaks = 6, **kwargs):
     """
@@ -156,7 +150,8 @@ class XRDset:
     """
     Represents data on a single detector.
     """
-    def __init__(self, dataref, detid, compound_list, mask = True, label = None, **kwargs):
+    def __init__(self, dataref, detid, compound_list, model = None, mask = True,
+            label = None, **kwargs):
         """
         kwargs are frame-processing related arguments, including
         event_data_getter and frame_processor. See data_access.py for details.
@@ -173,6 +168,13 @@ class XRDset:
         else: # dataref must be a 
             self.label = dataref.label
 
+
+
+    def set_model(self, model):
+        for p in self.patterns:
+            peaks = p.peaks.peaks
+            for peak in peaks:
+                peak.set_model(model)
 
     def get_array(self, event_data_getter = None):
         from dataccess import data_access as data
@@ -225,42 +227,63 @@ class Peak:
     """
     Class representing a single powder peak.
     """
-    def __init__(self, angle, param_values, fixed_params, peak_width = config.peak_width):
-        default_dict = {'amp': 4, 'cen': angle, 'wid': .2}
+    def __init__(self, angle, param_values, fixed_params, model = None,
+            peak_width = config.peak_width):
+        """
+        angle : float
+            Angle of the powder peak.
+        param_values : {str: float}
+            map from parameter names to starting values 
+        fixed_params : list of str
+            list of parameters to be fixed to their starting values
+        model : lmfit.Model
+            model to which to fit the peak. The model's parameters are assumed
+            to be a subset of 'amplitude', 'center', 'sigma', 'slope',
+            'intercept', and 'fraction' (the last being specific to lmfit's
+            pseudo-Voigt model).
+        """
+        default_model_params = {'amplitude': 4, 'center': angle, 'sigma': .2,
+                'slope': 0., 'intercept': 1., 'fraction': 0.5}
+        #if model is 
         self.angle = angle
-        self.param_values = {k: param_values.get(k, default_dict[k]) for k in default_dict.keys()}
-        self.fixed_params = {k: (k in fixed_params) for k in default_dict.keys()}
+        self.param_values = {k: param_values.get(k, default_model_params[k]) for k in default_model_params.keys()}
+        self.fixed_params = {k: (k in fixed_params) for k in default_model_params.keys()}
         if set(param_values.keys()) != set(fixed_params):
             raise ValueError("Cannot constrain parameters without providing starting values.")
         self.peak_width = peak_width
+        self.model = model if model is not None else Peak._default_model()
 
-    def _peak_size_gaussian_fit(self, x, y):
+    @staticmethod
+    def _default_model():
         from lmfit import Model
-        def gaussian(x, amp, cen, wid):
-            "1-d gaussian: gaussian(x, amp, cen, wid)"
-            return (amp/(np.sqrt(2*np.pi)*wid)) * np.exp(-(x-cen)**2 /(2*wid**2))
+        def gaussian(x, amplitude, center, sigma):
+            "1-d gaussian: gaussian(x, amplitude, center, sigma)"
+            return (amplitude/(np.sqrt(2*np.pi)*sigma)) * np.exp(-(x-center)**2 /(2*sigma**2))
         def line(x, slope, intercept):
             "line"
             return slope * x + intercept
         mod = Model(gaussian) + Model(line)
-        pars  = mod.make_params( amp=self.param_values['amp'], cen=self.param_values['cen'],
-                wid=self.param_values['wid'], slope=0, intercept=1)
-        for name, p in pars.iteritems():
-            if p.name in self.fixed_params and self.fixed_params[p.name]:
-                p.set(vary = False)
-        i = self.crop_indices(x, self.peak_width)
-        result = mod.fit(y[i], pars, x=x[i])
-        best_values = result.best_values
-        # The fit values are sometimes inverted, for some reason
-        if best_values['amp'] < 0 and best_values['wid'] < 0:
-            best_values['amp'] = -best_values['amp']
-            best_values['wid'] = -best_values['wid']
-        self._post_fit_update_params(best_values)
-        return best_values, x[i], result.best_fit
+        return mod
+
+    def _get_model_params(self, mod):
+        param_names = mod.param_names
+        return {k: v for k, v in self.param_values.iteritems() if k in param_names}
+
 
     def _post_fit_update_params(self, best_values):
-        for p in self.param_values:
-            self.param_values[p] = best_values[p]
+        self.param_values = {k: v for k, v in best_values.iteritems()}
+#        for p in self.param_values:
+#            self.param_values[p] = best_values[p] if p in self.param_values
+
+    def set_model(self, model):
+        self.model = model
+
+    def integrate(self, x, y):
+        """
+        TODO: make this more sophisticated.
+        """
+        i = self.crop_indices(np.array(x), self.peak_width)
+        return np.sum(np.array(y)[i])
 
     def peak_fit(self, x, y, peak_width = config.peak_width, **kwargs):
         """
@@ -275,8 +298,22 @@ class Peak:
         x, y = np.array(x), np.array(y)
         from collections import namedtuple
         FitResult = namedtuple('Fit', ['m', 'b', 'amplitude', 'xfit', 'yfit', 'values'])
-        best_values, xfit, yfit = self._peak_size_gaussian_fit(x, y) 
-        amplitude = best_values['amp']
+
+        pars  = self.model.make_params(**self._get_model_params(self.model))
+        for name, p in pars.iteritems():
+            if p.name in self.fixed_params and self.fixed_params[p.name]:
+                p.set(vary = False)
+        i = self.crop_indices(x, self.peak_width)
+        result = self.model.fit(y[i], pars, x=x[i])
+        best_values = result.best_values
+        # The fit values are sometimes inverted, for some reason
+        if best_values['amplitude'] < 0 and best_values['sigma'] < 0:
+            best_values['amplitude'] = -best_values['amplitude']
+            best_values['sigma'] = -best_values['sigma']
+        self._post_fit_update_params(best_values)
+        xfit, yfit = x[i], result.best_fit
+
+        amplitude = best_values['amplitude']
         m, b = best_values['slope'], best_values['intercept']
         return FitResult(m, b, amplitude, xfit.copy(), yfit.copy(), best_values)
 
@@ -296,13 +333,13 @@ class PeakParams:
         fit_peaks : return fit parameters for all peaks, using a guassian +
         linear background model.
     """
-    def __init__(self, angles, starting_values = None, fixed_params = None):
+    def __init__(self, angles, starting_values = None, fixed_params = None, model = None):
         """
         starting_values : list of dicts of form {str -> float}
             Starting values (or, for constrained parameters, final values) for
-            one or more of the fit parameters 'wid', 'cen', and 'amp' for the
+            one or more of the fit parameters 'sigma', 'center', and 'amp' for the
             gaussian components of peak fits. The default mapping is: {'amp':
-            5, 'cen': 5, 'wid': 2}.
+            5, 'center': 5, 'sigma': 2}.
         fixed_params : list of tuples of strings
             Specifies which parameters to fix using the values specified in
             starting_values.
@@ -313,7 +350,7 @@ class PeakParams:
         if fixed_params is None:
             fixed_params = [[] for _ in angles]
         for angle, d, fixed in zip(angles, starting_values, fixed_params):
-            peaks.append(Peak(angle, d, fixed))
+            peaks.append(Peak(angle, d, fixed, model = model))
 #        for angle in angles:
 #            peaks.append(Peak(angle, starting_values, fixed_params))
 
@@ -338,7 +375,7 @@ class Pattern:
     def __init__(self, xrdset, peak_width = config.peak_width,
             nbins = 1000, fiducial_ellipses = None, bgsub = False,
             pre_integration_smoothing = 0, starting_values = None,
-            fixed_params = None, **kwargs):
+            fixed_params = None, model = None, **kwargs):
         """
         Initialize an instance using a single dataset.
         
@@ -357,11 +394,12 @@ class Pattern:
         self.peak_angles = np.array(geometry.get_powder_angles(self.get_compound(),
             filterfunc = lambda ang: self.anglemask.includes(ang)))
         self.peaks = PeakParams(self.peak_angles, starting_values = starting_values,
-                fixed_params = fixed_params)
+                fixed_params = fixed_params, model = model)
 
     def get_pattern(self):
         return self.angle, self.intensities
 
+    #@utils.eager_persist_to_file("cache/xrd/pattern.from_dataset/")
     @classmethod
     def from_dataset(cls, dataset, detid, compound_list, label = None, **kwargs):
         """
@@ -435,6 +473,7 @@ class Pattern:
     @utils.ifplot
     def plot_peakfits(self, ax = None, show = False, normalization = 1.,
             peak_width = config.peak_width):
+        # TODO: leverage lmfit better
         if ax is None:
             ax = self._new_ax()
         for fit in self.fit_peaks():
@@ -444,11 +483,10 @@ class Pattern:
             plt.show()
         return ax
 
-#    @playback.db_insert
-#    @utils.ifplot
+    @playback.db_insert
+    @utils.ifplot
     def plot(self, ax = None, label = None, show = False, normalization = None,
-            peak_width = config.peak_width, fixed_params = [], legend = False):
-        pdb.set_trace()
+            peak_width = config.peak_width, fixed_params = None, legend = False):
         if ax is None:
             ax = self._new_ax()
         if normalization:
@@ -469,13 +507,30 @@ class Pattern:
             plt.show()
         return ax, scale
 
-    def peak_sizes(self, peak_width = config.peak_width, fixed_params = [],
-            **kwargs):
-        peak_fits = self.peaks.fit_peaks(self.angles, self.intensities, peak_width = peak_width, fixed_params = fixed_params)
+    def peak_sizes(self, peak_width = config.peak_width, fixed_params = None,
+            method = 'fit', **kwargs):
         amplitudes = []
-        for fit in peak_fits:
-            amplitudes.append(fit.amplitude)
-        return np.array(amplitudes)
+        if method == 'fit':
+            peak_fits = self.peaks.fit_peaks(self.angles, self.intensities, peak_width = peak_width, fixed_params = fixed_params)
+            for fit in peak_fits:
+                amplitudes.append(fit.amplitude)
+            return np.array(amplitudes)
+        elif method == 'integral':
+            return [peak.integrate(self.angles, self.intensities) for peak in self.peaks.peaks]
+        else:
+            raise ValueError("invalid method %s" % method)
+
+    def background(self, peak_width = config.peak_width):
+        """
+        Return an estimate of background level by integrating from 0 to just
+        before the first peak.
+        """
+        max_angle = self.peaks.peaks[0].angle - peak_width/2.
+        x = np.array(self.angles)
+        i =  np.where(x < max_angle)[0]
+        return np.sum(np.array(self.intensities)[i])
+                
+
 
 
 
@@ -500,7 +555,7 @@ class XRD:
         peak_progression_compound = None, compound_list = [], mask = True,
         plot_progression = False, plot_peakfits = False,
         event_data_getter = None, frame_processor = None, starting_values = None,
-        fixed_params = None, **kwargs):
+        fixed_params = None, fit = True, **kwargs):
 
         self.fixed_params = fixed_params
 
@@ -515,7 +570,7 @@ class XRD:
                         event_data_getter = event_data_getter, frame_processor = frame_processor,
                         **kwargs)
                 return Pattern(dataset, bgsub = bgsub, starting_values = starting_values,
-                        fixed_params = fixed_params)
+                        fixed_params = fixed_params, **kwargs)
             return reduce(operator.add, map(one_detid, detid_list))
 
         self.patterns = map(pattern_one_dataref, data_identifiers)
@@ -525,10 +580,37 @@ class XRD:
         else:
             self.ax = ax
 
+        if fit:
+            self.fit_all()
+
+    def fit_all(self):
         for pat in self.patterns:
             pat.fit_peaks()
 
+    def set_model_param(self, param, value, peak_index):
+        """
+        Constrain a peak fit parameter.
         
+        param : str, equal to 'sigma', 'slope', or 'amplitude'
+            parameter to set
+        value : float
+            parameter value
+        peak_index : int
+            index of the peak for which apply the change.
+        """
+        for p in self.patterns:
+            peaks = p.peaks.peaks
+            peaks[peak_index].param_values[param] = value
+            peaks[peak_index].fixed_params[param] = True
+
+    def iter_peaks(self):
+        """
+        Iterate through all Peak instances contained in this dataset's Powder instances.
+        """
+        for pattern in self.patterns:
+            for peak in pattern.peaks.peaks:
+                yield peak
+
     def show_images(self):
         imarrays = [pat.image for pat in self.patterns]
         labels = [pat.label for pat in self.patterns]
