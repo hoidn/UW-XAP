@@ -73,7 +73,7 @@ def print_xrd_param(xrdset, param):
         peaks = p.peaks.peaks
         print [pk.param_values[param] for pk in peaks]
 
-def eval_xrd(datasets, compound_list, x = None, detectors = ['quad2'], normalization = 'peak', bgsub = False, iter_parameters = {}, globally_fixed_params = [], **kwargs):
+def eval_xrd(datasets, compound_list, x = None, detectors = ['quad2'], normalization = 'peak', bgsub = False, iter_parameters = {}, param_initial_values = {}, globally_fixed_params = [], peak_widths = {}, **kwargs):
     """
     set_parameters: {param name: [list of peak indices]}
 
@@ -82,8 +82,21 @@ def eval_xrd(datasets, compound_list, x = None, detectors = ['quad2'], normaliza
     indices for which the parameter will be constrained to the mean value among
     all peaks from the first iteration.
     """
-    x = xrd.XRD(detectors, datasets,  compound_list = compound_list, bgsub = bgsub, **kwargs)
+    x = xrd.XRD(detectors, datasets,  compound_list = compound_list, bgsub = bgsub, fit = False,
+            **kwargs)
             #fixed_params = globally_fixed_params, **kwargs)
+    for index in param_initial_values:
+        for param in param_initial_values[index]:
+            value, fixed = param_initial_values[index][param]
+            x.set_model_param(param, value, index, fixed = fixed)
+    x.fit_all()
+    if peak_widths:
+        for i in peak_widths:
+            def set_width(peak):
+                peak.peak_width = peak_widths[i]
+                return peak
+            x.map_peak(i, set_width)
+
     for param, indices in iter_parameters.iteritems():
         values = mean_params(x)[param]
         for i in indices:

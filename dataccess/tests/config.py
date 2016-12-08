@@ -9,7 +9,7 @@ smd = True
 
 # If true, disable plotting (batch job compatibility). The default specified
 # here is overwritten by the -n option in mecana.py.
-noplot = False
+noplot = True
 
 cached_only = False
 

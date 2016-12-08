@@ -5,7 +5,6 @@ import ipyparallel
 from ipyparallel import Client
 from ipyparallel import error
 
-import pdb
 import subprocess
 import time
     
@@ -222,7 +221,6 @@ class JobPool:
         self.func = func
         self.shutdown = shutdown
 
-        
     @staticmethod
     def launch_engines(nengines = 1, ncores = 4, queue = 'psfehq'):
         return [add_engine(ncores = ncores, queue = queue) for i in range(nengines)]
@@ -298,10 +296,10 @@ usable_queues = map(Bqueue, ('psanaq', 'psfehq', 'psnehq'))
 
 def init():
     JobPool.launch_engines(nengines = 6, ncores = 4)
+
 #    import dill
 #    with open('.engines', 'wb') as f:
 #        dill.dump([engine.job_id for engine in engines], f)
-
 #try:
 #    print ("looking for engines file...")
 #    with open('.engines', 'rb') as f:

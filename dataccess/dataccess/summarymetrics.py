@@ -103,7 +103,7 @@ class ScatterData(object):
         lst = [self.row1, self.row2]
         return lst[k]
 
-    def make_mask_dictionary(self, filter_func):
+    def make_mask_dictionary_from_filter(self, filter_func):
         """
         Return an event mask of a format that can be fed back as the
         filter_mask kwarg for DataSet.evaluate().
@@ -120,6 +120,15 @@ class ScatterData(object):
                 run_mask[nevent] = filter_func(a, b)
             mask[run] = run_mask
         return mask
+
+    def make_mask_dictionary_from_mask_array(self, arr_mask):
+        dict_mask = {}
+        for i, (run, nevent, a, b) in enumerate(self.iter_event_value_pairs()):
+            if i in arr_mask:
+                dict_mask.setdefault(run, {})[nevent] = True
+            else:
+                dict_mask.setdefault(run, {})[nevent] = False
+        return dict_mask
 
     # TODO docstring
     def iter_event_value_pairs(self):

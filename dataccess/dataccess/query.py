@@ -229,7 +229,8 @@ class DataSet(object):
         database.mongo_store_object_by_label(self, self.label)
 
     @utils.eager_persist_to_file('cache/query/DataSet.evaluate')
-    def evaluate(self, detid, event_data_getter = None, frame_processor = None, darksub = True):
+    def evaluate(self, detid, event_data_getter = None, frame_processor = None,
+            darksub = True, event_mask = None):
     #def evaluate(self, detid, event_data_getter = None, insert = True):
         """
         Extracts data for all runs in self.run, subject to the specified event-by-event
@@ -252,7 +253,8 @@ class DataSet(object):
         labels = map(str, runs)
         data =\
             data_access.eval_dataset_and_filter(self, detid,
-            event_data_getter = event_data_getter, frame_processor = frame_processor)
+            event_data_getter = event_data_getter, frame_processor = frame_processor,
+            event_mask = event_mask)
 #        if insert:
 #            self._db_insert(data.mean, data.event_data, detid)
         return data
