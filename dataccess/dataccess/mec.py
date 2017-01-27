@@ -4,12 +4,12 @@ Functions for getting derived data from MEC-specific diagnostics.
 import data_access
 import utils
 import numpy as np
+from dataccess import xes_process as spec
 
 # based on equating GMD output to si integral for run 880
 si_integral_to_eV = 7.1923263553224339e-11
 
 def background_subtracted_spectrum(imarr, transpose = False):
-    from dataccess import xes_process as spec
     if transpose:
         imarr = imarr.T
     cencol = spec.center_col(imarr)
@@ -18,6 +18,30 @@ def background_subtracted_spectrum(imarr, transpose = False):
 def si_imarr_sum(imarr, **kwargs):
     spectrum = background_subtracted_spectrum(imarr, transpose = True)
     return np.sum(spectrum)
+
+def si_imarr_cm_3(imarr, **kwargs):
+    imarr = imarr.T
+    x, y = spec.get_spectrum(imarr, calib_load_path = '/reg/neh/home5/ohoidn/analysis/MgO/si_calib')
+    #spectrum = background_subtracted_spectrum(imarr, transpose = True)
+    cm = np.sum(y * x)/np.sum(y)
+    return cm
+    #return (cm_index * e_scale) + e_intercept
+
+def si_imarr_cm_4(imarr, **kwargs):
+    x, y = spec.get_spectrum(imarr, calib_load_path = '/reg/neh/home5/ohoidn/analysis/MgO/si_calib')
+    #spectrum = background_subtracted_spectrum(imarr, transpose = True)
+    cm = np.sum(y * x)/np.sum(y)
+    return cm
+    #return (cm_index * e_scale) + e_intercept
+
+def si_imarr_cm_subregion_3(imarr, **kwargs):
+    imarr = imarr.T
+    imarr = imarr[400:660, :]
+    x, y = spec.get_spectrum(imarr)
+    #spectrum = background_subtracted_spectrum(imarr, transpose = True)
+    cm = np.sum(y * x)/np.sum(y)
+    return cm
+    #return (cm_index * e_scale) + e_intercept
 
 #TODO: should have an mec-specific config file
 # TODO: Add a generic function for the integral of a detector in xes_process.py

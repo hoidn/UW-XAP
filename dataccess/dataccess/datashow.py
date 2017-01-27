@@ -17,8 +17,9 @@ if config.plotting_mode == 'notebook':
 def apply_default_masks(imarray, detid):
     import config
     import utils
+    base_mask = (imarray != 0)
     extra_masks = config.detinfo_map[detid].extra_masks
-    combined_mask = utils.combine_masks(imarray, extra_masks)
+    combined_mask = utils.combine_masks(base_mask, extra_masks)
     return imarray * combined_mask
 
 def identity(imarr):

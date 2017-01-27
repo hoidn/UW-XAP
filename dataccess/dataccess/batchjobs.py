@@ -1,3 +1,4 @@
+import pdb
 import dill
 import os
 from threading import Timer
@@ -14,6 +15,17 @@ from dataccess.utils import mpi_rank
 from IPython.config import Application
 log = Application.instance().log
 log.level = 10
+
+#def print_engines(f):
+#    def new_f(*args, **kwargs):
+#        try:
+#            print f.__name__
+#        except:
+#            pass
+#        print [en.batch_id for en in engines]
+#        #assert len(list(set(enginesl
+#        return f(*args, **kwargs)
+#    return new_f
 
 # TODO: refer to jobs by id instead of profile name
 def blocking_delay(func, err, maxdelay = 5, timeout_func = None):
@@ -46,7 +58,7 @@ def batch_submit(cmd, ncores = 6, queue = 'psfehq'):
 def add_engine(newid = None, ncores = 4, queue = 'psfehq', init = True):
     if newid is None:
         try:
-            newid = max(engines) + 1
+            newid = max([e.job_id for e in engines]) + 1
         except:
             newid = 0
     elif newid in engines:
@@ -94,15 +106,12 @@ def bjobs_count(queue_name):
 #    print host,pid
 #    #subprocess.Popen("ssh {0} \"kill {1}\"".format(host, pid), shell = True)
 
-def kill_job(job_id):
+def kill_job(batch_id):
     # pdb.set_trace()
     try:
-        return bashrun('bkill {0}'.format(job_id))
+        return bashrun('bkill {0}'.format(batch_id))
     except subprocess.CalledProcessError, e:
         print e
-
-
-
 
 def kill_engines():
     """
@@ -138,9 +147,9 @@ class Engine:
         
     def __eq__(self, other):
         try:
-            return other.job_id == self.job_id
+            return other.batch_id == self.batch_id
         except AttributeError:
-            return other == self.job_id
+            return other == self.batch_id
 
     def set_busy(self):
         self.busy = True
@@ -156,6 +165,8 @@ class Engine:
 	JobPool.remove_job(self.job_id)
 
     def restart(self, hosts, pids):
+        pdb.set_trace()
+        print self.batch_id
         kill_job(self.batch_id)
         # Move to the end of the engine queue
         engines.remove(self)
@@ -244,6 +255,7 @@ class JobPool:
 
 
     def __call__(self, *args, **kwargs):
+        pdb.set_trace()
         engine = JobPool._get_free_engine()
         print "engine batch: ", engine.batch_id
         engine.set_busy()

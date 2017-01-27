@@ -81,17 +81,9 @@ def eval_dataset(dataset_identifier, detid, event_data_getter = None, event_mask
     """
     dataset = get_dataset(dataset_identifier)
     runList = dataset.runs
-    if detid in config.nonarea:
-        subregion_index = None
-    else:
-        try:
-            subregion_index = config.detinfo_map[detid].subregion_index
-        except KeyError, e:
-            raise ValueError("Invalid detector id: %s" % detid)
     return psget.get_signal_many_parallel(
         runList, detid, event_data_getter = event_data_getter,
-        event_mask = event_mask, subregion_index = subregion_index,
-        dark_frame =  dark_frame, **kwargs)
+        event_mask = event_mask, dark_frame =  dark_frame, **kwargs)
         #print "event data is: ", event_data
 
 def get_dark_dataset(dataset_identifier):

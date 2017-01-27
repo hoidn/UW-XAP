@@ -333,7 +333,7 @@ def get_background_full_frame(imarray, detid, compound_list, smoothing = DEFAULT
     bgfit = imarray.copy()
     
     # mask based on good pixels
-    pixel_mask = utils.combine_masks(bgfit, [], transpose = True)
+    pixel_mask = utils.combine_masks((bgfit != 0), [], transpose = True)
 
     # mask based on powder peak locations
     powder_mask = make_powder_ring_mask(detid, bgfit, compound_list, width = width)

@@ -7,7 +7,7 @@ loaded at the top of config.py as follows: "from dataccess.default_config import
 stdout_to_file = False
 
 # Log file location
-logfile_path = None
+logfile_path = '.uwxap.log'
 
 # If False, only print stdout from the rank 0 mode when running with MPI
 suppress_root_print = True

@@ -1,21 +1,15 @@
 # Author: O. Hoidn
-import pandas as pd
-import re
 import pdb
 import sys
-import math
 import numpy as np
-from PIL import Image
-import glob
 import argparse
 import os
 import random
-import dill
-import sys
 from time import time
 from collections import namedtuple
 
 import config
+import logging
 from output import log
 
 
@@ -42,9 +36,21 @@ class DataResult(DataResultBase):
         """
         Return a 1d np.ndarray of event data.
         """
+        # TODO: currently does not work if each event datum is a numpy array rather than
+        # a numeric type
         def extract_event_data(arr2d):
-            return arr2d[:, -1]
+            data_col = arr2d[:, -1]
+            if type(data_col[0]) == np.ndarray:
+                return np.vstack(data_col)
+            return data_col
         return extract_event_data(utils.flatten_dict(self.event_data))
+
+    # TODO docstring
+    def iter_event_value_pairs(self):
+        event_data_dict = self.event_data
+        for run in event_data_dict:
+            for nevent in event_data_dict[run]:
+                yield event_data_dict[run][nevent]
 
     def nevents(self):
         """ Return the number of events"""
@@ -277,7 +283,7 @@ def get_area_detector_subregion(quad, det, evt, detid):
         else:
             return increment
 #@utils.eager_persist_to_file('cache/psget/gedn')
-def get_event_data_nonarea(runNum, detid, **kwargs):
+def get_event_data_nonarea(runNum, detid = None, **kwargs):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     if config.smd:
@@ -304,6 +310,7 @@ def get_event_data_nonarea(runNum, detid, **kwargs):
             det_values.append(np.mean([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()]))
             #print "appending: ", str([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()])
     for nevent, evt in evtgen:
+        log('processing' + str(nevent))
         if config.testing and nevent % 10 != 0:
             continue
         if config.nonarea[detid].type == 'Lusi.IpmFexV1':
@@ -315,7 +322,7 @@ def get_event_data_nonarea(runNum, detid, **kwargs):
     return reduce(lambda x, y: x + y, comm.allgather(det_values))
 
 #@memory.cache
-def get_signal_one_run_nonarea(runNum, detid,
+def get_signal_one_run_nonarea(runNum, detid = None,
         event_data_getter = None, event_mask = None, **kwargs):
     def event_valid(nevent):
         if event_mask:
@@ -346,10 +353,29 @@ def get_signal_one_run_nonarea(runNum, detid,
 
 
 # TODO: more testing and refactor all of this!
+def eval_frame_processor(evt, ds, frame_processor, **kwargs):
+    def detid_array(detid):
+        det = Detector(config.detinfo_map[detid].device_name, ds.env())
+        try:
+            subregion_index = config.detinfo_map[detid].subregion_index
+        except KeyError, e:
+            raise ValueError("Invalid detector id: %s" % detid)
+        return get_area_detector_subregion(subregion_index, det, evt,
+            detid)
+    if 'detids' in frame_processor.__dict__:
+        log ("detids: %s" % str(frame_processor.detids))
+        det_data_dict = {detid: detid_array(detid) for detid in frame_processor.detids}
+        det_data_dict.update(kwargs)
+        return frame_processor(**det_data_dict)
+    else:
+        try:
+            return frame_processor(detid_array(kwargs['detid']), **kwargs)
+        except KeyError, e:
+            raise ValueError("kwarg 'detid' must be provided if frame_processor lacks the attribute detids")
+
 #@utils.eager_persist_to_file('cache/psget/gsorsa')
-def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
-        event_data_getter = None, event_mask = None, frame_processor = None,
-        dark_frame = None, **kwargs):
+def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, event_mask = None,
+        frame_processor = None, dark_frame = None, **kwargs):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
     def event_valid(nevent):
@@ -381,19 +407,21 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
         if event_valid(nevent):
             evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
             try:
+                subregion_index = config.detinfo_map[detid].subregion_index
                 increment = get_area_detector_subregion(subregion_index, det, evt,
-                    detid, **kwargs)
+                    detid)
                 if dark_frame is not None:
-#                    print 'dark: ', dark_frame
-#                    print 'increment: ', increment
                     increment -= dark_frame#.astype('uint16')
-                    #print "subtracting dark frame"
                 if frame_processor is not None:
-                    np.save('increment%d.npy' % nevent, increment)
-                    increment = frame_processor(increment, detid = detid)
-                    log( "processing frame")
+                    if dark_frame is None:
+                        log( 'dark frame provided but will not be applied' )
+                    #np.save('increment%d.npy' % nevent, increment)
+                    if 'detid' not in kwargs:
+                        kwargs['detid'] = detid
+                    increment = eval_frame_processor(evt, ds, frame_processor, **kwargs)
+                    log( "processing frame, event %d" % nevent)
             except (AttributeError, TypeError) as e:
-                print e
+                logging.exception(e)
                 #raise
                 continue
             if increment is not None:
@@ -438,20 +466,19 @@ def get_signal_one_run_smd_area(runNum, detid, subregion_index = -1,
 
 
 #@memory.cache
-def get_signal_one_run_smd(runNum, detid, subregion_index = -1,
-        event_data_getter = None, event_mask = None, **kwargs):
+def get_signal_one_run_smd(runNum, detid = None, event_data_getter = None, event_mask = None,
+        **kwargs):
     if detid in config.nonarea:
         return get_signal_one_run_nonarea(runNum, detid,
             event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
     else: # Assume detid to be an area detector
-        return get_signal_one_run_smd_area(runNum, detid, subregion_index = subregion_index,
-            event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
+        return get_signal_one_run_smd_area(runNum, detid, event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
 
 
 
 #@memory.cache
 @utils.eager_persist_to_file('cache/psget/gsmp')
-def get_signal_many_parallel(runList, detid, event_data_getter = None,
+def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
     event_mask = None, **kwargs):
     """
     Parallel version of get_signal_many

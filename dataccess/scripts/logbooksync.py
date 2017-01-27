@@ -5,7 +5,7 @@ import os
 sys.path.append('.') # so that config.py can be imported
 from dataccess import logbook
 
-'Synchronize google spreadsheet logbook data by running this script on pslogin03'
+'Synchronize google spreadsheet logbook data by running this script on pslogin'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', help = 'URLs of the google drive spreadsheet. Defaults to the URL provided in config.py.')

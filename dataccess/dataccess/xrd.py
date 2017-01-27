@@ -12,6 +12,8 @@ import playback
 from output import log
 import geometry
 import query
+from dataccess.utils import extrap1d
+from scipy.interpolate import interp1d
 
 if config.plotting_mode == 'notebook':
     from dataccess.mpl_plotly import plt
@@ -27,6 +29,8 @@ def _all_equal(lst):
     if len(s) <= 1:
         return True
     return False
+
+
 
 
 def _patterns_compound(patterns):
@@ -170,15 +174,7 @@ class XRDset:
         else: # dataref must be a 
             self.label = dataref.label
 
-
-
-    def set_model(self, model):
-        for p in self.patterns:
-            peaks = p.peaks.peaks
-            for peak in peaks:
-                peak.set_model(model)
-
-    def get_array(self, event_data_getter = None):
+    def get_array(self, event_data_getter = None, **kwargs):
         from dataccess import data_access as data
 
         #elif dataset.ref_type == 'label':
@@ -191,8 +187,9 @@ class XRDset:
         imarray = imarray.T
 
         if self.mask:
+            base_mask = (imarray != 0.)
             extra_masks = config.detinfo_map[self.detid].extra_masks
-            combined_mask = utils.combine_masks(imarray, extra_masks, transpose = True)
+            combined_mask = utils.combine_masks(base_mask, extra_masks, transpose = True)
             imarray *= combined_mask
         min_val =  np.min(imarray)
         if min_val < 0:
@@ -342,6 +339,15 @@ class Peak:
                     param_values = param_values)
             return raw_integral - np.sum(fit_result.eval(x = x[i]))
 
+    def center_of_mass(self, x, y, **kwargs):
+        """
+        TODO: make this more sophisticated.
+        """
+        x = np.array(x)
+        i = self.crop_indices(x, self.peak_width)
+        x_i = x[i]
+        y_i = np.array(y)[i]
+        return np.sum(x_i * y_i) / np.sum(y_i)
 
     def background_fit(self, x, y, model, recenter = False, fixed_params = [], param_values = {},
             **kwargs):
@@ -474,7 +480,7 @@ class Pattern:
             nbins = 1000, fiducial_ellipses = None, bgsub = False,
             pre_integration_smoothing = 0, starting_values = None,
             fixed_params = None, model = None, pattern_smoothing = 0.,
-            **kwargs):
+            peak_angles = None, **kwargs):
         """
         Initialize an instance using a single dataset.
         
@@ -487,42 +493,76 @@ class Pattern:
         self.dataset_list = [xrdset]
         self.width = peak_width
         self.compound_list = xrdset.compound_list
-        #pdb.set_trace()
+
         self.angles, self.intensities, self.image =\
-                geometry.process_imarray(xrdset.detid, xrdset.get_array(kwargs),
+                geometry.process_imarray(xrdset.detid, xrdset.get_array(**kwargs),
                         compound_list = xrdset.compound_list, nbins = nbins,
                         fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
                         pre_integration_smoothing = pre_integration_smoothing)
-        self.intensities = list(gaussian_filter(self.intensities, pattern_smoothing))
+        self.angles = np.array(self.angles)
+        self.intensities = gaussian_filter(self.intensities, pattern_smoothing)
         #self.angles = np.array(self.angles)
         self.anglemask = RealMask((np.min(self.angles), np.max(self.angles)))
         self.label = xrdset.label
-        self.peak_angles = np.array(geometry.get_powder_angles(self.get_compound(),
-            filterfunc = lambda ang: self.anglemask.includes(ang)))
+        if peak_angles is None:
+            self.peak_angles = np.array(geometry.get_powder_angles(self.get_compound(),
+                filterfunc = lambda ang: self.anglemask.includes(ang)))
+        else:
+            self.peak_angles = peak_angles
         self.peaks = PeakParams(self.peak_angles, starting_values = starting_values,
                 fixed_params = fixed_params, model = model)
 
     def get_pattern(self):
         return self.angle, self.intensities
 
+    @classmethod
+    def from_xrdset(cls, xrdset, nbins = 1000, fiducial_ellipses = None,
+            bgsub = False, pre_integration_smoothing = 0, **kwargs):
+        """
+        Instantiate from an XRDset instance.
+        """
+        if type(xrdset.dataref) == query.DataSet:
+            dataset = xrdset.dataref
+        else:
+            dataset = None
+        angles, intensities, image =\
+                geometry.process_imarray(xrdset.detid, xrdset.get_array(kwargs),
+                        compound_list = xrdset.compound_list, nbins = nbins,
+                        fiducial_ellipses = fiducial_ellipses, bgsub = bgsub,
+                        pre_integration_smoothing = pre_integration_smoothing)
+        return cls(angles, intensities, image =image, dataset = dataset, **kwargs)
+
     #@utils.eager_persist_to_file("cache/xrd/pattern.from_dataset/")
     @classmethod
     def from_dataset(cls, dataset, detid, compound_list, label = None, **kwargs):
         """
-        Instantiate using a query.Dataset instance.
+        Instantiate using a 2d data array from an area detector.
 
         kwargs are passed to Pattern.__init__().
         """
         xrdset = XRDset(dataset, detid, compound_list, label = label)
         return cls(xrdset, label = label, **kwargs)
 
+    @classmethod
+    def from_event_patterns(cls, dataset, frame_processor, peak_width = config.peak_width,
+             **kwargs):
+        """
+        This requires a frame_processor function that returns a powder pattern.
+        """
+        result = dataset.evaluate(frame_processor = frame_processor,
+            event_data_getter = utils.identity, **kwargs)
+        angles, intensities = np.sum(result.flat_event_data()).T
+        return cls(angles, intensities, peak_width = peak_width)
+        
+
     def get_attribute(self, attr):
         """
         Return an attribute value for the dataset(s) associated with this instance.
         """
-        values = map(lambda ds: ds.dataref.get_attribute(attr), self.dataset_list)
-        assert _all_equal(values)
-        return values[0]
+        if self.dataset is not None:
+            return self.dataset.get_attribute(attr)
+        else:
+            raise KeyError("Cannot get attribute from None dataset")
 
     @classmethod
     def from_multiple(cls, dataset_list, **kwargs):
@@ -537,11 +577,10 @@ class Pattern:
         """
         Add the data of a second Pattern instance to the current one.
         """
-        self.dataset_list = self.dataset_list + other.dataset_list
         assert self.width == other.width
         assert self.compound_list == other.compound_list
-        self.angles = self.angles + other.angles
-        self.intensities = self.intensities + other.intensities
+        self.angles = np.concatenate((self.angles, other.angles))
+        self.intensities = np.concatenate((self.intensities, other.intensities))
         self.anglemask = self.anglemask + other.anglemask
         self.peak_angles = np.concatenate((self.peak_angles, other.peak_angles))
         self.peaks = self.peaks + other.peaks
@@ -616,7 +655,6 @@ class Pattern:
             peak_width = config.peak_width, fixed_params = None, legend = False):
         if ax is None:
             ax = self._new_ax()
-        #pdb.set_trace()
         if normalization:
             scale = get_normalization([ self ], normalization_type = normalization,
                     fixed_params = fixed_params)[0]
@@ -626,7 +664,6 @@ class Pattern:
             label = self.label
         dthet = (np.max(self.angles) - np.min(self.angles))/len(self.angles)
         ax.plot(self.angles, gaussian_filter(self.intensities, 0.05/dthet)/scale, label = label)
-        #pdb.set_trace()
         if normalization == 'peak':
             self.plot_peakfits(ax = ax, show = False, peak_width = peak_width,
                     normalization = scale)
@@ -659,6 +696,30 @@ class Pattern:
         else:
             raise ValueError("invalid method %s" % method)
 
+    def centers_of_mass(self):
+        """Calculate peak centers of mass"""
+        return [peak.center_of_mass(self.angles, self.intensities)
+                    for peak in self.peaks.peaks]
+
+    def recentered_peaks(self):
+        """
+        Return powder pattern with peaks shifted so that their CMs correspond to nominal peak angles.
+        """
+        assert type(self.angles) == np.ndarray
+        assert type(self.intensities) == np.ndarray
+        peak_cms = self.centers_of_mass()
+        output = np.zeros_like(self.intensities)
+        for peak, cm in zip(self.peaks.peaks, peak_cms):
+            shift = peak.angle - cm
+            i = ((peak.angle  - 0.5 *  peak.peak_width) < self.angles) & ((peak.angle  + 0.5 *  peak.peak_width) > self.angles)
+            x_peak, y_peak = self.angles[i], self.intensities[i]
+            _, new_y = utils.regrid(x_peak, y_peak, shift = shift)
+            if not np.isnan(np.sum(new_y)):
+                output[i] += new_y
+        return self.angles, output
+
+
+
     def background(self, peak_width = config.peak_width):
         """
         Return an estimate of background level by integrating from 0 to just
@@ -669,8 +730,6 @@ class Pattern:
         i =  np.where(x < max_angle)[0]
         return np.sum(np.array(self.intensities)[i])
                 
-
-
 
 
 

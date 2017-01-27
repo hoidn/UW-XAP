@@ -153,6 +153,8 @@ def lineout(data, cencol, pxwidth = 3):
     """
     Return a 1d lineout
     """
+    if data.dtype != np.dtype('float'):
+        data = data.astype('float')
     spectrum_num_points = len(data)
     spectrum_intensities = np.sum(data[:,cencol - pxwidth:cencol + pxwidth + 1], axis = 1)
     return spectrum_intensities
