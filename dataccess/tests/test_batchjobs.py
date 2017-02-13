@@ -31,6 +31,18 @@ def test_jobpool_3():
     assert np.all(np.isclose(result, [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]))
     return result
 
+def test_jobpool_4():
+    import numpy as np
+    @JobPool
+    def square(arr):
+        from dataccess import data_access
+        return mpimap(lambda x: x**2, arr)
+
+    arr = np.array(range(10))
+    result = square(arr).get()
+    assert np.all(np.isclose(result, [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]))
+    return result
+
 def test_blocking_delay():
     def mf():
         raise ValueError

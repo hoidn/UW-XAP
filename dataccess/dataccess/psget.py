@@ -7,6 +7,7 @@ import os
 import random
 from time import time
 from collections import namedtuple
+import batchjobs
 
 import config
 import logging
@@ -86,6 +87,7 @@ def idxgen(ds):
     size = comm.Get_size()
     run = ds.runs().next()
     times = run.times()
+    log('size: '+ str(size))
     mylength = len(times)//size
     startevt = rank*mylength
     mytimes= times[startevt:(rank+1)*mylength]
@@ -466,6 +468,7 @@ def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, 
 
 
 #@memory.cache
+@batchjobs.JobPool
 def get_signal_one_run_smd(runNum, detid = None, event_data_getter = None, event_mask = None,
         **kwargs):
     if detid in config.nonarea:
@@ -486,6 +489,7 @@ def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
     def mapfunc(run_number):
         return get_signal_one_run(run_number, detid, event_data_getter =
             event_data_getter, event_mask = event_mask, **kwargs)
+    # TODO move the .get()u up one level on the stack
     def mapfunc_smd(run_number):
         return get_signal_one_run_smd(run_number, detid, event_data_getter =
             event_data_getter, event_mask = event_mask, **kwargs)
@@ -496,9 +500,11 @@ def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
         # raised.
         run_data = []
         exceptions = []
-        for run in runList:
+        async_results = [mapfunc_smd(run) for run in runList]
+        for result in async_results:
             #try:
-            run_data.append(mapfunc_smd(run))
+            #run_data.append(result)
+            run_data.append(result.get())
 #            except ValueError, e:
 #                exceptions.append(e)
 #                log( "WARNING: ", e)

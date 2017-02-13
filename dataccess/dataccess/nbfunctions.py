@@ -8,14 +8,12 @@ config.stdout_to_file = True
 from dataccess import xrd
 from dataccess import query
 from dataccess import utils
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 
 from dataccess import logbook
 from itertools import *
 from collections import namedtuple
-from dataccess import utils
 import pdb
 
 # Configure notebook graphics
@@ -270,7 +268,6 @@ def best_queue():
 def preprocess_run(run_number, cores = 1, detid = 'quad2'):
     cmd = r'bsub -n {0} -o batch_logs/%J.log -q {1} mpirun mecana.py -n datashow {2} {3}'.format(cores, best_queue().name, detid, run_number)
 
-    #cmd = r'bsub -a mympi -n {0} -q {1} -o batch_logs/%J.log mecana.py -n datashow {2} {3}'.format(cores, best_queue(), detid, run_number)
     print 'submitting: %s' % cmd
     os.system(cmd)
 
@@ -290,7 +287,6 @@ def preprocess_histogram(ds, detid, event_data_getter_name = '', ncores = 1):
     """
     if isinstance(ds, str):
         ds = query.existing_dataset_by_label(ds)
-    import os
     if event_data_getter_name:
         edg_opt = ' -u ' + event_data_getter_name
     else:

@@ -1,10 +1,6 @@
 # Authors: O. Hoidn, J. Pacold, and R. Valenza
 
-import sys
-import argparse
 import numpy as np
-import math
-import matplotlib as mp
 import os
 import pandas as pd
 from scipy import interpolate
@@ -12,8 +8,6 @@ import functools
 
 import data_access as data
 import utils
-import data_access
-import logbook
 import playback
 
 import pdb

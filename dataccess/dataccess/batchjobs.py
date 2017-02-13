@@ -1,5 +1,5 @@
+from ipyparallel import error
 import pdb
-import dill
 import os
 from threading import Timer
 import ipyparallel
@@ -10,11 +10,14 @@ import subprocess
 import time
     
 engines = []
+DEFAULT_NCORES = 8
+LOCAL_NCORES = 16
 
-from dataccess.utils import mpi_rank
+from dataccess import utils
 from IPython.config import Application
-log = Application.instance().log
-log.level = 10
+from dataccess.output import log
+#log = Application.instance().log
+#log.level = 10
 
 #def print_engines(f):
 #    def new_f(*args, **kwargs):
@@ -26,6 +29,15 @@ log.level = 10
 #        #assert len(list(set(enginesl
 #        return f(*args, **kwargs)
 #    return new_f
+
+import atexit
+
+def shutdown():
+    if not utils.is_mpi():
+        for engine in engines:
+            engine.terminate(remove = False)
+
+atexit.register(shutdown)
 
 # TODO: refer to jobs by id instead of profile name
 def blocking_delay(func, err, maxdelay = 5, timeout_func = None):
@@ -52,10 +64,10 @@ def blocking_delay(func, err, maxdelay = 5, timeout_func = None):
 def bashrun(cmd, shell = True):
     return subprocess.check_output(cmd, shell=shell)
 
-def batch_submit(cmd, ncores = 6, queue = 'psfehq'):
+def batch_submit(cmd, ncores = DEFAULT_NCORES, queue = 'psfehq'):
     return bashrun(r'bsubx -n {0} -q {1} -o batch_logs/%J.log mpirun '.format(ncores, queue) + cmd)
 
-def add_engine(newid = None, ncores = 4, queue = 'psfehq', init = True):
+def add_engine(newid = None, ncores = DEFAULT_NCORES, queue = 'psfehq', init = True):
     if newid is None:
         try:
             newid = max([e.job_id for e in engines]) + 1
@@ -66,7 +78,7 @@ def add_engine(newid = None, ncores = 4, queue = 'psfehq', init = True):
     engines.append(Engine(newid, ncores = ncores,
           queue = queue, init_batch_job = init)) 
 
-def start_engines(name, ncores = 2, mode = 'batch', queue = 'psfehq'):
+def start_engines(name, ncores = DEFAULT_NCORES, mode = 'batch', queue = 'psfehq'):
     """
     Start ipyparallel engines.
 
@@ -82,18 +94,25 @@ def start_engines(name, ncores = 2, mode = 'batch', queue = 'psfehq'):
     if mode == 'batch':
         return get_batch_id(batch_submit('ipengine --profile={0} --location={1}'.format(name, host_ip), ncores = ncores, queue = queue))
     elif mode == 'local':
-        subprocess.Popen('mpirun -n 4 ipengine --profile={0} --log-to-file 2>&1 &'.format(name),
+        subprocess.Popen('mpirun -n {0} ipengine --profile={1} --log-to-file 2>&1 &'.format(min(ncores, LOCAL_NCORES), name),
                 shell = True)
     else:
         raise ValueError("invalid mode: %s" % mode)
 
-def ipcluster_submit(name, ncores = 6, queue = 'psfehq', mode = 'batch'):
+def ipcluster_submit(name, ncores = DEFAULT_NCORES, queue = 'psfehq', mode = 'batch'):
     """
     Launch (1) an ipcontroller (locally) and (2) the specified number of ipengines
     via an LSF batch job.
     """
-    host_ip = bashrun('hostname --ip-address')[:-1]
-    subprocess.Popen("ipcontroller --profile={0} --location={1} --ip='*' --log-to-file 2>&1 &".format(name, host_ip), shell = True)
+    ipcontroller_path = os.path.expanduser('~/.ipython/profile_{0}/security/ipcontroller-engine.json'.format(name))
+    # TODO:L this check makes it unecessary for the user to specify whether to
+    # launch the controllers or not
+    if not os.path.exists(ipcontroller_path):
+        host_ip = bashrun('hostname --ip-address')[:-1]
+        subprocess.Popen("ipcontroller --profile={0} --location={1} --ip='*' --log-to-file 2>&1 &".format(name, host_ip), shell = True)
+        log('launching ipcontroller')
+    else:
+        log('ipcontroller found')
     batch_id = start_engines(name, ncores = ncores, mode = mode)
     print batch_id
     return batch_id
@@ -107,7 +126,6 @@ def bjobs_count(queue_name):
 #    #subprocess.Popen("ssh {0} \"kill {1}\"".format(host, pid), shell = True)
 
 def kill_job(batch_id):
-    # pdb.set_trace()
     try:
         return bashrun('bkill {0}'.format(batch_id))
     except subprocess.CalledProcessError, e:
@@ -121,9 +139,10 @@ def kill_engines():
     subprocess.Popen("ps -aux | egrep ohoidn.*ipcontroller | sed -r 's/ +/:/g' | cut -d: -f2 | xargs kill", shell = True)
     subprocess.Popen("rm .engines", shell = True)
 
+
 class Engine:
     jobname_prefix = 'mpi'
-    def __init__(self, job_id, ncores = 6, queue = 'pfehq',
+    def __init__(self, job_id, ncores = DEFAULT_NCORES, queue = 'pfehq',
                 shutdown_seconds = None, init_batch_job = True):
         """
         shutdown_seconds : int
@@ -138,7 +157,6 @@ class Engine:
         self.shutdown_seconds = shutdown_seconds
 
         if init_batch_job:
-            #pdb.set_trace()
             self.batch_id = ipcluster_submit(self.profile_name, ncores = self.ncores, queue = self.queue)
             
             if self.shutdown_seconds is not None:
@@ -160,16 +178,14 @@ class Engine:
     def unset_busy(self):
         self.busy = False
     
-    def terminate(self, hub = True):
-        self.get_rc().shutdown(hub = hub)
-	JobPool.remove_job(self.job_id)
-
-    def restart(self, hosts, pids):
-        pdb.set_trace()
-        print self.batch_id
+    def terminate(self, remove = True):
         kill_job(self.batch_id)
-        # Move to the end of the engine queue
-        engines.remove(self)
+        if remove:
+            engines.remove(self)
+
+    def restart(self):
+        print self.batch_id
+        self.terminate(remove = True)
         engines.append(self)
         self.batch_id = start_engines(self.profile_name, ncores = self.ncores, queue = self.queue)
 
@@ -200,6 +216,10 @@ class JobResult:
         if type(output) != ipyparallel.client.asyncresult.AsyncResult:
             self.result = self._process_output(output)
 
+    def _reset_engine(self):
+        self.engine.restart()
+        self.engine.unset_busy()
+
     def _process_output(self, output_list):
         """
         Find output from the rank 0 worker and return it. Also resets self.engine.
@@ -211,17 +231,24 @@ class JobResult:
             pids.append(pid)
             if rank == 0:
                 rank0_result = result
-        self.engine.restart(hosts, pids)
-        self.engine.unset_busy()
+        self._reset_engine()
         return rank0_result
 
 
     def get(self):
-        try:
-            return self.result
-        except AttributeError:
-            self.result = self._process_output(self.raw_output.get())
-            return self.result
+        while True:
+            try:
+                return self.result
+            except AttributeError:
+                try:
+                    self.result = self._process_output(self.raw_output.get())
+                    return self.result
+                except error.TimeoutError:
+                    time.sleep(1)
+            except error.EngineError:
+                self.engine._reset_engine()
+                log('restarting engines due to EngineError exception')
+                raise
 
 class JobPool:
     """
@@ -233,7 +260,7 @@ class JobPool:
         self.shutdown = shutdown
 
     @staticmethod
-    def launch_engines(nengines = 1, ncores = 4, queue = 'psfehq'):
+    def launch_engines(nengines = 1, ncores = DEFAULT_NCORES, queue = 'psfehq'):
         return [add_engine(ncores = ncores, queue = queue) for i in range(nengines)]
 
     @staticmethod
@@ -246,7 +273,6 @@ class JobPool:
     @staticmethod
     def _get_free_engine():
         """Return a free Engine instance, creating new ones if necessary"""
-        #pdb.set_trace()
         free = [engine for engine in engines if not engine.check_busy()]
         if free:
             return free[0]
@@ -255,7 +281,6 @@ class JobPool:
 
 
     def __call__(self, *args, **kwargs):
-        pdb.set_trace()
         engine = JobPool._get_free_engine()
         print "engine batch: ", engine.batch_id
         engine.set_busy()
@@ -271,9 +296,10 @@ class JobPool:
             #import logging
             host = os.environ['HOSTNAME']
             pid = os.getpid()
-            rank = mpi_rank()
+            rank = utils.mpi_rank()
             result = self.func(*args, **kwargs)
 
+            #utils.mpi_finalize()
             return host, pid, rank, result
 
         return JobResult(engine, newfunc(*args, **kwargs))
@@ -307,21 +333,8 @@ def best_queue(usable_queues):
 usable_queues = map(Bqueue, ('psanaq', 'psfehq', 'psnehq'))
 
 def init():
-    JobPool.launch_engines(nengines = 6, ncores = 4)
+    JobPool.launch_engines(nengines = 4, ncores = DEFAULT_NCORES)
 
-#    import dill
-#    with open('.engines', 'wb') as f:
-#        dill.dump([engine.job_id for engine in engines], f)
-#try:
-#    print ("looking for engines file...")
-#    with open('.engines', 'rb') as f:
-#        engine_ids = dill.load(f)
-#        [add_engine(newid = i, init = False) for i in engine_ids]
-#except IOError:
-#    print ("File .engines not found; launching batch jobs")
-#    init()
-#print "engines:", engines
-
-if 'OMPI_COMM_WORLD_SIZE' not in os.environ:
-    # launch ipyparallel controller and engines if this is the controlling process.
+# launch ipyparallel controller and engines if this is the controlling process.
+if not utils.is_mpi():
     init()

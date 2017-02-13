@@ -58,3 +58,33 @@ def xrts1_fe_fluorescence_integral(label):
         return np.sum(spectrum)
     mean_frame, _ = data_access.eval_dataset_and_filter(label, 'xrts1')
     return xrts1_sum(mean_frame)
+
+def grid_mask(arr, stride = 10):
+    mask = np.ones(arr.shape, dtype = bool)
+    mask[::stride, :] = False
+    mask[:, ::stride] = False
+    return mask
+
+def outlier_mask(arr, min = -10, max = 10):
+    mask = np.ones(arr.shape, dtype = bool)
+    mask[np.logical_or(arr < min, arr > max)] = False
+    return mask
+
+# TODO: handle the mec-specific data files referenced here
+def write_masks():
+    m1 = np.load('quad1_mask_calibman_10.12.npy')
+
+    m2 = np.load('quad2_mask_calibman_10.12.npy')
+    #m2 = np.load('mask3.npy')
+
+    dark1 = np.load('dark1.npy').T
+    new1 = outlier_mask(dark1) * m1
+    #new1 = zero_islands(outlier_mask(dark1) * grid_mask(dark1) * m1, 0, 75)
+
+    dark2 = np.load('dark2.npy').T
+    new2 = outlier_mask(dark2) * m2
+    #new2 = zero_islands(outlier_mask(dark2) * grid_mask(dark2) * m2, 0, 75)
+
+    np.save('quad1_mask_10.11.npy', new1)
+
+    np.save('quad2_mask_10.11.npy', new2)
