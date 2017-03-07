@@ -1,6 +1,10 @@
+import config
+config.autobatch = False
+
 from dataccess.batchjobs import *
 from dataccess.utils import mpi_rank
 from dataccess.utils import mpimap
+
 
 def test_jobpool():
     @JobPool

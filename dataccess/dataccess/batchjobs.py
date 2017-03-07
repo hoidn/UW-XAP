@@ -11,7 +11,7 @@ import time
     
 engines = []
 DEFAULT_NCORES = 8
-LOCAL_NCORES = 16
+LOCAL_NCORES = 8
 
 from dataccess import utils
 from IPython.config import Application
@@ -19,16 +19,6 @@ from dataccess.output import log
 #log = Application.instance().log
 #log.level = 10
 
-#def print_engines(f):
-#    def new_f(*args, **kwargs):
-#        try:
-#            print f.__name__
-#        except:
-#            pass
-#        print [en.batch_id for en in engines]
-#        #assert len(list(set(enginesl
-#        return f(*args, **kwargs)
-#    return new_f
 
 import atexit
 
@@ -67,7 +57,7 @@ def bashrun(cmd, shell = True):
 def batch_submit(cmd, ncores = DEFAULT_NCORES, queue = 'psfehq'):
     return bashrun(r'bsubx -n {0} -q {1} -o batch_logs/%J.log mpirun '.format(ncores, queue) + cmd)
 
-def add_engine(newid = None, ncores = DEFAULT_NCORES, queue = 'psfehq', init = True):
+def add_engine(newid = None, ncores = DEFAULT_NCORES, queue = 'psfehq', mode = 'batch'):
     if newid is None:
         try:
             newid = max([e.job_id for e in engines]) + 1
@@ -75,8 +65,10 @@ def add_engine(newid = None, ncores = DEFAULT_NCORES, queue = 'psfehq', init = T
             newid = 0
     elif newid in engines:
         raise ValueError("Engine id: %d already exists" % newid)
-    engines.append(Engine(newid, ncores = ncores,
-          queue = queue, init_batch_job = init)) 
+    engine = Engine(newid, ncores = ncores,
+                      queue = queue, init_controller = True, mode = mode)
+    engines.append(engine) 
+    return engine
 
 def start_engines(name, ncores = DEFAULT_NCORES, mode = 'batch', queue = 'psfehq'):
     """
@@ -94,7 +86,7 @@ def start_engines(name, ncores = DEFAULT_NCORES, mode = 'batch', queue = 'psfehq
     if mode == 'batch':
         return get_batch_id(batch_submit('ipengine --profile={0} --location={1}'.format(name, host_ip), ncores = ncores, queue = queue))
     elif mode == 'local':
-        subprocess.Popen('mpirun -n {0} ipengine --profile={1} --log-to-file 2>&1 &'.format(min(ncores, LOCAL_NCORES), name),
+        subprocess.Popen('mpirun -n {0} ipengine --profile={1} >> mpi_log_file 2>&1 &'.format(min(ncores, LOCAL_NCORES), name),
                 shell = True)
     else:
         raise ValueError("invalid mode: %s" % mode)
@@ -107,12 +99,12 @@ def ipcluster_submit(name, ncores = DEFAULT_NCORES, queue = 'psfehq', mode = 'ba
     ipcontroller_path = os.path.expanduser('~/.ipython/profile_{0}/security/ipcontroller-engine.json'.format(name))
     # TODO:L this check makes it unecessary for the user to specify whether to
     # launch the controllers or not
-    if not os.path.exists(ipcontroller_path):
-        host_ip = bashrun('hostname --ip-address')[:-1]
-        subprocess.Popen("ipcontroller --profile={0} --location={1} --ip='*' --log-to-file 2>&1 &".format(name, host_ip), shell = True)
-        log('launching ipcontroller')
-    else:
-        log('ipcontroller found')
+    #if not os.path.exists(ipcontroller_path):
+    host_ip = bashrun('hostname --ip-address')[:-1]
+    subprocess.Popen("ipcontroller --profile={0} --location={1} --ip='*' --log-to-file 2>&1 &".format(name, host_ip), shell = True)
+    log('launching ipcontroller')
+    #else:
+    #    log('ipcontroller found')
     batch_id = start_engines(name, ncores = ncores, mode = mode)
     print batch_id
     return batch_id
@@ -143,7 +135,7 @@ def kill_engines():
 class Engine:
     jobname_prefix = 'mpi'
     def __init__(self, job_id, ncores = DEFAULT_NCORES, queue = 'pfehq',
-                shutdown_seconds = None, init_batch_job = True):
+                shutdown_seconds = None, init_controller = True, mode = 'batch'):
         """
         shutdown_seconds : int
             shut down the engine after this many seconds.
@@ -155,13 +147,14 @@ class Engine:
         self.queue = queue
         self.busy = False
         self.shutdown_seconds = shutdown_seconds
+        self.mode = mode
 
-        if init_batch_job:
-            self.batch_id = ipcluster_submit(self.profile_name, ncores = self.ncores, queue = self.queue)
+        if init_controller:
+            self.batch_id = ipcluster_submit(self.profile_name, ncores = self.ncores, queue = self.queue, mode = mode)
             
-            if self.shutdown_seconds is not None:
-                t = Timer(self.shutdown_seconds, self.terminate)
-                t.start()
+#            if self.shutdown_seconds is not None:
+#                t = Timer(self.shutdown_seconds, self.terminate)
+#                t.start()
         
     def __eq__(self, other):
         try:
@@ -179,20 +172,28 @@ class Engine:
         self.busy = False
     
     def terminate(self, remove = True):
-        kill_job(self.batch_id)
+        if self.mode == 'batch':
+            kill_job(self.batch_id)
         if remove:
             engines.remove(self)
 
     def restart(self):
-        print self.batch_id
+        print 'restarting'
+        if self.mode == 'batch':
+            print self.batch_id
         self.terminate(remove = True)
         engines.append(self)
-        self.batch_id = start_engines(self.profile_name, ncores = self.ncores, queue = self.queue)
+        self.batch_id = start_engines(self.profile_name, ncores = self.ncores, queue = self.queue,
+                mode = self.mode)
 
     
     def get_rc(self, maxdelay = 5):
         def _get_rc():
-            return Client(profile = self.profile_name)
+            try:
+                return self._rc
+            except AttributeError:
+                self._rc = Client(profile = self.profile_name)
+                return self._rc
         err = (IOError, error.TimeoutError)
 
         return blocking_delay(_get_rc, err, maxdelay = maxdelay)
@@ -260,8 +261,8 @@ class JobPool:
         self.shutdown = shutdown
 
     @staticmethod
-    def launch_engines(nengines = 1, ncores = DEFAULT_NCORES, queue = 'psfehq'):
-        return [add_engine(ncores = ncores, queue = queue) for i in range(nengines)]
+    def launch_engines(nengines = 1, ncores = DEFAULT_NCORES, queue = 'psfehq', mode = 'batch'):
+        return [add_engine(ncores = ncores, queue = queue, mode = mode) for i in range(nengines)]
 
     @staticmethod
     def remove_job(job_id):
@@ -271,25 +272,36 @@ class JobPool:
         del[engines[job_id]]
         
     @staticmethod
-    def _get_free_engine():
+    def _get_free_engine(mode = 'batch'):
         """Return a free Engine instance, creating new ones if necessary"""
         free = [engine for engine in engines if not engine.check_busy()]
         if free:
-            return free[0]
+            engine = free[0]
         else:
-            return JobPool.launch_engines()[0]
+            engine = JobPool.launch_engines(mode = mode)[0]
+        return engine
 
 
     def __call__(self, *args, **kwargs):
-        engine = JobPool._get_free_engine()
-        print "engine batch: ", engine.batch_id
+        import config
+        if config.autobatch:
+            engine = JobPool._get_free_engine(mode = 'batch')
+            try:
+                dview = engine.get_view()
+                print "engine batch: ", engine.batch_id
+            except:
+                print "Could not obtain batch engine. Attempting to run on local host"
+                start_engines(engine.profile_name, ncores = engine.ncores, mode = 'local')
+                dview = engine.get_view()
+        else:
+            try:
+                engine = JobPool._get_free_engine(mode = 'local')
+                dview = engine.get_view()
+            except error.NoEnginesRegistered:
+                start_engines(engine.profile_name, ncores = engine.ncores, mode = 'local')
+                dview = engine.get_view()
         engine.set_busy()
-        try:
-            dview = engine.get_view()
-        except:
-            print "Could not obtain batch engine. Attempting to run on local host"
-            start_engines(engine.profile_name, ncores = engine.ncores, mode = 'local')
-            dview = engine.get_view()
+
 
         @dview.remote(block = False)
         def newfunc(*args, **kwargs):
@@ -313,13 +325,13 @@ class Bqueue:
             self.upstream_q = Bqueue(name[:-1] + 'hiprioq')
         else:
             self.upstream_q = None
-        
+
     def number_pending(self):
         if self.upstream_q is not None:
             return bjobs_count(self.name) + bjobs_count(self.upstream_q.name)
         else:
             return bjobs_count(self.name)
-        
+
     def key(self):
         """
         Sorting key for this class.
@@ -333,7 +345,9 @@ def best_queue(usable_queues):
 usable_queues = map(Bqueue, ('psanaq', 'psfehq', 'psnehq'))
 
 def init():
-    JobPool.launch_engines(nengines = 4, ncores = DEFAULT_NCORES)
+    import config
+    if config.autobatch:
+        JobPool.launch_engines(nengines = 4, ncores = DEFAULT_NCORES)
 
 # launch ipyparallel controller and engines if this is the controlling process.
 if not utils.is_mpi():

@@ -1,22 +1,35 @@
 # Author: O. Hoidn
 import pdb
-import sys
 import numpy as np
-import argparse
 import os
 import random
-from time import time
+import time
 from collections import namedtuple
 import batchjobs
+import inspect
 
 import config
 import logging
 from output import log
 
+frame = inspect.currentframe()
 
 """
 Module for accessing data from the psana API.
 """
+
+POOL_NODES = 12
+def get_pool():
+    from pathos.multiprocessing import ProcessingPool
+    return ProcessingPool(nodes=POOL_NODES)
+
+#def get_pool():
+#    from pathos.parallel import ParallelPool as Pool
+#    pool = Pool()
+#    pool.ncpus = 12
+#    pool.servers = ('psanagpu101:4321',)#'psanagpu105:4321',)
+#    return pool
+
 
 DataResultBase = namedtuple("DataResultBase", "mean, event_data")
 class DataResult(DataResultBase):
@@ -40,7 +53,10 @@ class DataResult(DataResultBase):
         # TODO: currently does not work if each event datum is a numpy array rather than
         # a numeric type
         def extract_event_data(arr2d):
-            data_col = arr2d[:, -1]
+            try:
+                data_col = arr2d[:, -1]
+            except TypeError: # arr2d is a list, not an array
+                data_col = np.array([elt[-1] for elt in arr2d])
             if type(data_col[0]) == np.ndarray:
                 return np.vstack(data_col)
             return data_col
@@ -94,6 +110,10 @@ def idxgen(ds):
     for nevent,t in enumerate(mytimes, startevt):
         yield nevent,run.event(t)
 
+#def mproc_process(nevent, run):
+#    times = run.times()
+#    return run.event(times[nevent])
+
 def smdgen(ds):
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
@@ -108,9 +128,9 @@ random.seed(os.getpid())
 import config
 if not config.smd:
     from dataccess import psana_get
-from psana import *
+import psana
 from PSCalib.GeometryAccess import img_from_pixel_arrays
-from Detector.GlobalUtils import print_ndarr
+#from psana.Detector.GlobalUtils import print_ndarr
 from dataccess import toscript
 from functools import partial
 import config # config.py in local directory
@@ -130,7 +150,6 @@ except:
 # something more reliable (i.e. with fewer edge cases)
 
 from dataccess import utils
-from pathos.multiprocessing import ProcessingPool
 
 XTC_DIR = '/reg/d/psdm/' + config.exppath + '/xtc/'
 
@@ -227,7 +246,7 @@ def get_area_detector_subregion(quad, det, evt, detid):
 #        print_ndarr(iX, 'iX')
 #        print_ndarr(iY, 'iY')
 
-        t0_sec = time()
+        t0_sec = time.time()
 
         nda = det.raw(evt)
         if nda is None:
@@ -269,7 +288,6 @@ def get_area_detector_subregion(quad, det, evt, detid):
         # reconstruct image for quad
         img = img_from_pixel_arrays(iX, iY, W=ndaq)
         bg = img_from_pixel_arrays(iX, iY, W=pedq)
-        #pdb.set_trace()
         common = img_from_pixel_arrays(iX, iY, W=cmq)
 
         new = np.empty_like(img)
@@ -284,44 +302,82 @@ def get_area_detector_subregion(quad, det, evt, detid):
             return increment.astype('float')
         else:
             return increment
-#@utils.eager_persist_to_file('cache/psget/gedn')
-def get_event_data_nonarea(runNum, detid = None, **kwargs):
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
+
+def get_ds(runNum):
     if config.smd:
-        ds = DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
+        return psana.DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
         #ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
         #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
     else:
-        ds = DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
+        return psana.DataSource('exp=%s:run=%d:stream=0,1'% (config.expname,runNum))
+
+#@utils.eager_persist_to_file('cache/psget/gedn')
+def get_event_data_nonarea(runNum, detid = None, **kwargs):
     log( '')
     log( "PROCESSING RUN: ", runNum)
     log( '')
-    evtgen = idxgen(ds)
-    #evtgen = smdgen(ds)
-    det_values = []
+    if config.multiprocess:
+        log('using multiprocessing in get_event_data_nonarea')
+        pool = get_pool()
+        if config.testing:
+            size = 1
+        else:
+            size = pool.ncpus
+        def mapfunc(i):
+            ds = get_ds(runNum)
+            if i ==0: log( 'idx mode')
+            run = ds.runs().next()
+            times = run.times()
+            log('size: '+ str(size))
+            length = len(times)//size
+            startevt = i *length
+            mytimes= times[startevt:(i +1)*length]
+            det_values = []
+            for t in mytimes:
+                evt = run.event(t)
+                det_values = accumulator_nonarea(evt, detid, det_values = det_values)
+            return det_values
+
+        gathered = pool.map(mapfunc, range(size))
+    else:
+        log('using MPI in get_event_data_nonarea')
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        #evtgen = smdgen(ds)
+        ds = get_ds(runNum)
+        evtgen = idxgen(ds)
+        det_values = []
+        for nevent, evt in evtgen:
+            log('processing' + str(nevent))
+            if config.testing and nevent % 10 != 0:
+                continue
+            det_values = accumulator_nonarea(evt, detid, det_values = det_values)
+        log('going to gather')
+        gathered = comm.allgather(det_values)
+        log('gathered')
+    return reduce(lambda x, y: x + y, gathered)
+
+#@utils.eager_persist_to_file('cache/psget/gedn')
+def accumulator_nonarea(evt, detid, det_values = []):
     def eval_lusi(evt):
         """LUSI detector reading"""
-        k = evt.get(Lusi.IpmFexV1, Source(config.nonarea[detid].src))
+        k = evt.get(psana.Lusi.IpmFexV1, psana.Source(config.nonarea[detid].src))
         if k:
-            det_values.append(k.channel()[0])
+            return k.channel()[0]
     def eval_bld(evt):
         """gas detector average reading"""
-        k = evt.get(Bld.BldDataFEEGasDetEnergyV1, Source(config.nonarea[detid].src))
+        k = evt.get(psana.Bld.BldDataFEEGasDetEnergyV1, psana.Source(config.nonarea[detid].src))
         if k:
-            det_values.append(np.mean([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()]))
-            #print "appending: ", str([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()])
-    for nevent, evt in evtgen:
-        log('processing' + str(nevent))
-        if config.testing and nevent % 10 != 0:
-            continue
-        if config.nonarea[detid].type == 'Lusi.IpmFexV1':
-            eval_lusi(evt)
-        elif config.nonarea[detid].type == 'Bld.BldDataFEEGasDetEnergyV1':
-            eval_bld(evt)
-        else:
-            raise ValueError("Not a valid non-area detector")
-    return reduce(lambda x, y: x + y, comm.allgather(det_values))
+            return np.mean([k.f_11_ENRC(), k.f_12_ENRC(), k.f_21_ENRC(), k.f_22_ENRC()])
+    if config.nonarea[detid].type == 'Lusi.IpmFexV1':
+        new = eval_lusi(evt)
+    elif config.nonarea[detid].type == 'Bld.BldDataFEEGasDetEnergyV1':
+        new = eval_bld(evt)
+    else:
+        raise ValueError("Not a valid non-area detector")
+    if new is not None:
+        det_values.append(new)
+    return det_values
 
 #@memory.cache
 def get_signal_one_run_nonarea(runNum, detid = None,
@@ -357,7 +413,7 @@ def get_signal_one_run_nonarea(runNum, detid = None,
 # TODO: more testing and refactor all of this!
 def eval_frame_processor(evt, ds, frame_processor, **kwargs):
     def detid_array(detid):
-        det = Detector(config.detinfo_map[detid].device_name, ds.env())
+        det = psana.Detector(config.detinfo_map[detid].device_name, ds.env())
         try:
             subregion_index = config.detinfo_map[detid].subregion_index
         except KeyError, e:
@@ -375,12 +431,11 @@ def eval_frame_processor(evt, ds, frame_processor, **kwargs):
         except KeyError, e:
             raise ValueError("kwarg 'detid' must be provided if frame_processor lacks the attribute detids")
 
-#@utils.eager_persist_to_file('cache/psget/gsorsa')
-def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, event_mask = None,
-        frame_processor = None, dark_frame = None, **kwargs):
-    from mpi4py import MPI
-    comm = MPI.COMM_WORLD
+def accumulator_area(ds, evt,  nevent, runNum, det, signalsum = None, detid = None, event_data = {}, events_processed = 0,
+        dark_frame = None, event_mask = None, frame_processor = None, event_data_getter = None, **kwargs):
     def event_valid(nevent):
+        if config.testing and nevent % 10 != 0:
+            return False
         if event_mask is not None:
             run_mask = event_mask[runNum]
             if nevent in run_mask:
@@ -389,93 +444,190 @@ def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, 
                 return False
         else:
             return True
-    #DIVERTED_CODE = 162
-    ds = DataSource('exp=%s:run=%d:idx' % (config.expname, runNum))
-    #ds = DataSource('exp=%s:run=%d:smd' % (config.expname, runNum))
-    #evtgen = smdgen(ds)
-    evtgen = idxgen(ds)
-    #ds = DataSource('exp=%s:run=%d:smd:dir=/reg/d/ffb/%s/xtc:live' % (config.expname, runNum, config.exppath))
-    det = Detector(config.detinfo_map[detid].device_name, ds.env())
-    rank = comm.Get_rank()
-    log( "rank is", rank)
-    size = comm.Get_size()
-    event_data = {}
-    events_processed = 0
-    last = time()
-    last_nevent = 0
-    for nevent, evt in evtgen:
-        if config.testing and nevent % 10 != 0:
-            continue
-        if event_valid(nevent):
-            evr = evt.get(EvrData.DataV4, Source('DetInfo(NoDetector.0:Evr.0)'))
-            try:
-                subregion_index = config.detinfo_map[detid].subregion_index
-                increment = get_area_detector_subregion(subregion_index, det, evt,
-                    detid)
-                if dark_frame is not None:
-                    increment -= dark_frame#.astype('uint16')
-                if frame_processor is not None:
-                    if dark_frame is None:
-                        log( 'dark frame provided but will not be applied' )
-                    #np.save('increment%d.npy' % nevent, increment)
-                    if 'detid' not in kwargs:
-                        kwargs['detid'] = detid
-                    increment = eval_frame_processor(evt, ds, frame_processor, **kwargs)
-                    log( "processing frame, event %d" % nevent)
-            except (AttributeError, TypeError) as e:
-                logging.exception(e)
-                #raise
-                continue
-            if increment is not None:
-                # TODO: modify the non-smd version of this function so that mutation
-                # of increment by event_data_getter carries through in the same way
-                # (or better yet, refactor so that this current code is reused).
-                if event_data_getter:
-                    event_data[nevent] = event_data_getter(increment, run = runNum,
-                        nevent = nevent)
+    if event_valid(nevent):
+        try:
+            subregion_index = config.detinfo_map[detid].subregion_index
+            increment = get_area_detector_subregion(subregion_index, det, evt,
+                detid)
+            if dark_frame is not None:
+                increment -= dark_frame#.astype('uint16')
+            if frame_processor is not None:
+                if dark_frame is None:
+                    log( 'dark frame provided but will not be applied' )
+                #np.save('increment%d.npy' % nevent, increment)
+                if 'detid' not in kwargs:
+                    kwargs['detid'] = detid
+                increment = eval_frame_processor(evt, ds, frame_processor, **kwargs)
+                log( "processing frame, event %d" % nevent)
+        except (AttributeError, TypeError) as e:
+            logging.exception(e)
+            if config.testing:
+                raise
+            increment = None
+            #evr = evt.get(EvrData.DataV4, psana.Source('DetInfo(NoDetector.0:Evr.0)'))
+        if increment is not None:
+            # TODO: modify the non-smd version of this function so that mutation
+            # of increment by event_data_getter carries through in the same way
+            # (or better yet, refactor so that this current code is reused).
+            if event_data_getter:
+                event_data[nevent] = event_data_getter(increment, run = runNum,
+                    nevent = nevent)
+            if signalsum is None:
+                signalsum = np.zeros_like(increment).astype('float')
+            signalsum += increment
+            events_processed += 1
+        else:
+            if event_valid(nevent):
+                log('bad event: %d' % nevent)
+    return signalsum, event_data, events_processed
+
+#@utils.eager_persist_to_file('cache/psget/gsorsa')
+def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, event_mask = None,
+        frame_processor = None, dark_frame = None, **kwargs):
+    def multiprocess_func():
+        """
+        Returns signalsum_final, event_data, events_processed, or None if no
+        valid data is found
+
+        signalsum_final : numpy array
+            The sum of event data (either raw or transformed by
+            frame_processor, if that function is non-None
+        event_data : list of dicts
+            list of dectionaries generated by evaluating event_data_getter on
+            each event datum. One list element per MPI rank.
+        events_processed : int
+            number of events processed
+        """
+        log('using multiprocessing in get_signal_one_run_smd_area')
+        pool = get_pool()
+        if config.testing:
+            size = 1
+        else:
+            size = pool.ncpus
+        def mapfunc(i):
+            ds = get_ds(runNum)
+            det = psana.Detector(config.detinfo_map[detid].device_name, ds.env())
+            run = ds.runs().next()
+            times = run.times()
+            log('size: '+ str(size))
+            length = len(times)//size
+            startevt = i *length
+            mytimes= times[startevt:(i +1)*length]
+            for nevent, t in enumerate(mytimes, start = startevt):
+                evt = run.event(t)
                 try:
-                    signalsum += increment
-                except UnboundLocalError:
-                    signalsum = np.zeros_like(increment).astype('float')
-                    signalsum += increment
-                events_processed += 1
+                    signalsum, event_data, events_processed = accumulator_area(ds, evt,  nevent, runNum, det,
+                            detid = detid, signalsum = signalsum, event_data = event_data,
+                            events_processed = events_processed, dark_frame = dark_frame,
+                            event_mask = event_mask, frame_processor = frame_processor, event_data_getter = event_data_getter, **kwargs)
+                except NameError:
+                    signalsum, event_data, events_processed = accumulator_area(ds, evt, nevent, runNum, det, detid = detid, 
+                            dark_frame = dark_frame, event_mask = event_mask, frame_processor = frame_processor, event_data_getter = event_data_getter, **kwargs)
+            return signalsum, event_data, events_processed 
+
+        if config.testing:
+            gathered = map(mapfunc, range(size))
+        else:
+            try:
+                gathered = pool.map(mapfunc, range(size))
+            except AssertionError, e: # Can't do nestied multiprocessing with daemonic processes
+                log(str(e))
+                gathered = map(mapfunc, range(1))
+        signalsum_list, event_data_list, events_processed_list  = zip(*gathered)
+        signalsum = reduce(lambda x, y: x + y, signalsum_list)
+        events_processed = reduce(lambda x, y: x + y, events_processed_list)
+        return signalsum, event_data_list, events_processed
+    def mpi_func():
+        """
+        Returns signalsum_final, event_data, events_processed, or None if no
+        valid data is found
+
+        signalsum_final : numpy array
+            The sum of event data (either raw or transformed by
+            frame_processor, if that function is non-None
+        event_data : list of dicts
+            list of dectionaries generated by evaluating event_data_getter on
+            each event datum. One list element per MPI rank.
+        events_processed : int
+            number of events processed
+        """
+        log('using MPI in get_signal_one_run_smd_area')
+        from mpi4py import MPI
+        comm = MPI.COMM_WORLD
+        #DIVERTED_CODE = 162
+        ds = get_ds(runNum)
+        det = psana.Detector(config.detinfo_map[detid].device_name, ds.env())
+        #evtgen = smdgen(ds)
+        evtgen = idxgen(ds)
+        #det = Detector(config.detinfo_map[detid].device_name, ds.env())
+        rank = comm.Get_rank()
+        log( "rank is", rank)
+        size = comm.Get_size()
+        last = time.time()
+        last_nevent = 0
+        for nevent, evt in evtgen:
+            if config.testing and nevent % 10 != 0:
+                continue
+            try:
+                signalsum, event_data, events_processed = accumulator_area(ds, evt, nevent, runNum,
+                        det, signalsum = signalsum, detid = detid,
+                        event_data = event_data, events_processed = events_processed, dark_frame = dark_frame,
+                        event_mask = event_mask,  frame_processor = frame_processor, event_data_getter = event_data_getter, **kwargs)
+            except NameError:
+                signalsum, event_data, events_processed = accumulator_area(ds, evt, nevent, runNum, det, detid = detid,
+                        dark_frame = dark_frame, event_mask = event_mask, frame_processor = frame_processor, event_data_getter = event_data_getter, **kwargs)
             if nevent % 100 == 0:
-                now = time()
+                now = time.time()
                 deltat = now - last
                 deltan = nevent - last_nevent
                 log( 'processed event: ', nevent, (deltan/deltat) * size, "rank is: ", rank, "size is: ", size)
                 last = now
                 last_nevent = nevent
-    try:
-        signalsum_final = np.empty_like(signalsum)
-        comm.Allreduce(signalsum, signalsum_final)
-        events_processed = comm.allreduce(events_processed)
+        if signalsum is not None:
+            signalsum_final = np.empty_like(signalsum)
+            comm.Allreduce(signalsum, signalsum_final)
+            events_processed = comm.allreduce(events_processed)
+            if event_data_getter:
+                event_data = comm.allgather(event_data)
+            log( "rank is: ", rank)
+            if rank == 0:
+                log( "processed ", events_processed, "events")
+            return signalsum_final, event_data, events_processed
+
+    if config.multiprocess:
+        result = multiprocess_func()
+    else:
+        result = mpi_func()
+
+    if result is not None:
+        signalsum_final, event_data, events_processed = result
         signalsum_final /= events_processed
-        if event_data_getter:
-            event_data = comm.allgather(event_data)
-        log( "rank is: ", rank)
-        if rank == 0:
-            log( "processed ", events_processed, "events")
         if event_data:
             #print event_data
             #event_data = reduce(lambda x, y: x + y, event_data)
             log( 'before merge')
-            log( event_data)
+            #log( event_data)
             event_data = utils.merge_dicts(*event_data)
         return signalsum_final, event_data, events_processed
-    except UnboundLocalError:
+    else:
         raise ValueError("No events found for det: " + str(detid) + ", run: " + str(runNum) + ": " + str(events_processed))
 
 
+def check_autompi():
+    return config.autompi
+
 #@memory.cache
-@batchjobs.JobPool
+@utils.conditional_decorator(batchjobs.JobPool, check_autompi)
 def get_signal_one_run_smd(runNum, detid = None, event_data_getter = None, event_mask = None,
         **kwargs):
     if detid in config.nonarea:
         return get_signal_one_run_nonarea(runNum, detid,
             event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
     else: # Assume detid to be an area detector
-        return get_signal_one_run_smd_area(runNum, detid, event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
+        log('calling get_signal_one_run_smd_area')
+        result = get_signal_one_run_smd_area(runNum, detid, event_data_getter = event_data_getter, event_mask = event_mask, **kwargs)
+        log('called get_signal_one_run_smd_area')
+        return result
 
 
 
@@ -491,6 +643,7 @@ def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
             event_data_getter, event_mask = event_mask, **kwargs)
     # TODO move the .get()u up one level on the stack
     def mapfunc_smd(run_number):
+        log('calling get_signal_one_run_smd')
         return get_signal_one_run_smd(run_number, detid, event_data_getter =
             event_data_getter, event_mask = event_mask, **kwargs)
 
@@ -500,11 +653,16 @@ def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
         # raised.
         run_data = []
         exceptions = []
-        async_results = [mapfunc_smd(run) for run in runList]
-        for result in async_results:
+        #async_results = [mapfunc_smd(run) for run in runList]
+        #for result in async_results:
+        for run in runList:
             #try:
             #run_data.append(result)
-            run_data.append(result.get())
+            log('applying mapfunc_smd')
+            if config.autompi:
+                run_data.append(mapfunc_smd(run).get())
+            else:
+                run_data.append(mapfunc_smd(run))
 #            except ValueError, e:
 #                exceptions.append(e)
 #                log( "WARNING: ", e)
@@ -517,8 +675,7 @@ def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
         elif exceptions:
             log( "WARNING: INVALID RUNS WILL BE EXCLUDED")
     else:
-        MAXNODES = 14
-        pool = ProcessingPool(nodes=min(MAXNODES, len(runList)))
+        pool = get_pool()
         run_data = pool.map(mapfunc, runList)
         #run_data = map(mapfunc, runList)
     event_data = {}
@@ -531,6 +688,7 @@ def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
             signal = signal_increment * (float(events_processed) / total_events)
         event_data[runList[runindx]] = event_data_entry
         runindx += 1
+    log('returning from get_signal_many_parallel')
     return DataResult(signal, event_data)
     #return signal, event_data
 

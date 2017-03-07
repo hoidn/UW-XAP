@@ -32,7 +32,6 @@ def _all_equal(lst):
 
 
 
-
 def _patterns_compound(patterns):
     compound_list = [pattern.get_compound() for pattern in patterns]
     if not _all_equal(compound_list):
@@ -277,6 +276,7 @@ def eval_fitresult(model, result, x):
     eval_params['x'] = x
     return model.eval(**eval_params)
 
+# TODO: why doesn't this class store powder data?
 class Peak:
     """
     Class representing a single powder peak.
@@ -357,15 +357,33 @@ class Peak:
                     param_values = param_values)
             return raw_integral - np.sum(eval_fitresult(model, fit_result, x[i]))
 
-    def center_of_mass(self, x, y, **kwargs):
-        """
-        TODO: make this more sophisticated.
-        """
-        x = np.array(x)
-        i = self.crop_indices(x, self.peak_width)
-        x_i = x[i]
-        y_i = np.array(y)[i]
-        return np.sum(x_i * y_i) / np.sum(y_i)
+#    def center_of_mass(self, x, y, **kwargs):
+#        """
+#        TODO: make this more sophisticated.
+#        """
+#        x = np.array(x)
+#        i = self.crop_indices(x, self.peak_width)
+#        x_i = x[i]
+#        y_i = np.array(y)[i]
+#        return np.sum(x_i * y_i) / np.sum(y_i)
+
+    def center_of_mass(self, x, y, mode = 'mean', **kwargs):
+        log('center of mas mode: %s' % mode)
+        fitresult = self.peak_fit(x, y, **kwargs)
+        if mode == 'mean': # calculate CM from weighted mean of data
+            x = np.array(x)
+            i = self.crop_indices(x, self.peak_width)
+            x_i = x[i]
+            y_i = np.array(y)[i]
+            result = np.sum(x_i * y_i) / np.sum(y_i)
+            log(np.shape(result))
+            return result
+        elif mode == 'fit': # calculate from peak fit
+            result = fitresult.values['center']
+            #log(np.shape(result))
+            return result
+        else:
+            raise ValueError('invalid mode: %s' % str(mode))
 
     def background_fit(self, x, y, model, recenter = False, fixed_params = [],
             param_values = {}, **kwargs):
@@ -639,15 +657,17 @@ class Pattern:
     # TODO: make this model-dependent
     @utils.ifplot
     def plot_peakfits(self, ax = None, show = False, normalization = 1.,
-            peak_width = config.peak_width):
+            peak_width = config.peak_width, bg = True, fit = True):
         # TODO: leverage lmfit better
         if ax is None:
             ax = self._new_ax()
         for peak_fit, bg_fit in zip(self.fit_peaks(), self.fit_backgrounds()):
             # TODO: fix this hack. how do we prevent specifying the color kwarg from screwing up plotly's color cycle?
             #ax.plot(fit.xfit, (fit.yfit - (fit.m * fit.xfit + fit.b)) / normalization, color = 'black')
-            ax.plot(bg_fit.xfit, bg_fit.yfit / normalization, color = 'black')
-            ax.plot(peak_fit.xfit, peak_fit.yfit / normalization, color = 'red')
+            if bg:
+                ax.plot(bg_fit.xfit, bg_fit.yfit / normalization, color = 'black', label = '')
+            if fit:
+                ax.plot(peak_fit.xfit, peak_fit.yfit / normalization, color = 'red')
         if show:
             plt.show()
         return ax
@@ -714,22 +734,82 @@ class Pattern:
         else:
             raise ValueError("invalid method %s" % method)
 
-    def centers_of_mass(self):
-        """Calculate peak centers of mass"""
-        return [peak.center_of_mass(self.angles, self.intensities)
+    def subtract_background(self, bg_pattern = None, bg_subtract = True,
+        photon_value = 100., scale_factors_bg = None, **kwargs):
+        """
+        Return new, background-subtracted Pattern instance
+        """
+        angles, intensities = self.angles, self.intensities
+        if bg_subtract:
+            if bg_pattern is not None:
+                peak_bgs = bg_pattern.fit_backgrounds()
+            else:
+                log( 'fitting background')
+                peak_bgs = self.fit_backgrounds()
+
+            if scale_factors_bg is None:
+                scale_factors_bg = [1.] * len(peak_bgs)
+            for scale, fit in zip(scale_factors_bg, peak_bgs):
+                intensities = utils.interpolated_subtraction(angles, intensities, fit.xfit, scale * fit.yfit)
+            # TODO clone all attributes
+            return Pattern(angles, intensities, self.compound_list)
+                    
+    def centers_of_mass(self, bg_pattern = None, bg_subtract = True, mode = 'mean',
+        photon_value = 100., scale_factors_bg = None, **kwargs):
+        """
+        Calculate peak centers of mass
+        
+        bg_pattern: a Pattern instance to be used for background subtraction
+        via call to fit_backgrounds().
+
+	if bg_pattern is None and bg_subtract is True, then a background fit to
+	this Pattern instance will be used.
+        """
+        angles, intensities = self.angles, self.intensities
+        if bg_subtract:
+            if bg_pattern is not None:
+                peak_bgs = bg_pattern.fit_backgrounds()
+            else:
+                log( 'fitting background')
+                peak_bgs = self.fit_backgrounds()
+
+            if scale_factors_bg is None:
+                scale_factors_bg = [1.] * len(peak_bgs)
+            for scale, fit in zip(scale_factors_bg, peak_bgs):
+                # calculate CM with a regularization term
+#                num_counts_bg = np.sum(fit.yfit) / photon_value
+#                scale_factor_bg = (1. - 1./np.sqrt(num_counts_bg))
+                log(scale)
+                intensities = utils.interpolated_subtraction(angles, intensities, fit.xfit, scale * fit.yfit)
+        return [peak.center_of_mass(angles, intensities, mode = mode)
                     for peak in self.peaks.peaks]
 
-    def recentered_peaks(self, shift_scale = -1.):
+    # TODO: refactor
+    def recentered_peaks(self, shift_scale = -1., corrections = None, **kwargs):
         """
-        Return powder pattern with peaks shifted so that their CMs correspond
-        to nominal peak angles.
+         If shift values are not provided, the peaks are shifted so that their
+         CMs correspond to nominal peak angles.
         """
         assert type(self.angles) == np.ndarray
         assert type(self.intensities) == np.ndarray
-        peak_cms = self.centers_of_mass()
+        peak_cms = self.centers_of_mass(**kwargs)
         output = self.intensities.copy()
         for peak, cm in zip(self.peaks.peaks, peak_cms):
             shift = shift_scale * (peak.angle - cm)
+            i = ((peak.angle  - 0.5 *  peak.peak_width) < self.angles) & ((peak.angle  + 0.5 *  peak.peak_width) > self.angles)
+            x_peak, y_peak = self.angles[i], self.intensities[i]
+            _, new_y = utils.regrid(x_peak, y_peak, shift = shift)
+            if not np.isnan(np.sum(new_y)):
+                output[i] = new_y
+        return self.angles, output
+
+    def shift_peaks(self, corrections, shift_scale = -1.):
+        """
+        Return powder pattern with peaks shifted by the provided values.
+        """
+        output = self.intensities.copy()
+        for peak, shift in zip(self.peaks.peaks, corrections):
+            shift = shift_scale * shift
             i = ((peak.angle  - 0.5 *  peak.peak_width) < self.angles) & ((peak.angle  + 0.5 *  peak.peak_width) > self.angles)
             x_peak, y_peak = self.angles[i], self.intensities[i]
             _, new_y = utils.regrid(x_peak, y_peak, shift = shift)

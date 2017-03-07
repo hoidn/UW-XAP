@@ -20,4 +20,8 @@ queues = ('psanaq', 'psfehq', 'psnehq')
 # default powder peak width, in degrees
 peak_width = 1.5
 
+# configuration for batchjobs.py
+autompi = True
+autobatch = True
 #import matplotlib.pyplot as plt
+multiprocess = False
