@@ -227,30 +227,24 @@ class RealMask:
                 return True
         return False
 
+# TODO: multiple models
 def background_model(angle):
     from lmfit import Model
     def poly(x, a = 0, b = 0, c = 0, d = 1):
-        return a * (x - angle)**3 + b * (x - angle)**2 + c * (x - angle) + d
+        return c * (x - angle) + d
+        #return a * (x - angle)**3 + b * (x - angle)**2 + c * (x - angle) + d
     #from lmfit.models import PolynomialModel
     #return PolynomialModel(order)
     return Model(poly)
 
 # Returns a second-order polynomial expanded about the center of the fit range
+# TODO: linear/quadratic fit options
 def poly_model():
     from lmfit import Model
     def shifted_poly(x, center = 0, slope = 0, intercept = 200, amplitude = 10):
-        #center = np.mean(x)
-        # center = x[np.argmax(x)]
-        #return intercept + amplitude * (x - center)**2
         x = x - np.mean(x)
-        return intercept + slope * (x - center) - amplitude * (x - center)**2
+        return intercept + slope * (x - center)# - amplitude * (x - center)**2
     mod = Model(shifted_poly) 
-#    #mod.set_param_hint('center', min = 10)
-#    #mod.set_param_hint('intercept', min = 0)
-#    #mod.set_param_hint('amplitude', max = -5)
-#    return mod
-#    mod = QuadraticModel()
-#    mod.set_param_hint('a', max = -5, min = -100000)
     return mod
 
 def model_fit(x, y, model, x_filter = lambda x: True, recenter = False,
@@ -657,17 +651,20 @@ class Pattern:
     # TODO: make this model-dependent
     @utils.ifplot
     def plot_peakfits(self, ax = None, show = False, normalization = 1.,
-            peak_width = config.peak_width, bg = True, fit = True):
+            peak_width = config.peak_width, bg = True, fit = True, plot_cm = False):
         # TODO: leverage lmfit better
         if ax is None:
             ax = self._new_ax()
-        for peak_fit, bg_fit in zip(self.fit_peaks(), self.fit_backgrounds()):
+        for peak_fit, bg_fit, cm in zip(self.fit_peaks(), self.fit_backgrounds(),
+            self.centers_of_mass()):
             # TODO: fix this hack. how do we prevent specifying the color kwarg from screwing up plotly's color cycle?
             #ax.plot(fit.xfit, (fit.yfit - (fit.m * fit.xfit + fit.b)) / normalization, color = 'black')
             if bg:
                 ax.plot(bg_fit.xfit, bg_fit.yfit / normalization, color = 'black', label = '')
             if fit:
                 ax.plot(peak_fit.xfit, peak_fit.yfit / normalization, color = 'red')
+            if plot_cm:
+                ax.plot([cm, cm], [0, np.max(self.intensities)], color = 'green')
         if show:
             plt.show()
         return ax
@@ -765,6 +762,7 @@ class Pattern:
 	if bg_pattern is None and bg_subtract is True, then a background fit to
 	this Pattern instance will be used.
         """
+        #pdb.set_trace()
         angles, intensities = self.angles, self.intensities
         if bg_subtract:
             if bg_pattern is not None:

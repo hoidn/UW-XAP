@@ -49,12 +49,12 @@ def si_imarr_cm_subregion_3(imarr, **kwargs):
 def si_spectrometer_integral(label, **kwargs):
     # Dark frame-subtracted si spectrometer data
     mean_frame, event_data = data_access.eval_dataset_and_filter(label, 'si', event_data_getter = si_imarr_sum)
-    return utils.dict_leaf_mean(event_data)
+    return np.sum(background_subtracted_spectrum(mean_frame))
 
 @utils.eager_persist_to_file('cache/mec/xrts1_fe_fluorescence_integral')
 def xrts1_fe_fluorescence_integral(label):
     def xrts1_sum(imarr, **kwargs):
-        spectrum = background_subtracted_spectrum(imarr)
+        indices, spectrum = background_subtracted_spectrum(imarr)
         return np.sum(spectrum)
     mean_frame, _ = data_access.eval_dataset_and_filter(label, 'xrts1')
     return xrts1_sum(mean_frame)

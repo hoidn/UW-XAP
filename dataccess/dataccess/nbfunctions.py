@@ -467,7 +467,7 @@ def interpolated_cms(ds, bgsub = False, sigma_max = 3., subtract_mean = True, pe
 #        return uncorrected_cm
 
 # TODO: this isn't quite right, since it uses the default peak locations (not the fitted values)
-def get_peak_angles(dataset, mode = 'mean'):
+def get_peak_angles(dataset, mode = 'mean', n_iters = 2):
     """
     Return the positions (in deg) of powder peaks for the given dataset
     """
@@ -475,6 +475,11 @@ def get_peak_angles(dataset, mode = 'mean'):
                                event_data_getter = utils.identity)
     angles, intensities = uncorrected.mean
     pat = xrd.Pattern(angles, intensities, compound_list = ['MgO'])
+    if n_iters <= 1:
+	peak_angles = np.array(pat.centers_of_mass(mode = mode))
+        return peak_angles
+    peak_angles = get_peak_angles(dataset, mode = mode, n_iters = n_iters - 1)
+    pat = xrd.Pattern(angles, intensities, compound_list = ['MgO'], peak_angles = peak_angles)
     return np.array(pat.centers_of_mass(mode = mode))
 
 def signal_to_background(ds):
