@@ -99,7 +99,6 @@ def construct_query(attribute, param1, param2 = None):
     else:# param1 is numeric
         return match_numeric()
 
-
 # TODO: tests
 class DataSet(object):
     """

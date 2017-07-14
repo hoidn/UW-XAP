@@ -79,12 +79,9 @@ def write_masks():
 
     dark1 = np.load('dark1.npy').T
     new1 = outlier_mask(dark1) * m1
-    #new1 = zero_islands(outlier_mask(dark1) * grid_mask(dark1) * m1, 0, 75)
 
     dark2 = np.load('dark2.npy').T
     new2 = outlier_mask(dark2) * m2
-    #new2 = zero_islands(outlier_mask(dark2) * grid_mask(dark2) * m2, 0, 75)
 
     np.save('quad1_mask_10.11.npy', new1)
-
     np.save('quad2_mask_10.11.npy', new2)

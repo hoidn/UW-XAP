@@ -5,7 +5,7 @@ import os
 import random
 import time
 from collections import namedtuple
-import batchjobs
+#import batchjobs
 import inspect
 
 import config
@@ -534,7 +534,7 @@ def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, 
                 log(str(e))
                 gathered = map(mapfunc, range(1))
         signalsum_list, event_data_list, events_processed_list  = zip(*gathered)
-        signalsum = reduce(lambda x, y: x + y, signalsum_list)
+        signalsum = reduce(lambda x, y: x + y, filter(lambda d: d is not None, signalsum_list))
         events_processed = reduce(lambda x, y: x + y, events_processed_list)
         return signalsum, event_data_list, events_processed
     def mpi_func():
@@ -617,7 +617,7 @@ def check_autompi():
     return config.autompi
 
 #@memory.cache
-@utils.conditional_decorator(batchjobs.JobPool, check_autompi)
+#@utils.conditional_decorator(batchjobs.JobPool, check_autompi)
 def get_signal_one_run_smd(runNum, detid = None, event_data_getter = None, event_mask = None,
         **kwargs):
     if detid in config.nonarea:

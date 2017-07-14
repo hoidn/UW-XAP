@@ -69,7 +69,6 @@ def mean_params(xrdset):
         return np.mean([[p[key] for p in pattern] for pattern in params], axis = 0)
     return {k: get_mean(k) for k in keys} 
 
-
 def print_xrd_param(xrdset, param):
     for p in xrdset.patterns:
         peaks = p.peaks.peaks
@@ -554,67 +553,73 @@ def make_shifter_frame_processor(dataset, pattern_shifter_func):
         return shifter(quad2 = quad2, si = si, **kwargs)
     return frame_processor
 
-        #from dataccess.peakfinder import peakfilter_frame
-        # TODO set peak angles
-        
-#        pat = xrd.Pattern.from_dataset(peakfilter_frame(quad2, detid = 'quad2'), 'quad2', ['MgO'],
-#                                           label  = 'test')#, peak_angles = peak_angles)
+def plot_xrd_masked(datasets, event_masks, mode = 'patterns', peak_widths = {0: 1.5, 1: 1.5, 2: 1.5, 3: 1.7}, 
+                    param_initial_values = {3: {'sigma': (0.4, False), 'amplitude': (5., False), 'center': (129.7, True)},
+                                   1: {'amplitude': (30, False)}},
+                    iter_parameters = {'sigma': [3]}, normalization = 'peak', **kwargs):
+    if mode == 'patterns':
+        plot_patterns, plot_progression = True, False
+    elif mode == 'progression':
+        plot_patterns, plot_progression = False, True
+    else:
+        raise ValueError
+    return plot_xrd(datasets, compound_list = ['MgO'], normalization = normalization,
+         plot_patterns = plot_patterns,  plot_progression = plot_progression, show_image = False,
+         detectors = ['quad2', 'quad1'],
+         frame_processor = peakfilter_frame, peak_widths = peak_widths,
+            iter_parameters = iter_parameters,
+            param_initial_values = param_initial_values,
+            event_masks = event_masks, **kwargs)
 
-#def peak_cm_shifted(bg_result, bgsub = True, correct_cm = False):
-#    from dataccess.output import log
-#    import numpy as np
-#    from dataccess.peakfinder import peakfilter_frame
-#    from dataccess import xrd
-#    from dataccess.nbfunctions import eval_xrd
-#
-#    def smooth_cm_200_interp_nosub(n_evt, i):
-#        cms_nosub, smoothed_cms_nosub, smoothed_cms_nosub_interp, trace = cm_variation_scatter(ds, bgsub=False)
-#        sampled = smoothed_cms_nosub_interp(n_evt)[:, i]
-#        if hasattr(n_evt, '__iter__'):
-#            return sampled
-#        else:
-#            return sampled[0]
-#
-#    def smooth_cm_200_interp(n_evt, i):
-#        cms, smoothed_cms, smoothed_cms_interp, trace = cm_variation_scatter(ds, bgsub=True)
-#        sampled = smoothed_cms_interp(n_evt)[:, i]
-#        if hasattr(n_evt, '__iter__'):
-#            return sampled
-#        else:
-#            return sampled[0]
-#
-#    
-#    #TODO: WHAT's up with the normalization here?
-#    #my_xrd = xrd.XRD(['quad2'], [ds], compound_list=['MgO'], bgsub = False, fit = False,
-#    #                 frame_processor = peakfilter_frame)
-#    bg_angles, bg_intensity = bg_result.mean
-#    bg_pattern = xrd.Pattern(bg_angles, bg_intensity, ['MgO'])
-#    return powder_pattern_cm, bg_pattern
-#
-#def cm_variation_scatter(ds, bgsub = True, correct_cm = False):
-#    """
-#    Returns cms, smoothed_cms, smoothed_cm_interp
-#    
-#    where cms is a 2d array, each element of which contains the CM coordinates of all powder peaks,
-#    and smoothed_cms is a smoothed version of the same. smoothed_cm_interp is the mean-subtracted interpolation function
-#    version of smoothed_cms (i.e., it returns angle offset values)
-#    """
-#    from dataccess.peakfinder import peakfilter_frame
-#    def powder_pattern_single_frame(imarr = None, **kwargs):
-#        dss = xrd.Pattern.from_dataset(peakfilter_frame(imarr, detid = 'quad2'), 'quad2', ['MgO'], label  = 'test')
-#        return np.array([dss.angles, dss.intensities])
-#    bg_result = ds.evaluate('quad2', frame_processor = powder_pattern_single_frame,
-#                            event_data_getter = utils.identity)
-#    trace = ds.evaluate('quad2', frame_processor = peak_cm_shifted(bg_result, bgsub = bgsub, correct_cm = correct_cm)[0], event_data_getter = utils.identity)
-#    event_numbers, cms = np.arange(len(trace.flat_event_data())), trace.flat_event_data()
-#    smoothed_cm_interp = utils.extrap1d(interp1d(event_numbers, gfilt(cms - np.mean(cms, axis = 0), sigma = [20, 0]),
-#                                                 axis = 0))
-#    smoothed_cms = smoothed_cm_interp(event_numbers)
-#    return cms, smoothed_cms, smoothed_cm_interp, trace
-#    #cms_highpass = cms - smoothed_cms
-#    #from dataccess.mec import si_imarr_cm_3
-#    #energies = ds.evaluate('si', frame_processor = si_imarr_cm_3, event_data_getter = utils.identity)
-#
-#    #plt.scatter(event_numbers, cms, label = 'raw')
-#    #plt.plot(np.array(event_numbers), smoothed_cms, label  ='interpolation, smoothed with sigma = 20')
-#    #plt.show()
+def plot_xrd_masked_nth_bin(datasets, bin_index, num_bins = 3, mode = 'patterns', **kwargs):
+    assert bin_index < num_bins
+    masks = [dataset_get_i200_i00_dictionary_masks(ds, num_bins)[bin_index] for ds in datasets]
+    return plot_xrd_masked(datasets, masks, mode = mode, **kwargs)
+
+def dataresult_to_pattern(dataresult, compound_list = ['MgO']):
+    mean_angles, mean_intensities = dataresult.mean
+    return xrd.Pattern(mean_angles, mean_intensities, compound_list)
+
+def powder_pattern_adhoc_jitter_get_result(dataset, peak_angles = None, shift_scale = -1., rejection_threshold = 0.2,
+                                           **kwargs_outer):
+    if peak_angles is None:
+        peak_angles = get_peak_angles(dataset)
+    def frame_processor(imarr = None, **kwargs):
+        for k, v in kwargs_outer.iteritems():
+            kwargs[k] = v
+        from dataccess import xrd
+        import numpy as np
+        from dataccess.peakfinder import peakfilter_frame
+        pat = xrd.Pattern.from_dataset(peakfilter_frame(imarr, detid = 'quad2'), 'quad2', ['MgO'],
+                                       label  = 'test', peak_angles = peak_angles)
+        def signal_to_bg_one_peak(peak):
+            signal = peak.integrate(pat.angles, pat.intensities, mode = 'integral_bgsubbed')
+            total = peak.integrate(pat.angles, pat.intensities, mode = 'integral')
+            return signal/(total - signal)
+        signal_to_bgs = np.array([signal_to_bg_one_peak(peak) for peak in pat.peaks.peaks])
+        
+        if np.any(signal_to_bgs < rejection_threshold): # reject events with poor signal
+            raise AttributeError('Rejecting event due to low signal/background')
+        
+        return np.array(pat.recentered_peaks(shift_scale = shift_scale, **kwargs))
+    return dataset.evaluate('quad2', frame_processor = frame_processor)
+
+def powder_pattern_adhoc_jitter_get_pattern(dataset, shift_scale = -1, rejection_threshold = 0.2, **kwargs):
+    result = powder_pattern_adhoc_jitter_get_result(dataset, shift_scale = shift_scale, rejection_threshold = rejection_threshold,
+                                                    **kwargs)
+    pattern = dataresult_to_pattern(result)
+    pattern.label = dataset.label
+    return pattern
+
+def plot_normed_pat(ds, label = '', corrected = True):
+    if corrected:
+        pat = powder_pattern_adhoc_jitter_get_pattern(ds, scale_factors_bg = [1.0, 1.0, 1.0])
+    else:
+        pat = dataresult_to_pattern(ds.evaluate('quad2', frame_processor = powder_pattern_single_frame,
+                               event_data_getter = utils.identity))
+    newpat = pat.subtract_background()
+    norm = pat.peaks.peaks[1].integrate(newpat.angles, newpat.intensities, mode = 'integral_bgsubbed')
+    p = newpat.normalize(norm)
+    plt.plot(p.angles, p.intensities, label = label)
+
+
