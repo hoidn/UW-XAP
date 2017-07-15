@@ -27,16 +27,28 @@ def make_pattern_getter(detid, peakfinder = False, compound_list = None):
     return pattern_getter
     
 
-def plot_run_events(detid, runs, events, plot_mean = False, show = True, peakfinder = False, compound_list = None):
-    ds = query.DataSet(runs)
+def plot_run_events(detid, runs, events, plot_mean = False, plot_individual  = True,
+        show = True, peakfinder = False, compound_list = None):
+    ds = query.DataSet(runs, label = str(runs) + str(events))
     event_mask = make_event_mask(runs, events)
     pattern_getter = make_pattern_getter(detid, peakfinder = peakfinder, compound_list = compound_list)
-    evaluated = ds.evaluate(detid, event_data_getter = pattern_getter,
-                                event_mask = event_mask)
+    if plot_individual:
+        evaluated = ds.evaluate(detid, event_data_getter = pattern_getter,
+                                    event_mask = event_mask)
+    else:
+        evaluated = ds.evaluate(detid, event_mask = event_mask)
     ax = None
-    for r, events in zip(runs, events):
-        for event in events:
-            if event == events[-1] and r == runs[-1]:
-                ax, _ = evaluated.event_data[r][event].plot(ax = ax, show = True, label = 'run %s, event %s' % (r, event))
-            else:
-                ax, _ = evaluated.event_data[r][event].plot(ax = ax, show = False, label = 'run %s, event %s' % (r, event))
+    if plot_mean:
+        pat = xrd.Pattern.from_dataset(evaluated.mean, detid, compound_list)
+        if not plot_individual:
+            ax, _ = pat.plot(ax = ax, show = True, label = 'runs %s: mean' % str(runs))
+        else:
+            ax, _ = pat.plot(ax = ax, show = False, label = 'runs %s: mean' % str(runs))
+
+    if plot_individual:
+        for r, events in zip(runs, events):
+            for event in events:
+                if event == events[-1] and r == runs[-1]:
+                    ax, _ = evaluated.event_data[r][event].plot(ax = ax, show = True, label = 'run %s, event %s' % (r, event))
+                else:
+                    ax, _ = evaluated.event_data[r][event].plot(ax = ax, show = False, label = 'run %s, event %s' % (r, event))

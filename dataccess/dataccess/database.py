@@ -93,7 +93,6 @@ def mongo_replace_atomic(collection, d, mongo_query_dict = None):
     remove_query_dict['_id'] = {"$ne": inserted}
     if list(collection.find(remove_query_dict)):
         collection.remove(remove_query_dict)
-        log( "removed")
 
 
 def mongo_insert_logbook_dict(d):
@@ -282,5 +281,6 @@ def delete_collections(delete_logbook = False):
     for collection in collections:
         collection.delete_many({})
     if delete_logbook:
-       collections_lookup['logbook'].delete_many({})
+        log('mongo delete')
+        collections_lookup['logbook'].delete_many({})
     os.system('rm -rf cache/query/DataSet.evaluate*')

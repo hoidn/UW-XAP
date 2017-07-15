@@ -431,8 +431,10 @@ def eval_frame_processor(evt, ds, frame_processor, **kwargs):
         except KeyError, e:
             raise ValueError("kwarg 'detid' must be provided if frame_processor lacks the attribute detids")
 
-def accumulator_area(ds, evt,  nevent, runNum, det, signalsum = None, detid = None, event_data = {}, events_processed = 0,
+def accumulator_area(ds, evt,  nevent, runNum, det, signalsum = None, detid = None, event_data = None, events_processed = 0,
         dark_frame = None, event_mask = None, frame_processor = None, event_data_getter = None, **kwargs):
+    if event_data is None:
+        event_data = {}
     def event_valid(nevent):
         if config.testing and nevent % 10 != 0:
             return False

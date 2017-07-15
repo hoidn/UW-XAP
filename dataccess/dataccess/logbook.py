@@ -463,9 +463,11 @@ def spreadsheet_mapping(url):
     return utils.merge_dicts(*mapping_list)
 
 
-def main(url = config.url):
+def main(url = None):
     
     # TODO: correct the output of spreadsheet_mapping so that this isn't necessary.
+    if url is None:
+        url = config.url 
     def correct_format(sub_dictionary):
         if 'runs' in sub_dictionary:
             if all(isinstance(r, int) for r in sub_dictionary['runs']):

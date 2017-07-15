@@ -1,16 +1,7 @@
-# Author: O. Hoidn
-
 import numpy as np
-import sys
-import pandas as pd
 import psget
 import os
-import pdb
-import sys
-import zmq
-import dill
 import re
-import hashlib
 
 import utils
 import logbook
@@ -113,7 +104,7 @@ def get_dark_dataset(dataset_identifier):
 #@memory.cache
 @utils.eager_persist_to_file('cache/dataccess/epr')
 def eval_dataset_and_filter(dataset_identifier, detid, event_data_getter = None,
-        darksub = True, frame_processor = None, event_mask = None, **kwargs):
+        darksub = False, frame_processor = None, event_mask = None, **kwargs):
     """
     # TODO: update this. Make it clear that this function is the public interface.
     """

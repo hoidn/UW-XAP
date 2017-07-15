@@ -127,7 +127,8 @@ class DataSet(object):
             other = existing_dataset_by_label(self.label)
             if other != self:
                 raise ValueError("Dataset conflicts with an existing one that has the same label.")
-        except KeyError:
+        except (AttributeError, KeyError) as e:
+            log(e)
             pass
 
         # Store this entire data structure
@@ -248,8 +249,6 @@ class DataSet(object):
             # so that we can get the number of events per run even if event_data_getter is None            
             # TODO: this is a temporary solution, find a better one.
             event_data_getter = eventsum
-        runs = self.runs
-        labels = map(str, runs)
         data =\
             data_access.eval_dataset_and_filter(self, detid,
             event_data_getter = event_data_getter, frame_processor = frame_processor,
