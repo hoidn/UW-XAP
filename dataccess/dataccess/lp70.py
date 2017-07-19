@@ -1,5 +1,6 @@
 from dataccess import xrd
 from dataccess import query
+from dataccess import utils
 
 def make_event_mask(runs, events_included, max_events = 1000):
     """
@@ -26,29 +27,40 @@ def make_pattern_getter(detid, peakfinder = False, compound_list = None):
         return pattern_getter_peakfitting
     return pattern_getter
     
+def plot_patterns(patterns, labels= None, show = True):
+    if labels is None:
+        labels =  [''] * len(patterns)
+    ax = None
+    for pat, label in zip(patterns[:-1], labels[:-1]):
+        ax, _ = pat.plot(ax = ax, show = False, label = label)
+    ax, _ = patterns[-1].plot(ax = ax, show = show, label = labels[-1])
 
 def plot_run_events(detid, runs, events, plot_mean = False, plot_individual  = True,
         show = True, peakfinder = False, compound_list = None):
     ds = query.DataSet(runs, label = str(runs) + str(events))
     event_mask = make_event_mask(runs, events)
-    pattern_getter = make_pattern_getter(detid, peakfinder = peakfinder, compound_list = compound_list)
     if plot_individual:
-        evaluated = ds.evaluate(detid, event_data_getter = pattern_getter,
+        evaluated = ds.evaluate(detid, event_data_getter = utils.identity,
                                     event_mask = event_mask)
     else:
         evaluated = ds.evaluate(detid, event_mask = event_mask)
     ax = None
+    output = []
     if plot_mean:
         pat = xrd.Pattern.from_dataset(evaluated.mean, detid, compound_list)
+        output.append(pat)
         if not plot_individual:
-            ax, _ = pat.plot(ax = ax, show = True, label = 'runs %s: mean' % str(runs))
+            ax, _ = pat.plot(ax = ax, show = show, label = 'runs %s: mean' % str(runs))
         else:
             ax, _ = pat.plot(ax = ax, show = False, label = 'runs %s: mean' % str(runs))
 
     if plot_individual:
         for r, events in zip(runs, events):
             for event in events:
+                pat = xrd.Pattern.from_dataset(evaluated.event_data[r][event], detid, compound_list)
+                output.append(pat)
                 if event == events[-1] and r == runs[-1]:
-                    ax, _ = evaluated.event_data[r][event].plot(ax = ax, show = True, label = 'run %s, event %s' % (r, event))
+                    ax, _ = pat.plot(ax = ax, show = show, label = 'run %s, event %s' % (r, event))
                 else:
-                    ax, _ = evaluated.event_data[r][event].plot(ax = ax, show = False, label = 'run %s, event %s' % (r, event))
+                    ax, _ = pat.plot(ax = ax, show = False, label = 'run %s, event %s' % (r, event))
+    return output
