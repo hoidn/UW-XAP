@@ -329,7 +329,7 @@ def get_event_data_nonarea(runNum, detid = None, **kwargs):
             run = ds.runs().next()
             times = run.times()
             log('size: '+ str(size))
-            length = len(times)//size
+            length = max(1, len(times)//size)
             startevt = i *length
             mytimes= times[startevt:(i +1)*length]
             det_values = []
@@ -512,9 +512,10 @@ def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, 
             run = ds.runs().next()
             times = run.times()
             log('size: '+ str(size))
-            length = len(times)//size
+            length = max(1, len(times)//size)
             startevt = i *length
             mytimes= times[startevt:(i +1)*length]
+            #log('mytimes',len(mytimes),startevt,length,i,size,len(times))
             for nevent, t in enumerate(mytimes, start = startevt):
                 evt = run.event(t)
                 try:
@@ -525,7 +526,10 @@ def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, 
                 except NameError:
                     signalsum, event_data, events_processed = accumulator_area(ds, evt, nevent, runNum, det, detid = detid, 
                             dark_frame = dark_frame, event_mask = event_mask, frame_processor = frame_processor, event_data_getter = event_data_getter, **kwargs)
-            return signalsum, event_data, events_processed 
+            try:
+                return signalsum, event_data, events_processed 
+            except UnboundLocalError:
+                return None
 
         if config.testing:
             gathered = map(mapfunc, range(size))
@@ -535,7 +539,7 @@ def get_signal_one_run_smd_area(runNum, detid = None, event_data_getter = None, 
             except AssertionError, e: # Can't do nestied multiprocessing with daemonic processes
                 log(str(e))
                 gathered = map(mapfunc, range(1))
-        signalsum_list, event_data_list, events_processed_list  = zip(*gathered)
+        signalsum_list, event_data_list, events_processed_list  = zip(*filter(lambda elt: elt is not None, gathered))
         signalsum = reduce(lambda x, y: x + y, filter(lambda d: d is not None, signalsum_list))
         events_processed = reduce(lambda x, y: x + y, events_processed_list)
         return signalsum, event_data_list, events_processed

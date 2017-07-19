@@ -39,8 +39,9 @@ def plot_run_events(detid, runs, events, plot_mean = False, plot_individual  = T
         show = True, peakfinder = False, compound_list = None):
     ds = query.DataSet(runs, label = str(runs) + str(events))
     event_mask = make_event_mask(runs, events)
+    pattern_getter = make_pattern_getter(detid, peakfinder = peakfinder, compound_list = compound_list)
     if plot_individual:
-        evaluated = ds.evaluate(detid, event_data_getter = utils.identity,
+        evaluated = ds.evaluate(detid, event_data_getter = pattern_getter,
                                     event_mask = event_mask)
     else:
         evaluated = ds.evaluate(detid, event_mask = event_mask)
@@ -57,7 +58,7 @@ def plot_run_events(detid, runs, events, plot_mean = False, plot_individual  = T
     if plot_individual:
         for r, events in zip(runs, events):
             for event in events:
-                pat = xrd.Pattern.from_dataset(evaluated.event_data[r][event], detid, compound_list)
+                pat = evaluated.event_data[r][event]
                 output.append(pat)
                 if event == events[-1] and r == runs[-1]:
                     ax, _ = pat.plot(ax = ax, show = show, label = 'run %s, event %s' % (r, event))
