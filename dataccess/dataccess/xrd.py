@@ -198,11 +198,7 @@ class XRDset:
             extra_masks = config.detinfo_map[self.detid].extra_masks
             combined_mask = utils.combine_masks(base_mask, extra_masks, transpose = True)
             imarray *= combined_mask
-        min_val =  np.min(imarray)
-        if min_val < 0:
-            return np.abs(min_val) + imarray
-        else:
-            return imarray
+        return imarray
 
 class RealMask:
     """
