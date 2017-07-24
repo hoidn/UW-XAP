@@ -452,7 +452,6 @@ def accumulator_area(ds, evt,  nevent, runNum, det, signalsum = None, detid = No
             increment = get_area_detector_subregion(subregion_index, det, evt,
                 detid)
             if dark_frame is not None:
-                log('subtracting dark frame')
                 increment -= dark_frame#.astype('uint16')
             if frame_processor is not None:
                 if dark_frame is None:
@@ -689,12 +688,10 @@ def get_signal_many_parallel(runList, detid = None, event_data_getter = None,
     runindx = 0
     total_events = np.sum(map(lambda x: x[2], run_data))
     for signal_increment, event_data_entry, events_processed in run_data:
-        weighted_increment = signal_increment * (float(events_processed) / total_events)
-        log('weighted increment: ', np.sum(weighted_increment))
         try:
-            signal += weighted_incrememnt
+            signal += signal_increment * (float(events_processed) / total_events)
         except UnboundLocalError:
-            signal = weighted_increment
+            signal = signal_increment * (float(events_processed) / total_events)
         event_data[runList[runindx]] = event_data_entry
         runindx += 1
     log('returning from get_signal_many_parallel')
